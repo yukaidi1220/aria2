@@ -97,10 +97,11 @@ RUN tar xf libssh2-1.11.1.tar.bz2 && \
     ./configure \
         --disable-shared --enable-static \
         --with-crypto=openssl \
+        --disable-examples-build \
         --prefix=/usr/local/$HOST \
         --host=$HOST \
         --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
         LIBS="-lws2_32 -lgdi32 -lcrypt32 -ladvapi32" && \
-    make -C src -j$(nproc) install
+    make -j$(nproc) install
 
 WORKDIR /build
