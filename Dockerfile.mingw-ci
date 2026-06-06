@@ -90,17 +90,17 @@ RUN tar xf openssl-1.1.1w.tar.gz && \
     make -j$(nproc) && \
     make install_sw
 
-# libssh2 (with OpenSSL backend instead of WinCNG)
+# libssh2 (with OpenSSL backend)
 RUN tar xf libssh2-1.11.1.tar.bz2 && \
     cd libssh2-1.11.1 && \
+    PKG_CONFIG_PATH=/usr/local/$HOST/lib/pkgconfig \
     ./configure \
         --disable-shared --enable-static \
         --with-crypto=openssl \
-        --with-libssl-prefix=/usr/local/$HOST \
         --prefix=/usr/local/$HOST \
         --host=$HOST \
         --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
-        LIBS="-lssl -lcrypto -lws2_32 -lgdi32 -lcrypt32 -ladvapi32" && \
+        LIBS="-lws2_32 -lgdi32 -lcrypt32 -ladvapi32" && \
     make -j$(nproc) install
 
 WORKDIR /build
