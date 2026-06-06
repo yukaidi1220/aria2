@@ -100,3 +100,37 @@ jobs:
     - name: Build aria2
       run: |
         make -j"$(nproc 2> /dev/null || sysctl -n hw.ncpu)" check
+
+  build-windows:
+    strategy:
+      matrix:
+        host: [i686-w64-mingw32, x86_64-w64-mingw32]
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v6
+    - name: Build dependencies Docker image
+      run: |
+        docker build \
+          --build-arg HOST=${{ matrix.host }} \
+          -t aria2-deps-${{ matrix.host }} \
+          -f Dockerfile.mingw-ci .
+    - name: Build aria2 Windows binary
+      run: |
+        mkdir -p out
+        docker run --rm \
+          -v ${{ github.workspace }}:/src:ro \
+          -v ${{ github.workspace }}/out:/out \
+          aria2-deps-${{ matrix.host }} bash -c "
+            cp -a /src /tmp/aria2-build &&
+            cd /tmp/aria2-build &&
+            autoreconf -i &&
+            ./mingw-config &&
+            make -j\$(nproc) &&
+            ${{ matrix.host }}-strip src/aria2c.exe &&
+            cp src/aria2c.exe /out/
+          "
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: aria2-${{ matrix.host }}
+        path: out/aria2c.exe

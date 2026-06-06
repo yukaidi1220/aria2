@@ -65,18 +65,19 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --disable-nls \
     --with-libcares \
     --without-gnutls \
-    --without-openssl \
+    --with-openssl \
     --with-sqlite3 \
     --without-libxml2 \
     --with-libexpat \
     --with-libz \
     --with-libgmp \
     --with-libssh2 \
+    --without-wintls \
     --without-libgcrypt \
     --without-libnettle \
     --with-cppunit-prefix=$PREFIX \
     ARIA2_STATIC=yes \
-    CPPFLAGS="-I$PREFIX/include" \
+    CPPFLAGS="-I$PREFIX/include -DCARES_STATICLIB" \
     LDFLAGS="-L$PREFIX/lib" \
     PKG_CONFIG="/usr/bin/pkg-config" \
     PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"

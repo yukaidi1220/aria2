@@ -1,0 +1,106 @@
+# CI variant of Dockerfile.mingw: builds dependencies only.
+# Source code is copied from the GitHub Actions checkout, not cloned from upstream.
+#
+# Uses OpenSSL 1.1.1w (last version supporting Windows XP) for TLS.
+# All dependencies are statically linked.
+
+FROM ubuntu:22.04
+
+ARG HOST=i686-w64-mingw32
+
+RUN apt-get update && \
+    DEBIAN_FRONTEND="noninteractive" \
+    apt-get install -y --no-install-recommends \
+        make binutils autoconf automake autotools-dev libtool \
+        patch ca-certificates \
+        pkg-config git curl dpkg-dev gcc-mingw-w64 g++-mingw-w64 \
+        autopoint libcppunit-dev libxml2-dev libgcrypt20-dev lzip \
+        python3-docutils perl
+
+# Download all dependency sources
+RUN curl -L --retry 5 -O https://gmplib.org/download/gmp/gmp-6.3.0.tar.xz && \
+    curl -L --retry 5 -O https://github.com/libexpat/libexpat/releases/download/R_2_8_1/expat-2.8.1.tar.bz2 && \
+    curl -L --retry 5 -O https://www.sqlite.org/2026/sqlite-autoconf-3530200.tar.gz && \
+    curl -L --retry 5 -O https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz && \
+    curl -L --retry 5 -O https://github.com/c-ares/c-ares/releases/download/v1.34.6/c-ares-1.34.6.tar.gz && \
+    curl -L --retry 5 -O https://github.com/libssh2/libssh2/releases/download/libssh2-1.11.1/libssh2-1.11.1.tar.bz2 && \
+    curl -L --retry 5 -O https://github.com/openssl/openssl/releases/download/OpenSSL_1_1_1w/openssl-1.1.1w.tar.gz
+
+# GMP
+RUN tar xf gmp-6.3.0.tar.xz && \
+    cd gmp-6.3.0 && \
+    ./configure \
+        --disable-shared --enable-static \
+        --prefix=/usr/local/$HOST \
+        --host=$HOST --disable-cxx --enable-fat \
+        CFLAGS="-mtune=generic -O2 -g0" && \
+    make -j$(nproc) install
+
+# Expat
+RUN tar xf expat-2.8.1.tar.bz2 && \
+    cd expat-2.8.1 && \
+    ./configure \
+        --disable-shared --enable-static \
+        --prefix=/usr/local/$HOST \
+        --host=$HOST \
+        --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) && \
+    make -j$(nproc) install
+
+# SQLite
+RUN tar xf sqlite-autoconf-3530200.tar.gz && \
+    cd sqlite-autoconf-3530200 && \
+    ./configure \
+        --disable-shared --enable-static \
+        --prefix=/usr/local/$HOST \
+        --host=$HOST \
+        --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) && \
+    make -j$(nproc) install
+
+# zlib
+RUN tar xf zlib-1.3.2.tar.gz && \
+    cd zlib-1.3.2 && \
+    CC=$HOST-gcc AR=$HOST-ar LD=$HOST-ld \
+    RANLIB=$HOST-ranlib STRIP=$HOST-strip \
+    ./configure \
+        --prefix=/usr/local/$HOST \
+        --libdir=/usr/local/$HOST/lib \
+        --includedir=/usr/local/$HOST/include \
+        --static && \
+    make -j$(nproc) install
+
+# c-ares
+RUN tar xf c-ares-1.34.6.tar.gz && \
+    cd c-ares-1.34.6 && \
+    ./configure \
+        --disable-shared --enable-static --without-random \
+        --prefix=/usr/local/$HOST \
+        --host=$HOST \
+        --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
+        LIBS="-lws2_32" && \
+    make -j$(nproc) install
+
+# OpenSSL 1.1.1w (last version supporting Windows XP)
+RUN tar xf openssl-1.1.1w.tar.gz && \
+    cd openssl-1.1.1w && \
+    ./Configure $(echo $HOST | grep -q x86_64 && echo mingw64 || echo mingw) \
+        --cross-compile-prefix=$HOST- \
+        --prefix=/usr/local/$HOST \
+        no-shared no-ssl3 no-comp no-dynamic-engine \
+        -DL_ENDIAN && \
+    make -j$(nproc) && \
+    make install_sw
+
+# libssh2 (with OpenSSL backend instead of WinCNG)
+RUN tar xf libssh2-1.11.1.tar.bz2 && \
+    cd libssh2-1.11.1 && \
+    ./configure \
+        --disable-shared --enable-static \
+        --with-crypto=openssl \
+        --with-libssl-prefix=/usr/local/$HOST \
+        --prefix=/usr/local/$HOST \
+        --host=$HOST \
+        --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
+        LIBS="-lws2_32" && \
+    make -j$(nproc) install
+
+WORKDIR /build
