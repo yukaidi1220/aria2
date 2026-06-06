@@ -125,22 +125,7 @@ jobs:
           aria2-deps-${{ matrix.host }} bash -c "
             cp -a /src /tmp/aria2-build &&
             cd /tmp/aria2-build &&
-            python3 - <<'PY'
-from pathlib import Path
-pem = Path('/etc/ssl/certs/ca-certificates.crt').read_text()
-Path('src/EmbeddedCABundle.h').write_text(f'''#ifndef D_EMBEDDED_CA_BUNDLE_H
-#define D_EMBEDDED_CA_BUNDLE_H
-
-namespace aria2 {{
-
-static const char EMBEDDED_CA_BUNDLE[] = R"ARIA2CA({pem})ARIA2CA";
-static const unsigned int EMBEDDED_CA_BUNDLE_LEN = sizeof(EMBEDDED_CA_BUNDLE) - 1;
-
-}} // namespace aria2
-
-#endif // D_EMBEDDED_CA_BUNDLE_H
-''')
-PY
+            python3 ci/embed-ca-bundle.py /etc/ssl/certs/ca-certificates.crt src/EmbeddedCABundle.h &&
             autoreconf -i &&
             ./mingw-config &&
             make -j\$(nproc) &&
