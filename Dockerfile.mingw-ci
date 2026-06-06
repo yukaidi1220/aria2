@@ -101,6 +101,6 @@ RUN tar xf libssh2-1.11.1.tar.bz2 && \
         --host=$HOST \
         --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
         LIBS="-lws2_32 -lgdi32 -lcrypt32 -ladvapi32" && \
-    make -C lib -j$(nproc) install
+    make -C src -j$(nproc) install
 
 WORKDIR /build
