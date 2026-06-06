@@ -128,10 +128,13 @@ jobs:
             ./mingw-config &&
             make -j\$(nproc) &&
             ${{ matrix.host }}-strip src/aria2c.exe &&
-            cp src/aria2c.exe /out/
+            cp src/aria2c.exe /out/ &&
+            cp /etc/ssl/certs/ca-certificates.crt /out/ca-certificates.crt
           "
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: aria2-${{ matrix.host }}
-        path: out/aria2c.exe
+        path: |
+          out/aria2c.exe
+          out/ca-certificates.crt

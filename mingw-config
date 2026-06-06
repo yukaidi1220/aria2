@@ -66,6 +66,7 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --with-libcares \
     --without-gnutls \
     --with-openssl \
+    --with-ca-bundle=ca-certificates.crt \
     --with-sqlite3 \
     --without-libxml2 \
     --with-libexpat \
