@@ -39,12 +39,14 @@
 
 #include <openssl/err.h>
 #include <openssl/pkcs12.h>
+#include <openssl/pem.h>
 #include <openssl/bio.h>
 
 #include "LogFactory.h"
 #include "Logger.h"
 #include "fmt.h"
 #include "message.h"
+#include "EmbeddedCABundle.h"
 #include "BufferedFile.h"
 
 namespace {
@@ -88,6 +90,16 @@ struct x509_sk_deleter {
   }
 };
 typedef std::unique_ptr<STACK_OF(X509), x509_sk_deleter> x509_sk_t;
+
+struct x509_info_sk_deleter {
+  void operator()(STACK_OF(X509_INFO)* x) const
+  {
+    if (x) {
+      sk_X509_INFO_pop_free(x, X509_INFO_free);
+    }
+  }
+};
+typedef std::unique_ptr<STACK_OF(X509_INFO), x509_info_sk_deleter> x509_info_sk_t;
 } // namespace
 
 namespace aria2 {
@@ -275,6 +287,30 @@ bool OpenSSLTLSContext::addP12CredentialFile(const std::string& p12file)
 
 bool OpenSSLTLSContext::addSystemTrustedCACerts()
 {
+  if (EMBEDDED_CA_BUNDLE_LEN > 0) {
+    bio_t bio(BIO_new_mem_buf(EMBEDDED_CA_BUNDLE, EMBEDDED_CA_BUNDLE_LEN));
+    if (bio) {
+      x509_info_sk_t certs(
+          PEM_X509_INFO_read_bio(bio.get(), nullptr, nullptr, nullptr));
+      if (certs) {
+        auto store = SSL_CTX_get_cert_store(sslCtx_);
+        auto ncerts = sk_X509_INFO_num(certs.get());
+        bool ok = false;
+        for (int i = 0; i < ncerts; ++i) {
+          auto certInfo = sk_X509_INFO_value(certs.get(), i);
+          if (certInfo && certInfo->x509 &&
+              X509_STORE_add_cert(store, certInfo->x509) == 1) {
+            ok = true;
+          }
+        }
+        if (ok) {
+          A2_LOG_INFO("Embedded trusted CA certificates were successfully added.");
+          return true;
+        }
+      }
+    }
+  }
+
   if (SSL_CTX_set_default_verify_paths(sslCtx_) != 1) {
     A2_LOG_INFO(fmt(MSG_LOADING_SYSTEM_TRUSTED_CA_CERTS_FAILED,
                     ERR_error_string(ERR_get_error(), nullptr)));

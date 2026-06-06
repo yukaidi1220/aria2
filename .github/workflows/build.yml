@@ -125,17 +125,30 @@ jobs:
           aria2-deps-${{ matrix.host }} bash -c "
             cp -a /src /tmp/aria2-build &&
             cd /tmp/aria2-build &&
+            python3 - <<'PY'
+from pathlib import Path
+pem = Path('/etc/ssl/certs/ca-certificates.crt').read_text()
+Path('src/EmbeddedCABundle.h').write_text(f'''#ifndef D_EMBEDDED_CA_BUNDLE_H
+#define D_EMBEDDED_CA_BUNDLE_H
+
+namespace aria2 {{
+
+static const char EMBEDDED_CA_BUNDLE[] = R"ARIA2CA({pem})ARIA2CA";
+static const unsigned int EMBEDDED_CA_BUNDLE_LEN = sizeof(EMBEDDED_CA_BUNDLE) - 1;
+
+}} // namespace aria2
+
+#endif // D_EMBEDDED_CA_BUNDLE_H
+''')
+PY
             autoreconf -i &&
             ./mingw-config &&
             make -j\$(nproc) &&
             ${{ matrix.host }}-strip src/aria2c.exe &&
-            cp src/aria2c.exe /out/ &&
-            cp /etc/ssl/certs/ca-certificates.crt /out/ca-certificates.crt
+            cp src/aria2c.exe /out/
           "
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: aria2-${{ matrix.host }}
-        path: |
-          out/aria2c.exe
-          out/ca-certificates.crt
+        path: out/aria2c.exe
