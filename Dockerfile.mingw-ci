@@ -4,7 +4,7 @@
 # Uses OpenSSL 1.1.1w (last version supporting Windows XP) for TLS.
 # All dependencies are statically linked.
 
-FROM ubuntu:22.04
+FROM public.ecr.aws/docker/library/ubuntu:22.04
 
 ARG HOST=i686-w64-mingw32
 
