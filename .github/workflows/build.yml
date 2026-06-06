@@ -118,6 +118,7 @@ jobs:
       run: |
         mkdir -p out
         docker run --rm \
+          -e HOST=${{ matrix.host }} \
           -v ${{ github.workspace }}:/src:ro \
           -v ${{ github.workspace }}/out:/out \
           aria2-deps-${{ matrix.host }} bash -c "
