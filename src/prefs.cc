@@ -413,6 +413,8 @@ PrefPtr PREF_MAX_HTTP_PIPELINING = makePref("max-http-pipelining");
 PrefPtr PREF_HEADER = makePref("header");
 // value: hostname
 PrefPtr PREF_TLS_SNI_HOST = makePref("tls-sni-host");
+// values: comma separated HOST:IPADDR or IPADDR:HOST
+PrefPtr PREF_HOSTS_MAPPING = makePref("hosts-mapping");
 // value: string that your file system recognizes as a file name.
 PrefPtr PREF_CERTIFICATE = makePref("certificate");
 // value: string that your file system recognizes as a file name.

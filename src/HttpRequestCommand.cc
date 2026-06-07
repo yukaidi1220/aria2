@@ -46,6 +46,7 @@
 #include "Segment.h"
 #include "Option.h"
 #include "SocketCore.h"
+#include "HostMapping.h"
 #include "TLSSNIHostMapping.h"
 #include "prefs.h"
 #include "a2functional.h"
@@ -142,8 +143,10 @@ bool tryRetryTLSHandshakeWithNextAddress(
       req->getConnectedAddr().empty()) {
     return false;
   }
-  auto sniHostConfig = getTLSSNIHostConfig(req->getHost(), option.get());
-  if (sniHostConfig.sniHost != req->getHost()) {
+  auto logicalHost = getLogicalHostForRequest(req->getHost(), option.get());
+  auto sniHostConfig =
+      getTLSSNIHostConfig(req->getHost(), logicalHost, option.get());
+  if (sniHostConfig.sniHost != logicalHost) {
     return false;
   }
 
@@ -154,8 +157,10 @@ bool tryRetryTLSHandshakeWithNextAddress(
   if (e->findCachedIPAddress(req->getConnectedHostname(),
                              connectedPort)
           .empty()) {
-    e->removeCachedIPAddress(req->getConnectedHostname(),
-                             connectedPort);
+    if (getMappedAddresses(req->getConnectedHostname(), option.get())
+        .empty()) {
+      e->removeCachedIPAddress(req->getConnectedHostname(), connectedPort);
+    }
     return false;
   }
 
@@ -178,9 +183,11 @@ bool HttpRequestCommand::executeInternal()
   if (httpConnection_->sendBufferIsEmpty()) {
 #ifdef ENABLE_SSL
     if (getRequest()->getProtocol() == "https") {
-      const auto& verifyHost = getRequest()->getHost();
+      const auto verifyHost =
+          getLogicalHostForRequest(getRequest()->getHost(), getOption().get());
       auto sniHostConfig =
-          getTLSSNIHostConfig(verifyHost, getOption().get());
+          getTLSSNIHostConfig(getRequest()->getHost(), verifyHost,
+                              getOption().get());
       TLSHandshakeParams tlsParams(sniHostConfig.sniHost, verifyHost,
                                    sniHostConfig.overridden);
       try {

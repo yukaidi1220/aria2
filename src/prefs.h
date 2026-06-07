@@ -366,6 +366,8 @@ extern PrefPtr PREF_MAX_HTTP_PIPELINING;
 extern PrefPtr PREF_HEADER;
 // value: hostname
 extern PrefPtr PREF_TLS_SNI_HOST;
+// values: comma separated HOST:IPADDR or IPADDR:HOST
+extern PrefPtr PREF_HOSTS_MAPPING;
 // value: string that your file system recognizes as a file name.
 extern PrefPtr PREF_CERTIFICATE;
 // value: string that your file system recognizes as a file name.

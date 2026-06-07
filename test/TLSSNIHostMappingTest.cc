@@ -21,6 +21,9 @@ class TLSSNIHostMappingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testMappedIPv6Target);
   CPPUNIT_TEST(testCaseInsensitiveTarget);
   CPPUNIT_TEST(testFirstMatchingEntryWins);
+  CPPUNIT_TEST(testDefaultHostFallback);
+  CPPUNIT_TEST(testRequestHostBeatsDefaultHost);
+  CPPUNIT_TEST(testMappedDefaultHostWithoutExplicitSNI);
   CPPUNIT_TEST(testMalformedMapping);
   CPPUNIT_TEST_SUITE_END();
 
@@ -34,6 +37,9 @@ public:
   void testMappedIPv6Target();
   void testCaseInsensitiveTarget();
   void testFirstMatchingEntryWins();
+  void testDefaultHostFallback();
+  void testRequestHostBeatsDefaultHost();
+  void testMappedDefaultHostWithoutExplicitSNI();
   void testMalformedMapping();
 };
 
@@ -133,6 +139,39 @@ void TLSSNIHostMappingTest::testFirstMatchingEntryWins()
   auto config = getTLSSNIHostConfig("origin.example", &option);
   CPPUNIT_ASSERT_EQUAL(std::string("first.example"), config.sniHost);
   CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testDefaultHostFallback()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST, "origin.example:front.example");
+
+  auto config =
+      getTLSSNIHostConfig("198.18.0.18", "origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("front.example"), config.sniHost);
+  CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testRequestHostBeatsDefaultHost()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST,
+             "origin.example:front.example,198.18.0.18:ip-front.example");
+
+  auto config =
+      getTLSSNIHostConfig("198.18.0.18", "origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("ip-front.example"), config.sniHost);
+  CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testMappedDefaultHostWithoutExplicitSNI()
+{
+  Option option;
+
+  auto config =
+      getTLSSNIHostConfig("198.18.0.18", "origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), config.sniHost);
+  CPPUNIT_ASSERT(!config.overridden);
 }
 
 void TLSSNIHostMappingTest::testMalformedMapping()

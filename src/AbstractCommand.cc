@@ -51,6 +51,7 @@
 #include "StreamCheckIntegrityEntry.h"
 #include "PieceStorage.h"
 #include "SocketCore.h"
+#include "HostMapping.h"
 #include "message.h"
 #include "prefs.h"
 #include "fmt.h"
@@ -354,6 +355,12 @@ bool AbstractCommand::execute()
       }
       if (!connectedHostname.empty() &&
           e_->findCachedIPAddress(connectedHostname, connectedPort).empty()) {
+        auto mappedAddrs =
+            getMappedAddresses(connectedHostname, getOption().get());
+        if (!mappedAddrs.empty()) {
+          throw DL_ABORT_EX(fmt(MSG_ESTABLISHING_CONNECTION_FAILED,
+                                "No host mapping address left to try"));
+        }
         A2_LOG_DEBUG(fmt("CUID#%" PRId64 " - All IP addresses were marked bad."
                          " Removing Entry.",
                          getCuid()));
@@ -839,6 +846,32 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     return hostname;
   }
 
+  auto mappedAddrs = getMappedAddresses(hostname, getOption().get());
+  if (!mappedAddrs.empty()) {
+    for (const auto& addr : mappedAddrs) {
+      e_->cacheIPAddress(hostname, addr, port);
+    }
+    std::vector<std::string> cachedAddrs;
+    e_->findAllCachedIPAddresses(std::back_inserter(cachedAddrs), hostname,
+                                  port);
+    for (const auto& addr : mappedAddrs) {
+      if (std::find(std::begin(cachedAddrs), std::end(cachedAddrs), addr) !=
+          std::end(cachedAddrs)) {
+        addrs.push_back(addr);
+      }
+    }
+    if (addrs.empty()) {
+      throw DL_ABORT_EX(fmt(MSG_ESTABLISHING_CONNECTION_FAILED,
+                            "No host mapping address left to try"));
+    }
+    A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
+                    strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
+    A2_LOG_NETWORK(
+        fmt("DNS: hosts mapping %s -> %s", hostname.c_str(),
+            strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
+    return addrs.front();
+  }
+
   e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
   if (!addrs.empty()) {
     auto ipaddr = addrs.front();
@@ -922,6 +955,12 @@ bool AbstractCommand::checkIfConnectionEstablished(
   // See also InitiateConnectionCommand::executeInternal()
   e_->markBadIPAddress(connectedHostname, connectedAddr, connectedPort);
   if (e_->findCachedIPAddress(connectedHostname, connectedPort).empty()) {
+    auto mappedAddrs =
+        getMappedAddresses(connectedHostname, getOption().get());
+    if (!mappedAddrs.empty()) {
+      throw DL_ABORT_EX(fmt(MSG_ESTABLISHING_CONNECTION_FAILED,
+                            "No host mapping address left to try"));
+    }
     e_->removeCachedIPAddress(connectedHostname, connectedPort);
     // Don't set error if proxy server is used and its method is GET.
     if (resolveProxyMethod(req_->getProtocol()) != V_GET ||

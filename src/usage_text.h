@@ -545,6 +545,14 @@
     "                              address. SNI must be a DNS hostname, not an\n" \
     "                              IP address. Mappings are looked up using the\n" \
     "                              current request host after redirects.")
+#define TEXT_HOSTS_MAPPING                                              \
+  _(" --hosts-mapping=HOST:IPADDR[,IPADDR:HOST]...\n"                   \
+    "                              Set host mappings. HOST:IPADDR connects HOST\n" \
+    "                              to IPADDR without DNS lookup. IPADDR:HOST uses\n" \
+    "                              HOST as the logical HTTP/TLS hostname when\n" \
+    "                              requesting the IP address. IPv6 literals must\n" \
+    "                              be enclosed in square brackets. Proxy-side\n" \
+    "                              origin DNS resolution is not changed.")
 #define TEXT_NO_PROXY                                                   \
   _(" --no-proxy=DOMAINS           Specify comma separated hostnames, domains or\n" \
     "                              network address with or without CIDR block where\n" \

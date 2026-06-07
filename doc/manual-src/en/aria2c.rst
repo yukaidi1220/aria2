@@ -476,6 +476,39 @@ HTTP Specific Options
   If the first request is redirected to ``redirect.example``, the redirected
   HTTPS request uses ``redirect-front.example`` as the SNI hostname.
 
+.. option:: --hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>
+
+  Set host mappings for HTTP and HTTPS requests. Entries are comma separated
+  ``LEFT:RIGHT`` pairs. One side of each pair must be a DNS hostname and the
+  other side must be an IP address. IPv6 literal addresses must be enclosed in
+  square brackets, such as ``origin.example:[2001:db8::1]`` or
+  ``[2001:db8::1]:origin.example``.
+
+  ``HOST:IPADDR`` connects ``HOST`` to ``IPADDR`` without querying DNS. The URL
+  host, HTTP ``Host`` header, default TLS SNI hostname, and certificate
+  verification hostname remain ``HOST``.
+
+  ``IPADDR:HOST`` uses ``HOST`` as the logical HTTP/TLS hostname when the URL
+  host is the IP address. This changes the HTTP ``Host`` header, the default
+  TLS SNI hostname, and the certificate verification hostname to ``HOST`` while
+  the TCP connection still goes to ``IPADDR``. An explicit
+  :option:`--tls-sni-host` value still controls the TLS SNI hostname. In mapping
+  form, :option:`--tls-sni-host` first matches the current URL host, then falls
+  back to this logical hostname.
+
+  Hostname matching is case-insensitive. When multiple ``HOST:IPADDR`` mappings
+  use the same ``HOST``, aria2 tries the mapped IP addresses in the order they
+  appear. The mapping is applied to direct HTTP/HTTPS connections. It does not
+  change the origin hostname sent to an HTTP proxy or HTTPS ``CONNECT`` proxy;
+  in those cases proxy-side DNS resolution is controlled by the proxy.
+
+  Examples:
+
+  .. code-block:: console
+
+    $ aria2c --hosts-mapping=origin.example:198.18.0.18 https://origin.example/file
+    $ aria2c --hosts-mapping=198.18.0.18:origin.example https://198.18.0.18/file
+
 .. option:: --http-accept-gzip [true|false]
 
   Send ``Accept-Encoding: deflate, gzip`` request header and inflate response if

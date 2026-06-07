@@ -117,6 +117,7 @@ SRCS =  \
 	HashFuncEntry.h \
 	HaveEraseCommand.cc HaveEraseCommand.h\
 	help_tags.cc help_tags.h\
+	HostMapping.cc HostMapping.h\
 	HttpConnection.cc HttpConnection.h\
 	HttpDownloadCommand.cc HttpDownloadCommand.h\
 	HttpHeader.cc HttpHeader.h\

@@ -32,31 +32,24 @@
  * files in the program, then also delete it here.
  */
 /* copyright --> */
-#ifndef D_TLS_SNI_HOST_MAPPING_H
-#define D_TLS_SNI_HOST_MAPPING_H
+#ifndef D_HOST_MAPPING_H
+#define D_HOST_MAPPING_H
 
 #include "common.h"
 
 #include <string>
+#include <vector>
 
 namespace aria2 {
 
 class Option;
 
-struct TLSSNIHostConfig {
-  std::string sniHost;
-  bool overridden;
+std::vector<std::string> getMappedAddresses(const std::string& hostname,
+                                            const Option* option);
 
-  TLSSNIHostConfig(std::string sniHost, bool overridden);
-};
-
-TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
-                                     const Option* option);
-
-TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
-                                     const std::string& defaultHost,
+std::string getLogicalHostForRequest(const std::string& requestHost,
                                      const Option* option);
 
 } // namespace aria2
 
-#endif // D_TLS_SNI_HOST_MAPPING_H
+#endif // D_HOST_MAPPING_H

@@ -53,6 +53,7 @@
 #include "Request.h"
 #include "DownloadHandlerConstants.h"
 #include "MessageDigest.h"
+#include "HostMapping.h"
 
 namespace aria2 {
 
@@ -197,7 +198,11 @@ std::string HttpRequest::createRequest()
       builtinHds.emplace_back("Accept-Encoding:", acceptableEncodings);
     }
   }
-  builtinHds.emplace_back("Host:", getHostText(getURIHost(), getPort()));
+  auto host = getLogicalHostForRequest(getHost(), option_);
+  if (host == getHost()) {
+    host = getURIHost();
+  }
+  builtinHds.emplace_back("Host:", getHostText(host, getPort()));
   if (noCache_) {
     builtinHds.emplace_back("Pragma:", "no-cache");
     builtinHds.emplace_back("Cache-Control:", "no-cache");

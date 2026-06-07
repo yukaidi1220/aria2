@@ -51,6 +51,7 @@
 #include "RecoverableException.h"
 #include "fmt.h"
 #include "SocketRecvBuffer.h"
+#include "HostMapping.h"
 #include "BackupIPv4ConnectCommand.h"
 #include "ConnectCommand.h"
 
@@ -115,7 +116,9 @@ bool InitiateConnectionCommand::executeInternal()
       getDownloadEngine()->addCommand(std::move(command));
       return true;
     }
-    getDownloadEngine()->removeCachedIPAddress(hostname, port);
+    if (getMappedAddresses(hostname, getOption().get()).empty()) {
+      getDownloadEngine()->removeCachedIPAddress(hostname, port);
+    }
     throw;
   }
 }

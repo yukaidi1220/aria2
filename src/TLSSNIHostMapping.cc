@@ -123,8 +123,15 @@ TLSSNIHostMappingEntry parseMappingEntry(const std::string& value)
 TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
                                      const Option* option)
 {
+  return getTLSSNIHostConfig(requestHost, requestHost, option);
+}
+
+TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
+                                     const std::string& defaultHost,
+                                     const Option* option)
+{
   if (option == nullptr || !option->defined(PREF_TLS_SNI_HOST)) {
-    return TLSSNIHostConfig(requestHost, false);
+    return TLSSNIHostConfig(defaultHost, false);
   }
 
   const auto& value = option->get(PREF_TLS_SNI_HOST);
@@ -133,16 +140,23 @@ TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
   }
 
   auto normalizedRequestHost = normalizeTargetHost(requestHost);
-  TLSSNIHostConfig result(requestHost, false);
-  bool matched = false;
+  auto normalizedDefaultHost = normalizeTargetHost(defaultHost);
+  TLSSNIHostConfig result(defaultHost, false);
+  bool matchedRequestHost = false;
+  bool matchedDefaultHost = false;
   std::vector<std::string> entries;
   util::split(std::begin(value), std::end(value), std::back_inserter(entries),
               ',', true, true);
   for (const auto& entry : entries) {
     auto parsed = parseMappingEntry(entry);
-    if (!matched && parsed.targetHost == normalizedRequestHost) {
+    if (!matchedRequestHost && parsed.targetHost == normalizedRequestHost) {
       result = TLSSNIHostConfig(std::move(parsed.sniHost), true);
-      matched = true;
+      matchedRequestHost = true;
+    }
+    else if (!matchedRequestHost && !matchedDefaultHost &&
+             parsed.targetHost == normalizedDefaultHost) {
+      result = TLSSNIHostConfig(std::move(parsed.sniHost), true);
+      matchedDefaultHost = true;
     }
   }
   return result;

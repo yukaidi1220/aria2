@@ -48,6 +48,7 @@
 #include "Logger.h"
 #include "LogFactory.h"
 #include "SocketCore.h"
+#include "HostMapping.h"
 #include "TLSSNIHostMapping.h"
 #include "message.h"
 #include "prefs.h"
@@ -68,8 +69,9 @@ namespace {
 TLSHandshakeParams createTLSHandshakeParams(const Request* request,
                                             const Option* option)
 {
-  const auto& verifyHost = request->getHost();
-  auto sniHostConfig = getTLSSNIHostConfig(verifyHost, option);
+  const auto verifyHost = getLogicalHostForRequest(request->getHost(), option);
+  auto sniHostConfig =
+      getTLSSNIHostConfig(request->getHost(), verifyHost, option);
   return TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
                             sniHostConfig.overridden);
 }
