@@ -35,6 +35,7 @@
 #include "AsyncNameResolverMan.h"
 
 #include <cassert>
+#include <utility>
 
 #include "AsyncNameResolver.h"
 #include "DownloadEngine.h"
@@ -48,6 +49,29 @@
 #include "a2functional.h"
 
 namespace aria2 {
+
+namespace {
+const char* resolverStatusToString(AsyncNameResolver::STATUS status)
+{
+  switch (status) {
+  case AsyncNameResolver::STATUS_READY:
+    return "ready";
+  case AsyncNameResolver::STATUS_QUERYING:
+    return "querying";
+  case AsyncNameResolver::STATUS_SUCCESS:
+    return "success";
+  case AsyncNameResolver::STATUS_ERROR:
+    return "error";
+  default:
+    return "unknown";
+  }
+}
+
+const char* familyToString(int family)
+{
+  return family == AF_INET6 ? "AAAA" : "A";
+}
+} // namespace
 
 AsyncNameResolverMan::AsyncNameResolverMan()
     : numResolver_(0), resolverCheck_(0), ipv4_(true), ipv6_(true)
@@ -75,6 +99,9 @@ void AsyncNameResolverMan::startAsync(const std::string& hostname,
   A2_LOG_NETWORK(
       fmt("DNS: query families: A=%s, AAAA=%s",
           ipv4_ ? "yes" : "no", ipv6_ ? "yes" : "no"));
+  if (!servers_.empty()) {
+    A2_LOG_NETWORK(fmt("DNS: configured c-ares servers=%s", servers_.c_str()));
+  }
   // Set IPv6 resolver first, so that we can push IPv6 address in
   // front of IPv6 address in getResolvedAddress().
   if (ipv6_) {
@@ -96,7 +123,9 @@ void AsyncNameResolverMan::startAsyncFamily(const std::string& hostname,
   asyncNameResolver_[numResolver_] =
       std::make_shared<AsyncNameResolver>(family, servers_);
   asyncNameResolver_[numResolver_]->resolve(hostname);
-  setNameResolverCheck(numResolver_, e, command);
+  if (asyncNameResolver_[numResolver_]->usable()) {
+    setNameResolverCheck(numResolver_, e, command);
+  }
 }
 
 void AsyncNameResolverMan::getResolvedAddress(
@@ -201,6 +230,29 @@ const std::string& AsyncNameResolverMan::getLastError() const
   return A2STR::NIL;
 }
 
+std::string AsyncNameResolverMan::getQueryStatus() const
+{
+  std::vector<std::string> entries;
+  for (size_t i = 0; i < numResolver_; ++i) {
+    const auto& resolver = asyncNameResolver_[i];
+    if (!resolver) {
+      continue;
+    }
+    auto entry = fmt("%s=%s", familyToString(resolver->getFamily()),
+                     resolverStatusToString(resolver->getStatus()));
+    if (resolver->getStatus() == AsyncNameResolver::STATUS_ERROR &&
+        !resolver->getError().empty()) {
+      entry += fmt("(%s)", resolver->getError().c_str());
+    }
+    entries.push_back(std::move(entry));
+  }
+
+  if (entries.empty()) {
+    return A2STR::NIL;
+  }
+  return strjoin(std::begin(entries), std::end(entries), ", ");
+}
+
 void AsyncNameResolverMan::reset(DownloadEngine* e, Command* command)
 {
   disableNameResolverCheck(e, command);
@@ -230,12 +282,6 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
     asyncNameResolverMan->setIPv6(false);
   }
   asyncNameResolverMan->setServers(option->get(PREF_ASYNC_DNS_SERVER));
-#ifdef ENABLE_ASYNC_DNS
-  A2_LOG_NETWORK(
-      fmt("DNS: async resolver %s, servers=%s",
-          option->getAsBool(PREF_ASYNC_DNS) ? "enabled" : "disabled",
-          option->get(PREF_ASYNC_DNS_SERVER).c_str()));
-#endif // ENABLE_ASYNC_DNS
 }
 
 } // namespace aria2

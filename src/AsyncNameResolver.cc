@@ -45,17 +45,139 @@
 
 namespace aria2 {
 
+namespace {
+const char* familyToString(int family)
+{
+  return family == AF_INET6 ? "AAAA" : "A";
+}
+
+const char* socketTypeToString(int type)
+{
+  switch (type) {
+  case SOCK_DGRAM:
+    return "UDP";
+  case SOCK_STREAM:
+    return "TCP";
+  default:
+    return "unknown transport";
+  }
+}
+
+bool hasMultipleServers(const std::string& servers)
+{
+  return servers.find(',') != std::string::npos;
+}
+
+int configureOptionsForServers(ares_options* opts, const std::string& servers)
+{
+  auto optmask = ARES_OPT_SOCK_STATE_CB;
+  if (hasMultipleServers(servers)) {
+    // Keep c-ares' per-server retry cycle below aria2's outer DNS timeout, so
+    // a blackholed first server still leaves time to try later servers.
+    opts->tries = 2;
+    optmask |= ARES_OPT_TRIES;
+#ifdef ARES_OPT_TIMEOUTMS
+    opts->timeout = 2000;
+    optmask |= ARES_OPT_TIMEOUTMS;
+#else  // !ARES_OPT_TIMEOUTMS
+    opts->timeout = 2;
+    optmask |= ARES_OPT_TIMEOUT;
+#endif // !ARES_OPT_TIMEOUTMS
+  }
+  return optmask;
+}
+
+std::string getSocketPeer(ares_socket_t fd)
+{
+  sockaddr_union su{};
+  socklen_t len = sizeof(su);
+  if (getpeername(fd, &su.sa, &len) == -1) {
+    return A2STR::NIL;
+  }
+
+  char host[NI_MAXHOST];
+  char service[NI_MAXSERV];
+  auto rv = getnameinfo(&su.sa, len, host, sizeof(host), service,
+                        sizeof(service), NI_NUMERICHOST | NI_NUMERICSERV);
+  if (rv != 0) {
+    return A2STR::NIL;
+  }
+
+  std::string peer;
+  if (su.sa.sa_family == AF_INET6) {
+    peer += "[";
+    peer += host;
+    peer += "]";
+  }
+  else {
+    peer += host;
+  }
+  peer += ":";
+  peer += service;
+  return peer;
+}
+
+int socket_cb(ares_socket_t fd, int type, void* /* userdata */)
+{
+  if (A2_LOG_NETWORK_ENABLED) {
+    auto peer = getSocketPeer(fd);
+    if (!peer.empty()) {
+      A2_LOG_NETWORK(fmt("DNS: c-ares socket connected to %s over %s",
+                         peer.c_str(), socketTypeToString(type)));
+    }
+  }
+
+  return ARES_SUCCESS;
+}
+
+#ifdef HAVE_ARES_SET_SERVER_STATE_CALLBACK
+const char* serverStateTransportToString(int flags)
+{
+  if (flags & ARES_SERV_STATE_TCP) {
+    return "TCP";
+  }
+  if (flags & ARES_SERV_STATE_UDP) {
+    return "UDP";
+  }
+  return "unknown transport";
+}
+
+void server_state_cb(const char* serverString, ares_bool_t success, int flags,
+                     void* data)
+{
+  auto resolver = static_cast<AsyncNameResolver*>(data);
+  auto famStr = familyToString(resolver->getFamily());
+  auto hostname = resolver->getHostname();
+  if (hostname.empty()) {
+    hostname = "(pending)";
+  }
+  A2_LOG_NETWORK(
+      fmt("DNS: c-ares server %s %s for %s %s over %s",
+          serverString ? serverString : "(unknown)",
+          success == ARES_TRUE ? "succeeded" : "failed", famStr,
+          hostname.c_str(), serverStateTransportToString(flags)));
+}
+#endif // HAVE_ARES_SET_SERVER_STATE_CALLBACK
+} // namespace
+
 void callback(void* arg, int status, int timeouts, ares_addrinfo* result)
 {
   AsyncNameResolver* resolverPtr = reinterpret_cast<AsyncNameResolver*>(arg);
   const auto& hostname = resolverPtr->getHostname();
-  const auto famStr = resolverPtr->getFamily() == AF_INET6 ? "AAAA" : "A";
+  const auto famStr = familyToString(resolverPtr->getFamily());
   if (status != ARES_SUCCESS) {
     resolverPtr->error_ = ares_strerror(status);
     resolverPtr->status_ = AsyncNameResolver::STATUS_ERROR;
-    A2_LOG_NETWORK(
-        fmt("DNS: %s %s failed: %s", famStr, hostname.c_str(),
-            resolverPtr->error_.c_str()));
+    if (timeouts > 0) {
+      A2_LOG_NETWORK(fmt("DNS: %s %s failed after %d c-ares timeout(s): %s",
+                         famStr, hostname.c_str(), timeouts,
+                         resolverPtr->error_.c_str()));
+    }
+    else {
+      A2_LOG_NETWORK(
+          fmt("DNS: %s %s failed: %s", famStr, hostname.c_str(),
+              resolverPtr->error_.c_str()));
+    }
     return;
   }
   for (auto ap = result->nodes; ap; ap = ap->ai_next) {
@@ -128,37 +250,70 @@ void AsyncNameResolver::handle_sock_state(ares_socket_t fd, int read, int write)
 }
 
 AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers)
-    : status_(STATUS_READY), family_(family)
+    : status_(STATUS_READY), family_(family), channel_(nullptr)
 {
   ares_options opts{};
   opts.sock_state_cb = sock_state_cb;
   opts.sock_state_cb_data = this;
 
-  // TODO evaluate return value
-  ares_init_options(&channel_, &opts, ARES_OPT_SOCK_STATE_CB);
+  auto optmask = configureOptionsForServers(&opts, servers);
+  auto rv = ares_init_options(&channel_, &opts, optmask);
+  if (rv != ARES_SUCCESS) {
+    error_ = ares_strerror(rv);
+    status_ = STATUS_ERROR;
+    A2_LOG_NETWORK(
+        fmt("DNS: c-ares channel initialization failed: %s", error_.c_str()));
+    return;
+  }
+
+  ares_set_socket_callback(channel_, socket_cb, this);
+#ifdef HAVE_ARES_SET_SERVER_STATE_CALLBACK
+  ares_set_server_state_callback(channel_, server_state_cb, this);
+#endif // HAVE_ARES_SET_SERVER_STATE_CALLBACK
+
+  if (hasMultipleServers(servers)) {
+#ifdef ARES_OPT_TIMEOUTMS
+    A2_LOG_NETWORK(
+        "DNS: c-ares multi-server policy: timeout=2000ms, tries=2");
+#else  // !ARES_OPT_TIMEOUTMS
+    A2_LOG_NETWORK("DNS: c-ares multi-server policy: timeout=2s, tries=2");
+#endif // !ARES_OPT_TIMEOUTMS
+  }
 
   if (!servers.empty()) {
-    if (ares_set_servers_csv(channel_, servers.c_str()) != ARES_SUCCESS) {
+    rv = ares_set_servers_csv(channel_, servers.c_str());
+    if (rv != ARES_SUCCESS) {
       A2_LOG_DEBUG("ares_set_servers_csv failed");
-    }
-    else {
       A2_LOG_NETWORK(
-          fmt("DNS: async resolver servers=%s", servers.c_str()));
+          fmt("DNS: c-ares rejected configured server list %s: %s; keeping "
+              "existing resolver configuration",
+              servers.c_str(), ares_strerror(rv)));
     }
   }
 }
 
-AsyncNameResolver::~AsyncNameResolver() { ares_destroy(channel_); }
+AsyncNameResolver::~AsyncNameResolver()
+{
+  if (channel_) {
+    ares_destroy(channel_);
+  }
+}
 
 void AsyncNameResolver::resolve(const std::string& name)
 {
   hostname_ = name;
+  if (!channel_) {
+    A2_LOG_NETWORK(
+        fmt("DNS: query %s failed: c-ares channel is not initialized",
+            name.c_str()));
+    return;
+  }
   status_ = STATUS_QUERYING;
 
   ares_addrinfo_hints hints{};
   hints.ai_family = family_;
 
-  const auto famStr = family_ == AF_INET6 ? "AAAA" : "A";
+  const auto famStr = familyToString(family_);
   A2_LOG_NETWORK(fmt("DNS: query %s %s using c-ares", famStr, name.c_str()));
   ares_getaddrinfo(channel_, name.c_str(), nullptr, &hints, callback, this);
 }
@@ -212,6 +367,16 @@ AsyncNameResolver::getsock() const
 
 void AsyncNameResolver::process(ares_socket_t readfd, ares_socket_t writefd)
 {
+  if (!channel_) {
+    return;
+  }
+  if (A2_LOG_NETWORK_ENABLED && readfd != ARES_SOCKET_BAD) {
+    auto peer = getSocketPeer(readfd);
+    if (!peer.empty()) {
+      A2_LOG_NETWORK(
+          fmt("DNS: c-ares socket readable from %s", peer.c_str()));
+    }
+  }
   ares_process_fd(channel_, readfd, writefd);
 }
 

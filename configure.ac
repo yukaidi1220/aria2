@@ -507,6 +507,13 @@ if test "x$with_libcares" = "xyes"; then
                     [have_libcares=no])
   if test "x$have_libcares" = "xyes"; then
     AC_DEFINE([HAVE_LIBCARES], [1], [Define to 1 if you have libcares.])
+    save_CPPFLAGS=$CPPFLAGS
+    save_LIBS=$LIBS
+    CPPFLAGS="$CPPFLAGS $LIBCARES_CFLAGS"
+    LIBS="$LIBCARES_LIBS $LIBS"
+    AC_CHECK_FUNCS([ares_set_server_state_callback])
+    CPPFLAGS=$save_CPPFLAGS
+    LIBS=$save_LIBS
 
     # -DCARES_STATICLIB is appended by pkg-config file libcares.pc
   else

@@ -76,6 +76,8 @@ public:
   int getStatus() const;
   // Returns last error string
   const std::string& getLastError() const;
+  // Returns active query status for diagnostics.
+  std::string getQueryStatus() const;
   // Resets state. Also removes resolvers from DownloadEngine.
   void reset(DownloadEngine* e, Command* command);
 

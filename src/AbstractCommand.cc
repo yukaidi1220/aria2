@@ -339,31 +339,61 @@ bool AbstractCommand::execute()
       ss->setError();
       // When DNS query was timeout, req_->getConnectedAddr() is
       // empty.
-      if (!req_->getConnectedAddr().empty()) {
+      const auto& connectedAddr = req_->getConnectedAddr();
+      const auto& connectedHostname = req_->getConnectedHostname();
+      const auto connectedPort = req_->getConnectedPort();
+      const bool dnsTimeout = connectedAddr.empty();
+      if (!connectedAddr.empty()) {
         // Purging IP address cache to renew IP address.
         A2_LOG_DEBUG(fmt("CUID#%" PRId64 " - Marking IP address %s as bad",
-                         getCuid(), req_->getConnectedAddr().c_str()));
+                         getCuid(), connectedAddr.c_str()));
         A2_LOG_NETWORK(
             fmt("CUID#%" PRId64 " - Marking IP address %s as bad (timeout)",
-                getCuid(), req_->getConnectedAddr().c_str()));
-        e_->markBadIPAddress(req_->getConnectedHostname(),
-                             req_->getConnectedAddr(),
-                             req_->getConnectedPort());
+                getCuid(), connectedAddr.c_str()));
+        e_->markBadIPAddress(connectedHostname, connectedAddr, connectedPort);
       }
-      if (e_->findCachedIPAddress(req_->getConnectedHostname(),
-                                  req_->getConnectedPort())
-              .empty()) {
+      if (!connectedHostname.empty() &&
+          e_->findCachedIPAddress(connectedHostname, connectedPort).empty()) {
         A2_LOG_DEBUG(fmt("CUID#%" PRId64 " - All IP addresses were marked bad."
                          " Removing Entry.",
                          getCuid()));
         A2_LOG_NETWORK(
             fmt("CUID#%" PRId64 " - All IP addresses for %s were marked bad",
-                getCuid(), req_->getConnectedHostname().c_str()));
-        e_->removeCachedIPAddress(req_->getConnectedHostname(),
-                                  req_->getConnectedPort());
+                getCuid(), connectedHostname.c_str()));
+        e_->removeCachedIPAddress(connectedHostname, connectedPort);
       }
-      A2_LOG_NETWORK(fmt("CUID#%" PRId64 " - Connection to %s timed out, retrying",
-                         getCuid(), req_->getUri().c_str()));
+#ifdef ENABLE_ASYNC_DNS
+      if (dnsTimeout && asyncNameResolverMan_->started()) {
+        auto status = asyncNameResolverMan_->getQueryStatus();
+        if (!status.empty()) {
+          A2_LOG_NETWORK(
+              fmt("CUID#%" PRId64 " - DNS lookup for %s timed out after %ld "
+                  "seconds (%s), retrying",
+                  getCuid(), req_->getHost().c_str(),
+                  static_cast<long>(timeout_.count()), status.c_str()));
+        }
+        else {
+          A2_LOG_NETWORK(
+              fmt("CUID#%" PRId64 " - DNS lookup for %s timed out after %ld "
+                  "seconds, retrying",
+                  getCuid(), req_->getHost().c_str(),
+                  static_cast<long>(timeout_.count())));
+        }
+      }
+      else
+#endif // ENABLE_ASYNC_DNS
+      if (dnsTimeout) {
+        A2_LOG_NETWORK(
+            fmt("CUID#%" PRId64 " - DNS lookup for %s timed out after %ld "
+                "seconds, retrying",
+                getCuid(), req_->getHost().c_str(),
+                static_cast<long>(timeout_.count())));
+      }
+      else {
+        A2_LOG_NETWORK(
+            fmt("CUID#%" PRId64 " - Connection to %s timed out, retrying",
+                getCuid(), req_->getUri().c_str()));
+      }
       throw DL_RETRY_EX2(EX_TIME_OUT, error_code::TIME_OUT);
     }
 

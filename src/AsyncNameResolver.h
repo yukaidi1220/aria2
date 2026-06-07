@@ -89,6 +89,8 @@ public:
 
   STATUS getStatus() const { return status_; }
 
+  bool usable() const { return channel_; }
+
   ares_socket_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr) const;
 
   void process(fd_set* rfdsPtr, fd_set* wfdsPtr);
