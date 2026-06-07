@@ -430,6 +430,10 @@ SRCS += \
 	AsyncNameResolver.cc AsyncNameResolver.h\
 	AsyncResolver.h\
 	AsyncNameResolverMan.cc AsyncNameResolverMan.h
+if ENABLE_SSL
+SRCS += \
+	AsyncDotNameResolver.cc AsyncDotNameResolver.h
+endif # ENABLE_SSL
 endif # ENABLE_ASYNC_DNS
 
 if ENABLE_BITTORRENT
