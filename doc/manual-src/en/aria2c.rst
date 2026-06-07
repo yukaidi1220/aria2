@@ -439,7 +439,13 @@ HTTP Specific Options
   connect target, HTTP ``Host`` header, proxy ``CONNECT`` target, cookie scope,
   or the certificate verification hostname. If this option is not specified,
   aria2 uses the URI hostname as before. This option requires a TLS backend
-  which supports separate SNI and certificate verification hostnames.
+  which supports separate SNI and certificate verification hostnames when
+  ``HOST`` is different from the certificate verification hostname.
+
+  ``HOST`` must be a DNS hostname that is valid for TLS SNI. IP addresses,
+  ``localhost``, single-label names, empty labels, labels with characters other
+  than letters, digits, and hyphen, and labels that start or end with hyphen
+  are rejected.
 
 .. option:: --http-accept-gzip [true|false]
 

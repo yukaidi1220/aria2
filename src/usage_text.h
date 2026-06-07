@@ -541,8 +541,10 @@
   _(" --tls-sni-host=HOST        Set the hostname sent in the TLS SNI extension.\n" \
     "                              This does not change DNS resolution, TCP connect\n" \
     "                              target, HTTP Host header, or certificate\n" \
-    "                              verification hostname. This option requires a\n" \
-    "                              TLS backend which supports separate SNI and\n" \
+    "                              verification hostname. HOST must be a DNS\n" \
+    "                              hostname, not an IP address or single-label\n" \
+    "                              name. A different HOST requires a TLS\n" \
+    "                              backend which supports separate SNI and\n" \
     "                              verification hostnames.")
 #define TEXT_NO_PROXY                                                   \
   _(" --no-proxy=DOMAINS           Specify comma separated hostnames, domains or\n" \
