@@ -52,6 +52,9 @@ class AsyncNameResolverMan {
 public:
   enum ResolverMode {
     RESOLVER_CARES,
+#ifdef ENABLE_SSL
+    RESOLVER_DOT,
+#endif // ENABLE_SSL
   };
 
   AsyncNameResolverMan();
@@ -91,9 +94,9 @@ public:
     resolverMode_ = resolverMode;
   }
 
-private:
   std::shared_ptr<AsyncResolver> createResolver(int family) const;
 
+private:
   void startAsyncFamily(const std::string& hostname, int family,
                         DownloadEngine* e, Command* command);
   void setNameResolverCheck(size_t resolverIndex, DownloadEngine* e,

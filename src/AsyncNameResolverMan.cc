@@ -39,6 +39,10 @@
 
 #include "AsyncNameResolver.h"
 #include "AsyncResolver.h"
+#ifdef ENABLE_SSL
+#  include "AsyncDnsServerConfig.h"
+#  include "AsyncDotNameResolver.h"
+#endif // ENABLE_SSL
 #include "DownloadEngine.h"
 #include "Command.h"
 #include "message.h"
@@ -78,6 +82,10 @@ const char* resolverModeToString(AsyncNameResolverMan::ResolverMode mode)
   switch (mode) {
   case AsyncNameResolverMan::RESOLVER_CARES:
     return "c-ares";
+#ifdef ENABLE_SSL
+  case AsyncNameResolverMan::RESOLVER_DOT:
+    return "DoT";
+#endif // ENABLE_SSL
   }
   abort();
 }
@@ -147,6 +155,14 @@ std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
   switch (resolverMode_) {
   case RESOLVER_CARES:
     return std::make_shared<AsyncNameResolver>(family, servers_);
+#ifdef ENABLE_SSL
+  case RESOLVER_DOT: {
+    auto dotServers = parseAsyncDnsDotServerConfigList(servers_);
+    validateAsyncDnsDotServerConfigForDirectConnect(dotServers);
+    return std::make_shared<AsyncDotNameResolver>(family,
+                                                  std::move(dotServers));
+  }
+#endif // ENABLE_SSL
   }
   abort();
 }
