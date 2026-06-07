@@ -17,10 +17,14 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(AsyncNameResolverTest);
   CPPUNIT_TEST(testGetQueryStatusBeforeStart);
+  CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testCreateDotResolver);
   CPPUNIT_TEST(testCreateDotResolverRejectsDomainServer);
   CPPUNIT_TEST(testCreateDotResolverRejectsEmptyServerList);
+  CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
+  CPPUNIT_TEST(testValidateConfigRejectsDotDomainServer);
+  CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
 
@@ -30,10 +34,14 @@ public:
   void tearDown() {}
 
   void testGetQueryStatusBeforeStart();
+  void testValidateConfigLeavesCaresServersUnchanged();
 #ifdef ENABLE_SSL
   void testCreateDotResolver();
   void testCreateDotResolverRejectsDomainServer();
   void testCreateDotResolverRejectsEmptyServerList();
+  void testValidateConfigAcceptsDotIpServers();
+  void testValidateConfigRejectsDotDomainServer();
+  void testValidateConfigRejectsDotEmptyServerList();
 #endif // ENABLE_SSL
 };
 
@@ -44,6 +52,12 @@ void AsyncNameResolverTest::testGetQueryStatusBeforeStart()
   AsyncNameResolverMan resolverMan;
 
   CPPUNIT_ASSERT_EQUAL(std::string(), resolverMan.getQueryStatus());
+}
+
+void AsyncNameResolverTest::testValidateConfigLeavesCaresServersUnchanged()
+{
+  validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_CARES,
+                                  "dns.example.org");
 }
 
 #ifdef ENABLE_SSL
@@ -74,6 +88,28 @@ void AsyncNameResolverTest::testCreateDotResolverRejectsEmptyServerList()
   resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOT);
 
   CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
+}
+
+void AsyncNameResolverTest::testValidateConfigAcceptsDotIpServers()
+{
+  validateAsyncNameResolverConfig(
+      AsyncNameResolverMan::RESOLVER_DOT,
+      "1.1.1.1,[2606:4700:4700::1111]:853");
+}
+
+void AsyncNameResolverTest::testValidateConfigRejectsDotDomainServer()
+{
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOT,
+                                      "dns.example.org"),
+      Exception);
+}
+
+void AsyncNameResolverTest::testValidateConfigRejectsDotEmptyServerList()
+{
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOT, ""),
+      Exception);
 }
 #endif // ENABLE_SSL
 

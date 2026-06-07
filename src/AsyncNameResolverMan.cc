@@ -312,6 +312,22 @@ void AsyncNameResolverMan::reset(DownloadEngine* e, Command* command)
   numResolver_ = 0;
 }
 
+void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
+                                     const std::string& servers)
+{
+  switch (mode) {
+  case AsyncNameResolverMan::RESOLVER_CARES:
+    break;
+#ifdef ENABLE_SSL
+  case AsyncNameResolverMan::RESOLVER_DOT: {
+    auto dotServers = parseAsyncDnsDotServerConfigList(servers);
+    validateAsyncDnsDotServerConfigForDirectConnect(dotServers);
+    break;
+  }
+#endif // ENABLE_SSL
+  }
+}
+
 void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
                                    Option* option)
 {
@@ -330,8 +346,11 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
   if (!net::getIPv6AddrConfigured() || option->getAsBool(PREF_DISABLE_IPV6)) {
     asyncNameResolverMan->setIPv6(false);
   }
-  asyncNameResolverMan->setResolverMode(resolverModeFromOption(option));
-  asyncNameResolverMan->setServers(option->get(PREF_ASYNC_DNS_SERVER));
+  auto resolverMode = resolverModeFromOption(option);
+  auto servers = option->get(PREF_ASYNC_DNS_SERVER);
+  validateAsyncNameResolverConfig(resolverMode, servers);
+  asyncNameResolverMan->setResolverMode(resolverMode);
+  asyncNameResolverMan->setServers(std::move(servers));
 }
 
 } // namespace aria2

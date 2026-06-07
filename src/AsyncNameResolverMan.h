@@ -116,6 +116,9 @@ private:
 void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
                                    Option* option);
 
+void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
+                                     const std::string& servers);
+
 } // namespace aria2
 
 #endif // D_ASYNC_NAME_RESOLVER_MAN_H
