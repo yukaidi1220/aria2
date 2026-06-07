@@ -18,6 +18,9 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testInetPton);
   CPPUNIT_TEST(testGetBinAddr);
   CPPUNIT_TEST(testVerifyHostname);
+#ifdef ENABLE_SSL
+  CPPUNIT_TEST(testTLSHandshakeParams);
+#endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -31,6 +34,9 @@ public:
   void testInetPton();
   void testGetBinAddr();
   void testVerifyHostname();
+#ifdef ENABLE_SSL
+  void testTLSHandshakeParams();
+#endif // ENABLE_SSL
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(SocketCoreTest);
@@ -238,5 +244,41 @@ void SocketCoreTest::testVerifyHostname()
         !net::verifyHostname("192.168.0.1", dnsNames, ipAddrs, commonName));
   }
 }
+
+#ifdef ENABLE_SSL
+void SocketCoreTest::testTLSHandshakeParams()
+{
+  {
+    TLSHandshakeParams params;
+    CPPUNIT_ASSERT(params.sniHost.empty());
+    CPPUNIT_ASSERT(params.verifyHost.empty());
+    CPPUNIT_ASSERT(params.alpnProtocols.empty());
+  }
+  {
+    TLSHandshakeParams params("example.org");
+    CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.sniHost);
+    CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.verifyHost);
+    CPPUNIT_ASSERT(params.alpnProtocols.empty());
+  }
+  {
+    TLSHandshakeParams params("front.example", "origin.example");
+    CPPUNIT_ASSERT_EQUAL(std::string("front.example"), params.sniHost);
+    CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+    CPPUNIT_ASSERT(params.alpnProtocols.empty());
+  }
+  {
+    std::vector<std::string> alpnProtocols;
+    alpnProtocols.push_back("h2");
+    alpnProtocols.push_back("http/1.1");
+    TLSHandshakeParams params("front.example", "origin.example",
+                              alpnProtocols);
+    CPPUNIT_ASSERT_EQUAL(std::string("front.example"), params.sniHost);
+    CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+    CPPUNIT_ASSERT_EQUAL((size_t)2, params.alpnProtocols.size());
+    CPPUNIT_ASSERT_EQUAL(std::string("h2"), params.alpnProtocols[0]);
+    CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), params.alpnProtocols[1]);
+  }
+}
+#endif // ENABLE_SSL
 
 } // namespace aria2

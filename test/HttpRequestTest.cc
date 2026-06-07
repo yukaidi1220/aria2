@@ -28,6 +28,7 @@ class HttpRequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateRequest);
   CPPUNIT_TEST(testCreateRequest_ftp);
   CPPUNIT_TEST(testCreateRequest_with_cookie);
+  CPPUNIT_TEST(testCreateRequest_with_tls_sni_host);
   CPPUNIT_TEST(testCreateRequest_query);
   CPPUNIT_TEST(testCreateRequest_head);
   CPPUNIT_TEST(testCreateRequest_ipv6LiteralAddr);
@@ -59,6 +60,7 @@ public:
   void testCreateRequest();
   void testCreateRequest_ftp();
   void testCreateRequest_with_cookie();
+  void testCreateRequest_with_tls_sni_host();
   void testCreateRequest_query();
   void testCreateRequest_head();
   void testCreateRequest_ipv6LiteralAddr();
@@ -503,6 +505,32 @@ void HttpRequestTest::testCreateRequest_with_cookie()
                  "Connection: close\r\n"
                  "Cookie: name5=value5;\r\n"
                  "\r\n";
+
+  CPPUNIT_ASSERT_EQUAL(expectedText, httpRequest.createRequest());
+}
+
+void HttpRequestTest::testCreateRequest_with_tls_sni_host()
+{
+  auto request = std::make_shared<Request>();
+  request->setUri("https://origin.example/file");
+
+  option_->put(PREF_TLS_SNI_HOST, "front.example");
+
+  HttpRequest httpRequest;
+  httpRequest.disableContentEncoding();
+  httpRequest.setRequest(request);
+  httpRequest.setAuthConfigFactory(authConfigFactory_.get());
+  httpRequest.setOption(option_.get());
+  httpRequest.setNoWantDigest(true);
+
+  std::string expectedText = "GET /file HTTP/1.1\r\n"
+                             "User-Agent: aria2\r\n"
+                             "Accept: */*\r\n"
+                             "Host: origin.example\r\n"
+                             "Pragma: no-cache\r\n"
+                             "Cache-Control: no-cache\r\n"
+                             "Connection: close\r\n"
+                             "\r\n";
 
   CPPUNIT_ASSERT_EQUAL(expectedText, httpRequest.createRequest());
 }
