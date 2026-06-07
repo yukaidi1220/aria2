@@ -1251,8 +1251,9 @@ Advanced Options
   resolver. Usually asynchronous DNS resolver reads DNS server
   addresses from ``/etc/resolv.conf``. When this option is used, it uses
   DNS servers specified in this option instead of ones in
-  ``/etc/resolv.conf``. You can specify both IPv4 and IPv6 address. This
-  option is useful when the system does not have ``/etc/resolv.conf`` and
+  ``/etc/resolv.conf``. You can specify both IPv4 and IPv6 address. Use
+  ``[IPv6]:PORT`` format when specifying port. This option is useful when
+  the system does not have ``/etc/resolv.conf`` and
   user does not have the permission to create it.
 
 .. option:: --auto-file-renaming [true|false]
@@ -1293,7 +1294,10 @@ Advanced Options
 .. option:: --console-log-level=<LEVEL>
 
   Set log level to output to console.  LEVEL is either ``debug``,
-  ``info``, ``notice``, ``warn`` or ``error``.  Default: ``notice``
+  ``info``, ``notice``, ``warn``, ``error`` or ``network``.  ``network``
+  outputs key network events such as DNS, connect, TLS, HTTP and redirect,
+  plus selected network retry events, without filesystem debug noise.
+  Default: ``notice``
 
 .. option:: --content-disposition-default-utf8 [true|false]
 
@@ -1539,7 +1543,10 @@ Advanced Options
 .. option:: --log-level=<LEVEL>
 
   Set log level to output.
-  LEVEL is either ``debug``, ``info``, ``notice``, ``warn`` or ``error``.
+  LEVEL is either ``debug``, ``info``, ``notice``, ``warn``, ``error`` or
+  ``network``.  ``network`` outputs key network events such as DNS, connect,
+  TLS, HTTP and redirect, plus selected network retry events, without
+  filesystem debug noise.
   Default: ``debug``
 
 .. option:: --on-bt-download-complete=<COMMAND>

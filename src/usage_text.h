@@ -829,7 +829,8 @@
     "                              addresses from /etc/resolv.conf. When this option\n" \
     "                              is used, it uses DNS servers specified in this\n" \
     "                              option instead of ones in /etc/resolv.conf. You\n" \
-    "                              can specify both IPv4 and IPv6 address. This\n" \
+    "                              can specify both IPv4 and IPv6 address. Use\n" \
+    "                              [IPv6]:PORT format when specifying port. This\n" \
     "                              option is useful when the system does not have\n" \
     "                              /etc/resolv.conf and user does not have the\n" \
     "                              permission to create it.")
