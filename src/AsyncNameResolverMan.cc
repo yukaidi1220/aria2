@@ -96,6 +96,11 @@ AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
   if (mode == V_CARES) {
     return AsyncNameResolverMan::RESOLVER_CARES;
   }
+#ifdef ENABLE_SSL
+  if (mode == V_DOT) {
+    return AsyncNameResolverMan::RESOLVER_DOT;
+  }
+#endif // ENABLE_SSL
   abort();
 }
 } // namespace

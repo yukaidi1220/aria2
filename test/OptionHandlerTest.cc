@@ -182,24 +182,39 @@ void OptionHandlerTest::testParameterOptionHandler()
 
 void OptionHandlerTest::testAsyncDnsModeOptionHandler()
 {
-  ParameterOptionHandler handler(PREF_ASYNC_DNS_MODE, "", V_CARES, {V_CARES});
+  ParameterOptionHandler handler(PREF_ASYNC_DNS_MODE, "", V_CARES,
+#ifdef ENABLE_SSL
+                                 {V_CARES, V_DOT});
+#else  // !ENABLE_SSL
+                                 {V_CARES});
+#endif // !ENABLE_SSL
   Option option;
   handler.parse(option, V_CARES);
   CPPUNIT_ASSERT_EQUAL(std::string(V_CARES), option.get(PREF_ASYNC_DNS_MODE));
+#ifdef ENABLE_SSL
+  handler.parse(option, V_DOT);
+  CPPUNIT_ASSERT_EQUAL(std::string(V_DOT), option.get(PREF_ASYNC_DNS_MODE));
+#else  // !ENABLE_SSL
   try {
     handler.parse(option, "dot");
     CPPUNIT_FAIL("exception must be thrown.");
   }
   catch (Exception& e) {
   }
+#endif // !ENABLE_SSL
   try {
     handler.parse(option, "doh");
     CPPUNIT_FAIL("exception must be thrown.");
   }
   catch (Exception& e) {
   }
+#ifdef ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string(V_CARES + ", " + V_DOT),
+                       handler.createPossibleValuesString());
+#else  // !ENABLE_SSL
   CPPUNIT_ASSERT_EQUAL(std::string(V_CARES),
                        handler.createPossibleValuesString());
+#endif // !ENABLE_SSL
 }
 
 void OptionHandlerTest::testDefaultOptionHandler()

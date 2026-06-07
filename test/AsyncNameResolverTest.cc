@@ -9,6 +9,8 @@
 #include <cppunit/extensions/HelperMacros.h>
 
 #include "Exception.h"
+#include "Option.h"
+#include "prefs.h"
 #include "SocketCore.h"
 
 namespace aria2 {
@@ -25,6 +27,9 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
   CPPUNIT_TEST(testValidateConfigRejectsDotDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
+  CPPUNIT_TEST(testConfigureAcceptsDotIpServers);
+  CPPUNIT_TEST(testConfigureRejectsDotDomainServer);
+  CPPUNIT_TEST(testConfigureRejectsDotEmptyServerList);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
 
@@ -42,6 +47,9 @@ public:
   void testValidateConfigAcceptsDotIpServers();
   void testValidateConfigRejectsDotDomainServer();
   void testValidateConfigRejectsDotEmptyServerList();
+  void testConfigureAcceptsDotIpServers();
+  void testConfigureRejectsDotDomainServer();
+  void testConfigureRejectsDotEmptyServerList();
 #endif // ENABLE_SSL
 };
 
@@ -110,6 +118,38 @@ void AsyncNameResolverTest::testValidateConfigRejectsDotEmptyServerList()
   CPPUNIT_ASSERT_THROW(
       validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOT, ""),
       Exception);
+}
+
+void AsyncNameResolverTest::testConfigureAcceptsDotIpServers()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOT);
+  option.put(PREF_ASYNC_DNS_SERVER, "1.1.1.1");
+  AsyncNameResolverMan resolverMan;
+
+  configureAsyncNameResolverMan(&resolverMan, &option);
+}
+
+void AsyncNameResolverTest::testConfigureRejectsDotDomainServer()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOT);
+  option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
+  AsyncNameResolverMan resolverMan;
+
+  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
+                       Exception);
+}
+
+void AsyncNameResolverTest::testConfigureRejectsDotEmptyServerList()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOT);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+  AsyncNameResolverMan resolverMan;
+
+  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
+                       Exception);
 }
 #endif // ENABLE_SSL
 

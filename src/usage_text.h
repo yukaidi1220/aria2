@@ -451,8 +451,14 @@
   _(" -q, --quiet[=true|false]     Make aria2 quiet(no console output).")
 #define TEXT_ASYNC_DNS                                          \
   _(" --async-dns[=true|false]     Enable asynchronous DNS.")
+#ifdef ENABLE_SSL
+#define TEXT_ASYNC_DNS_MODE                                     \
+  _(" --async-dns-mode=cares|dot  Select asynchronous DNS resolver backend.\n" \
+    "                              DoT requires numeric --async-dns-server.")
+#else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
+#endif // !ENABLE_SSL
 #define TEXT_FTP_REUSE_CONNECTION                                       \
   _(" --ftp-reuse-connection[=true|false] Reuse connection in FTP.")
 #define TEXT_SUMMARY_INTERVAL                                           \
