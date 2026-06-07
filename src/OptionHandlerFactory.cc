@@ -100,6 +100,15 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+    OptionHandler* op(new ParameterOptionHandler(
+        PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_CARES, {V_CARES}));
+    op->addTag(TAG_ADVANCED);
+    op->setInitialOption(true);
+    op->setChangeGlobalOption(true);
+    op->setChangeOptionForReserved(true);
+    handlers.push_back(op);
+  }
+  {
     OptionHandler* op(new DefaultOptionHandler(
         PREF_ASYNC_DNS_SERVER, TEXT_ASYNC_DNS_SERVER, NO_DEFAULT_VALUE));
     op->addTag(TAG_ADVANCED);

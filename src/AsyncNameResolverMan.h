@@ -50,6 +50,10 @@ class Option;
 
 class AsyncNameResolverMan {
 public:
+  enum ResolverMode {
+    RESOLVER_CARES,
+  };
+
   AsyncNameResolverMan();
   // Destructor does not call disableNameResolverCheck(). Application
   // must call it before the destruction of this object.
@@ -82,8 +86,14 @@ public:
   void reset(DownloadEngine* e, Command* command);
 
   void setServers(std::string servers) { servers_ = std::move(servers); }
+  void setResolverMode(ResolverMode resolverMode)
+  {
+    resolverMode_ = resolverMode;
+  }
 
 private:
+  std::shared_ptr<AsyncResolver> createResolver(int family) const;
+
   void startAsyncFamily(const std::string& hostname, int family,
                         DownloadEngine* e, Command* command);
   void setNameResolverCheck(size_t resolverIndex, DownloadEngine* e,
@@ -93,6 +103,7 @@ private:
 
   std::shared_ptr<AsyncResolver> asyncNameResolver_[2];
   std::string servers_;
+  ResolverMode resolverMode_;
   size_t numResolver_;
   int resolverCheck_;
   bool ipv4_;

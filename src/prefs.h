@@ -108,6 +108,7 @@ extern const std::string V_ARC4;
 extern const std::string V_HTTP;
 extern const std::string V_HTTPS;
 extern const std::string V_FTP;
+extern const std::string V_CARES;
 extern const std::string A2_V_TLS11;
 extern const std::string A2_V_TLS12;
 extern const std::string A2_V_TLS13;
@@ -198,6 +199,8 @@ extern PrefPtr PREF_STOP;
 extern PrefPtr PREF_QUIET;
 // value: true | false
 extern PrefPtr PREF_ASYNC_DNS;
+// value: cares
+extern PrefPtr PREF_ASYNC_DNS_MODE;
 // value: 1*digit
 extern PrefPtr PREF_SUMMARY_INTERVAL;
 // value: debug, info, notice, warn, error

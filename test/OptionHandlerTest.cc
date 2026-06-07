@@ -19,6 +19,7 @@ class OptionHandlerTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testNumberOptionHandler_min_max);
   CPPUNIT_TEST(testUnitNumberOptionHandler);
   CPPUNIT_TEST(testParameterOptionHandler);
+  CPPUNIT_TEST(testAsyncDnsModeOptionHandler);
   CPPUNIT_TEST(testDefaultOptionHandler);
   CPPUNIT_TEST(testFloatNumberOptionHandler);
   CPPUNIT_TEST(testFloatNumberOptionHandler_min);
@@ -36,6 +37,7 @@ public:
   void testNumberOptionHandler_min_max();
   void testUnitNumberOptionHandler();
   void testParameterOptionHandler();
+  void testAsyncDnsModeOptionHandler();
   void testDefaultOptionHandler();
   void testFloatNumberOptionHandler();
   void testFloatNumberOptionHandler_min();
@@ -175,6 +177,28 @@ void OptionHandlerTest::testParameterOptionHandler()
   catch (Exception& e) {
   }
   CPPUNIT_ASSERT_EQUAL(std::string("value1, value2"),
+                       handler.createPossibleValuesString());
+}
+
+void OptionHandlerTest::testAsyncDnsModeOptionHandler()
+{
+  ParameterOptionHandler handler(PREF_ASYNC_DNS_MODE, "", V_CARES, {V_CARES});
+  Option option;
+  handler.parse(option, V_CARES);
+  CPPUNIT_ASSERT_EQUAL(std::string(V_CARES), option.get(PREF_ASYNC_DNS_MODE));
+  try {
+    handler.parse(option, "dot");
+    CPPUNIT_FAIL("exception must be thrown.");
+  }
+  catch (Exception& e) {
+  }
+  try {
+    handler.parse(option, "doh");
+    CPPUNIT_FAIL("exception must be thrown.");
+  }
+  catch (Exception& e) {
+  }
+  CPPUNIT_ASSERT_EQUAL(std::string(V_CARES),
                        handler.createPossibleValuesString());
 }
 

@@ -72,10 +72,32 @@ const char* familyToString(int family)
 {
   return family == AF_INET6 ? "AAAA" : "A";
 }
+
+const char* resolverModeToString(AsyncNameResolverMan::ResolverMode mode)
+{
+  switch (mode) {
+  case AsyncNameResolverMan::RESOLVER_CARES:
+    return "c-ares";
+  }
+  abort();
+}
+
+AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
+{
+  const auto& mode = option->get(PREF_ASYNC_DNS_MODE);
+  if (mode == V_CARES) {
+    return AsyncNameResolverMan::RESOLVER_CARES;
+  }
+  abort();
+}
 } // namespace
 
 AsyncNameResolverMan::AsyncNameResolverMan()
-    : numResolver_(0), resolverCheck_(0), ipv4_(true), ipv6_(true)
+    : resolverMode_(RESOLVER_CARES),
+      numResolver_(0),
+      resolverCheck_(0),
+      ipv4_(true),
+      ipv6_(true)
 {
 }
 
@@ -96,12 +118,14 @@ void AsyncNameResolverMan::startAsync(const std::string& hostname,
 {
   numResolver_ = 0;
   A2_LOG_NETWORK(
-      fmt("DNS: start resolving %s using c-ares", hostname.c_str()));
+      fmt("DNS: start resolving %s using %s", hostname.c_str(),
+          resolverModeToString(resolverMode_)));
   A2_LOG_NETWORK(
       fmt("DNS: query families: A=%s, AAAA=%s",
           ipv4_ ? "yes" : "no", ipv6_ ? "yes" : "no"));
   if (!servers_.empty()) {
-    A2_LOG_NETWORK(fmt("DNS: configured c-ares servers=%s", servers_.c_str()));
+    A2_LOG_NETWORK(fmt("DNS: configured %s servers=%s",
+                       resolverModeToString(resolverMode_), servers_.c_str()));
   }
   // Set IPv6 resolver first, so that we can push IPv6 address in
   // front of IPv6 address in getResolvedAddress().
@@ -117,12 +141,21 @@ void AsyncNameResolverMan::startAsync(const std::string& hostname,
       fmt(MSG_RESOLVING_HOSTNAME, command->getCuid(), hostname.c_str()));
 }
 
+std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
+    int family) const
+{
+  switch (resolverMode_) {
+  case RESOLVER_CARES:
+    return std::make_shared<AsyncNameResolver>(family, servers_);
+  }
+  abort();
+}
+
 void AsyncNameResolverMan::startAsyncFamily(const std::string& hostname,
                                             int family, DownloadEngine* e,
                                             Command* command)
 {
-  asyncNameResolver_[numResolver_] =
-      std::make_shared<AsyncNameResolver>(family, servers_);
+  asyncNameResolver_[numResolver_] = createResolver(family);
   asyncNameResolver_[numResolver_]->resolve(hostname);
   if (asyncNameResolver_[numResolver_]->usable()) {
     setNameResolverCheck(numResolver_, e, command);
@@ -281,6 +314,7 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
   if (!net::getIPv6AddrConfigured() || option->getAsBool(PREF_DISABLE_IPV6)) {
     asyncNameResolverMan->setIPv6(false);
   }
+  asyncNameResolverMan->setResolverMode(resolverModeFromOption(option));
   asyncNameResolverMan->setServers(option->get(PREF_ASYNC_DNS_SERVER));
 }
 
