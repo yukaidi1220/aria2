@@ -127,10 +127,11 @@ bool HttpRequestCommand::executeInternal()
 #ifdef ENABLE_SSL
     if (getRequest()->getProtocol() == "https") {
       const auto& verifyHost = getRequest()->getHost();
-      TLSHandshakeParams tlsParams(getOption()->blank(PREF_TLS_SNI_HOST)
-                                       ? verifyHost
-                                       : getOption()->get(PREF_TLS_SNI_HOST),
-                                   verifyHost);
+      const auto sniHostOverridden = getOption()->defined(PREF_TLS_SNI_HOST);
+      TLSHandshakeParams tlsParams(sniHostOverridden
+                                       ? getOption()->get(PREF_TLS_SNI_HOST)
+                                       : verifyHost,
+                                   verifyHost, sniHostOverridden);
       if (!getSocket()->tlsConnect(tlsParams)) {
         setReadCheckSocketIf(getSocket(), getSocket()->wantRead());
         setWriteCheckSocketIf(getSocket(), getSocket()->wantWrite());

@@ -58,6 +58,7 @@ struct TLSHandshakeParams {
   std::string sniHost;
   std::string verifyHost;
   std::vector<std::string> alpnProtocols;
+  bool sniHostOverridden = false;
 
   TLSHandshakeParams() = default;
   explicit TLSHandshakeParams(const std::string& hostname)
@@ -66,7 +67,17 @@ struct TLSHandshakeParams {
   }
   TLSHandshakeParams(const std::string& sniHost,
                      const std::string& verifyHost)
-      : sniHost(sniHost), verifyHost(verifyHost)
+      : sniHost(sniHost),
+        verifyHost(verifyHost),
+        sniHostOverridden(sniHost != verifyHost)
+  {
+  }
+  TLSHandshakeParams(const std::string& sniHost,
+                     const std::string& verifyHost,
+                     bool sniHostOverridden)
+      : sniHost(sniHost),
+        verifyHost(verifyHost),
+        sniHostOverridden(sniHostOverridden)
   {
   }
   TLSHandshakeParams(const std::string& sniHost,
@@ -74,7 +85,18 @@ struct TLSHandshakeParams {
                      std::vector<std::string> alpnProtocols)
       : sniHost(sniHost),
         verifyHost(verifyHost),
-        alpnProtocols(std::move(alpnProtocols))
+        alpnProtocols(std::move(alpnProtocols)),
+        sniHostOverridden(sniHost != verifyHost)
+  {
+  }
+  TLSHandshakeParams(const std::string& sniHost,
+                     const std::string& verifyHost,
+                     std::vector<std::string> alpnProtocols,
+                     bool sniHostOverridden)
+      : sniHost(sniHost),
+        verifyHost(verifyHost),
+        alpnProtocols(std::move(alpnProtocols)),
+        sniHostOverridden(sniHostOverridden)
   {
   }
 };

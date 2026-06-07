@@ -255,18 +255,27 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT(params.sniHost.empty());
     CPPUNIT_ASSERT(params.verifyHost.empty());
     CPPUNIT_ASSERT(params.alpnProtocols.empty());
+    CPPUNIT_ASSERT(!params.sniHostOverridden);
   }
   {
     TLSHandshakeParams params("example.org");
     CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.sniHost);
     CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.verifyHost);
     CPPUNIT_ASSERT(params.alpnProtocols.empty());
+    CPPUNIT_ASSERT(!params.sniHostOverridden);
   }
   {
     TLSHandshakeParams params("front.example", "origin.example");
     CPPUNIT_ASSERT_EQUAL(std::string("front.example"), params.sniHost);
     CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
     CPPUNIT_ASSERT(params.alpnProtocols.empty());
+    CPPUNIT_ASSERT(params.sniHostOverridden);
+  }
+  {
+    TLSHandshakeParams params("example.org", "example.org", true);
+    CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.sniHost);
+    CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.verifyHost);
+    CPPUNIT_ASSERT(params.sniHostOverridden);
   }
   {
     std::vector<std::string> alpnProtocols;
@@ -279,6 +288,17 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT_EQUAL((size_t)2, params.alpnProtocols.size());
     CPPUNIT_ASSERT_EQUAL(std::string("h2"), params.alpnProtocols[0]);
     CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), params.alpnProtocols[1]);
+    CPPUNIT_ASSERT(params.sniHostOverridden);
+  }
+  {
+    std::vector<std::string> alpnProtocols;
+    alpnProtocols.push_back("http/1.1");
+    TLSHandshakeParams params("example.org", "example.org", alpnProtocols,
+                              true);
+    CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.sniHost);
+    CPPUNIT_ASSERT_EQUAL(std::string("example.org"), params.verifyHost);
+    CPPUNIT_ASSERT_EQUAL((size_t)1, params.alpnProtocols.size());
+    CPPUNIT_ASSERT(params.sniHostOverridden);
   }
 }
 
@@ -286,8 +306,16 @@ void SocketCoreTest::testIsTLSSNIHostname()
 {
   CPPUNIT_ASSERT(isTLSSNIHostname("example.org"));
   CPPUNIT_ASSERT(isTLSSNIHostname("front.example"));
+  CPPUNIT_ASSERT(isTLSSNIHostname("a-b.example"));
+  CPPUNIT_ASSERT(isTLSSNIHostname("EXAMPLE.ORG"));
   CPPUNIT_ASSERT(!isTLSSNIHostname(""));
   CPPUNIT_ASSERT(!isTLSSNIHostname("localhost"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname(".example"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("example."));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("example..org"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("-example.org"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("example-.org"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("bad_name.example"));
   CPPUNIT_ASSERT(!isTLSSNIHostname("192.168.0.1"));
   CPPUNIT_ASSERT(!isTLSSNIHostname("2001:db8::1"));
 }

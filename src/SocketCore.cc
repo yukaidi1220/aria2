@@ -102,8 +102,43 @@ namespace aria2 {
 #ifdef ENABLE_SSL
 bool isTLSSNIHostname(const std::string& hostname)
 {
-  return !hostname.empty() && !util::isNumericHost(hostname) &&
-         hostname.find(".") != std::string::npos;
+  if (hostname.empty() || hostname.size() > 253 ||
+      util::isNumericHost(hostname) ||
+      hostname.find(".") == std::string::npos ||
+      hostname[hostname.size() - 1] == '.') {
+    return false;
+  }
+
+  std::string::size_type labelStart = 0;
+  while (labelStart < hostname.size()) {
+    auto labelEnd = hostname.find(".", labelStart);
+    if (labelEnd == std::string::npos) {
+      labelEnd = hostname.size();
+    }
+    const auto labelLen = labelEnd - labelStart;
+    if (labelLen == 0 || labelLen > 63) {
+      return false;
+    }
+    const auto labelFirst = hostname[labelStart];
+    const auto labelLast = hostname[labelEnd - 1];
+    if ((!util::isAlpha(labelFirst) && !util::isDigit(labelFirst)) ||
+        (!util::isAlpha(labelLast) && !util::isDigit(labelLast))) {
+      return false;
+    }
+
+    for (auto i = labelStart; i < labelEnd; ++i) {
+      const auto c = hostname[i];
+      if (!util::isAlpha(c) && !util::isDigit(c) && c != '-') {
+        return false;
+      }
+    }
+
+    if (labelEnd == hostname.size()) {
+      break;
+    }
+    labelStart = labelEnd + 1;
+  }
+  return true;
 }
 #endif // ENABLE_SSL
 
@@ -946,10 +981,12 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
       tlsSession_.reset();
       throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE, error.c_str()));
     }
+    const auto clientSide = tlsctx->getSide() == TLS_CLIENT;
+    const auto sniOverridden = clientSide && params.sniHostOverridden;
     const auto sniOverride =
-        tlsctx->getSide() == TLS_CLIENT && params.sniHost != params.verifyHost;
+        clientSide && params.sniHost != params.verifyHost;
     const auto sniHostname = isTLSSNIHostname(params.sniHost);
-    if (sniOverride && !sniHostname) {
+    if (sniOverridden && !sniHostname) {
       throw DL_ABORT_EX(fmt("Invalid TLS SNI hostname override"));
     }
     if (sniOverride && !tlsSession_->supportsSNIHostnameOverride()) {
@@ -958,17 +995,17 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
     }
     // Check hostname is not numeric and it includes ".". Setting
     // "localhost" will produce TLS alert with GNUTLS.
-    if (tlsctx->getSide() == TLS_CLIENT && sniHostname) {
+    if (clientSide && sniHostname) {
       rv = tlsSession_->setSNIHostname(params.sniHost);
       if (rv != TLS_ERR_OK) {
-        if (sniOverride) {
+        if (sniOverridden || sniOverride) {
           throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
                                 tlsSession_->getLastErrorString().c_str()));
         }
         A2_LOG_DEBUG("TLS SNI hostname was not set");
       }
     }
-    if (tlsctx->getSide() == TLS_CLIENT && !params.alpnProtocols.empty()) {
+    if (clientSide && !params.alpnProtocols.empty()) {
       rv = tlsSession_->setAlpnProtocols(params.alpnProtocols);
       if (rv != TLS_ERR_OK) {
         throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
