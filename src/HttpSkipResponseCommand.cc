@@ -63,6 +63,22 @@
 
 namespace aria2 {
 
+bool shouldRetryHttpStatusByDefault(int statusCode)
+{
+  switch (statusCode) {
+  case 401:
+  case 403:
+  case 404:
+  case 416:
+  case 502:
+  case 503:
+  case 504:
+    return false;
+  default:
+    return statusCode >= 400;
+  }
+}
+
 HttpSkipResponseCommand::HttpSkipResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
@@ -247,6 +263,13 @@ bool HttpSkipResponseCommand::processResponse()
                          error_code::HTTP_SERVICE_UNAVAILABLE);
     };
 
+    if (shouldRetryHttpStatusByDefault(statusCode)) {
+      A2_LOG_NETWORK(
+          fmt("HTTP: CUID#%" PRId64 " - HTTP %d for %s, retrying after wait",
+              getCuid(), statusCode, getRequest()->getCurrentUri().c_str()));
+      throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
+                         error_code::HTTP_PROTOCOL_ERROR);
+    }
     throw DL_ABORT_EX2(fmt(EX_BAD_STATUS, statusCode),
                        error_code::HTTP_PROTOCOL_ERROR);
   }

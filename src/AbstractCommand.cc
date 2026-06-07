@@ -74,6 +74,21 @@
 
 namespace aria2 {
 
+namespace {
+bool shouldWaitBeforeRetry(error_code::Value code)
+{
+  switch (code) {
+  case error_code::HTTP_SERVICE_UNAVAILABLE:
+  case error_code::HTTP_PROTOCOL_ERROR:
+  case error_code::TOO_SLOW_DOWNLOAD_SPEED:
+  case error_code::NETWORK_PROBLEM:
+    return true;
+  default:
+    return false;
+  }
+}
+} // namespace
+
 AbstractCommand::AbstractCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
@@ -386,8 +401,8 @@ bool AbstractCommand::execute()
     bool isAbort = maxTries != 0 && req_->getTryCount() >= maxTries;
     if (isAbort) {
       if (err.getErrorCode() == error_code::TIME_OUT ||
-          err.getErrorCode() == error_code::HTTP_SERVICE_UNAVAILABLE ||
-          err.getErrorCode() == error_code::RESOURCE_NOT_FOUND) {
+          err.getErrorCode() == error_code::RESOURCE_NOT_FOUND ||
+          shouldWaitBeforeRetry(err.getErrorCode())) {
         A2_LOG_NETWORK(
             fmt("CUID#%" PRId64 " - Retries exhausted (max=%d) for %s",
                 getCuid(), maxTries, req_->getUri().c_str()));
@@ -405,10 +420,10 @@ bool AbstractCommand::execute()
       return true;
     }
 
-    if (err.getErrorCode() == error_code::HTTP_SERVICE_UNAVAILABLE) {
+    if (shouldWaitBeforeRetry(err.getErrorCode())) {
       A2_LOG_NETWORK(fmt(
           "CUID#%" PRId64
-          " - Service unavailable, waiting %d seconds before retry",
+          " - Waiting %d seconds before retry",
           getCuid(), getOption()->getAsInt(PREF_RETRY_WAIT)));
       Timer wakeTime(global::wallclock());
       wakeTime.advance(

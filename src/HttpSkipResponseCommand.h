@@ -43,6 +43,8 @@ class HttpConnection;
 class HttpResponse;
 class StreamFilter;
 
+bool shouldRetryHttpStatusByDefault(int statusCode);
+
 class HttpSkipResponseCommand : public AbstractCommand {
 private:
   // hole from AbstractCommand (5 bytes on x86_64)
