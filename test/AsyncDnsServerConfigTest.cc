@@ -11,12 +11,14 @@ class AsyncDnsServerConfigTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testParseDotServerConfig);
   CPPUNIT_TEST(testParseDotServerConfigList);
   CPPUNIT_TEST(testParseDotServerConfig_badInput);
+  CPPUNIT_TEST(testValidateDotServerConfigForDirectConnect);
   CPPUNIT_TEST_SUITE_END();
 
 public:
   void testParseDotServerConfig();
   void testParseDotServerConfigList();
   void testParseDotServerConfig_badInput();
+  void testValidateDotServerConfigForDirectConnect();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AsyncDnsServerConfigTest);
@@ -76,6 +78,27 @@ void AsyncDnsServerConfigTest::testParseDotServerConfig_badInput()
                        Exception);
   CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfigList("dns.example.org,"),
                        Exception);
+}
+
+void AsyncDnsServerConfigTest::testValidateDotServerConfigForDirectConnect()
+{
+  auto configs =
+      parseAsyncDnsDotServerConfigList("1.1.1.1,[2606:4700:4700::1111]:853");
+  validateAsyncDnsDotServerConfigForDirectConnect(configs);
+
+  configs = parseAsyncDnsDotServerConfigList("dns.example.org");
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"), configs[0].connectHost);
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncDnsDotServerConfigForDirectConnect(configs), Exception);
+
+  configs = parseAsyncDnsDotServerConfigList("1.1.1.1,dns.example.org");
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncDnsDotServerConfigForDirectConnect(configs), Exception);
+
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncDnsDotServerConfigForDirectConnect(
+          std::vector<AsyncDnsServerConfig>()),
+      Exception);
 }
 
 } // namespace aria2

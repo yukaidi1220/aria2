@@ -54,6 +54,9 @@ AsyncDnsServerConfig parseAsyncDnsDotServerConfig(const std::string& value);
 std::vector<AsyncDnsServerConfig>
 parseAsyncDnsDotServerConfigList(const std::string& value);
 
+void validateAsyncDnsDotServerConfigForDirectConnect(
+    const std::vector<AsyncDnsServerConfig>& configs);
+
 } // namespace aria2
 
 #endif // D_ASYNC_DNS_SERVER_CONFIG_H

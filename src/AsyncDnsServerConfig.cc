@@ -130,4 +130,20 @@ parseAsyncDnsDotServerConfigList(const std::string& value)
   return result;
 }
 
+void validateAsyncDnsDotServerConfigForDirectConnect(
+    const std::vector<AsyncDnsServerConfig>& configs)
+{
+  if (configs.empty()) {
+    throw DL_ABORT_EX("No async DNS DoT server configured");
+  }
+  for (const auto& config : configs) {
+    if (!util::isNumericHost(config.connectHost)) {
+      throw DL_ABORT_EX(
+          fmt("Bad async DNS DoT server '%s': direct connect requires a "
+              "numeric host",
+              config.connectHost.c_str()));
+    }
+  }
+}
+
 } // namespace aria2
