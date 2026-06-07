@@ -904,15 +904,21 @@ void SocketCore::readData(void* data, size_t& len)
 
 bool SocketCore::tlsAccept()
 {
-  return tlsHandshake(svTlsContext_.get(), A2STR::NIL);
+  return tlsHandshake(svTlsContext_.get(), TLSHandshakeParams());
 }
 
 bool SocketCore::tlsConnect(const std::string& hostname)
 {
-  return tlsHandshake(clTlsContext_.get(), hostname);
+  return tlsConnect(TLSHandshakeParams(hostname));
 }
 
-bool SocketCore::tlsHandshake(TLSContext* tlsctx, const std::string& hostname)
+bool SocketCore::tlsConnect(const TLSHandshakeParams& params)
+{
+  return tlsHandshake(clTlsContext_.get(), params);
+}
+
+bool SocketCore::tlsHandshake(TLSContext* tlsctx,
+                              const TLSHandshakeParams& params)
 {
   wantRead_ = false;
   wantWrite_ = false;
@@ -932,11 +938,24 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx, const std::string& hostname)
       tlsSession_.reset();
       throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE, error.c_str()));
     }
+    if (tlsctx->getSide() == TLS_CLIENT && params.sniHost != params.verifyHost &&
+        !tlsSession_->supportsSNIHostnameOverride()) {
+      throw DL_ABORT_EX(
+          fmt("SSL/TLS backend does not support SNI hostname override"));
+    }
     // Check hostname is not numeric and it includes ".". Setting
     // "localhost" will produce TLS alert with GNUTLS.
-    if (tlsctx->getSide() == TLS_CLIENT && !util::isNumericHost(hostname) &&
-        hostname.find(".") != std::string::npos) {
-      rv = tlsSession_->setSNIHostname(hostname);
+    if (tlsctx->getSide() == TLS_CLIENT &&
+        !util::isNumericHost(params.sniHost) &&
+        params.sniHost.find(".") != std::string::npos) {
+      rv = tlsSession_->setSNIHostname(params.sniHost);
+      if (rv != TLS_ERR_OK) {
+        throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
+                              tlsSession_->getLastErrorString().c_str()));
+      }
+    }
+    if (tlsctx->getSide() == TLS_CLIENT && !params.alpnProtocols.empty()) {
+      rv = tlsSession_->setAlpnProtocols(params.alpnProtocols);
       if (rv != TLS_ERR_OK) {
         throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
                               tlsSession_->getLastErrorString().c_str()));
@@ -954,7 +973,7 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx, const std::string& hostname)
     std::string handshakeError;
 
     if (tlsctx->getSide() == TLS_CLIENT) {
-      rv = tlsSession_->tlsConnect(hostname, ver, handshakeError);
+      rv = tlsSession_->tlsConnect(params.verifyHost, ver, handshakeError);
     }
     else {
       rv = tlsSession_->tlsAccept(ver);
@@ -964,12 +983,12 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx, const std::string& hostname)
       // We're good, more or less.
       // 1. Construct peerinfo
       std::stringstream ss;
-      if (!hostname.empty()) {
-        ss << hostname << " (";
+      if (!params.verifyHost.empty()) {
+        ss << params.verifyHost << " (";
       }
       auto peerEndpoint = getPeerInfo();
       ss << peerEndpoint.addr << ":" << peerEndpoint.port;
-      if (!hostname.empty()) {
+      if (!params.verifyHost.empty()) {
         ss << ")";
       }
 
@@ -1031,6 +1050,11 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx, const std::string& hostname)
   // We should never get here, i.e. all possible states should have been handled
   // and returned from a branch before! Getting here is a bug, of course!
   throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE, "Invalid state (this is a bug!)"));
+}
+
+std::string SocketCore::getSelectedAlpnProtocol() const
+{
+  return tlsSession_ ? tlsSession_->getSelectedAlpnProtocol() : std::string();
 }
 
 #endif // ENABLE_SSL

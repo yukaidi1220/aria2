@@ -537,6 +537,13 @@
 #define TEXT_CHECK_CERTIFICATE                                          \
   _(" --check-certificate[=true|false] Verify the peer using certificates specified\n" \
     "                              in --ca-certificate option.")
+#define TEXT_TLS_SNI_HOST                                               \
+  _(" --tls-sni-host=HOST        Set the hostname sent in the TLS SNI extension.\n" \
+    "                              This does not change DNS resolution, TCP connect\n" \
+    "                              target, HTTP Host header, or certificate\n" \
+    "                              verification hostname. This option requires a\n" \
+    "                              TLS backend which supports separate SNI and\n" \
+    "                              verification hostnames.")
 #define TEXT_NO_PROXY                                                   \
   _(" --no-proxy=DOMAINS           Specify comma separated hostnames, domains or\n" \
     "                              network address with or without CIDR block where\n" \

@@ -53,6 +53,31 @@ namespace aria2 {
 #ifdef ENABLE_SSL
 class TLSContext;
 class TLSSession;
+
+struct TLSHandshakeParams {
+  std::string sniHost;
+  std::string verifyHost;
+  std::vector<std::string> alpnProtocols;
+
+  TLSHandshakeParams() = default;
+  explicit TLSHandshakeParams(const std::string& hostname)
+      : sniHost(hostname), verifyHost(hostname)
+  {
+  }
+  TLSHandshakeParams(const std::string& sniHost,
+                     const std::string& verifyHost)
+      : sniHost(sniHost), verifyHost(verifyHost)
+  {
+  }
+  TLSHandshakeParams(const std::string& sniHost,
+                     const std::string& verifyHost,
+                     std::vector<std::string> alpnProtocols)
+      : sniHost(sniHost),
+        verifyHost(verifyHost),
+        alpnProtocols(std::move(alpnProtocols))
+  {
+  }
+};
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2
@@ -99,7 +124,7 @@ private:
    *
    * If you are going to verify peer's certificate, hostname must be supplied.
    */
-  bool tlsHandshake(TLSContext* tlsctx, const std::string& hostname);
+  bool tlsHandshake(TLSContext* tlsctx, const TLSHandshakeParams& params);
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2
@@ -296,6 +321,9 @@ public:
   // If you are going to verify peer's certificate, hostname must be
   // supplied.
   bool tlsConnect(const std::string& hostname);
+  bool tlsConnect(const TLSHandshakeParams& params);
+
+  std::string getSelectedAlpnProtocol() const;
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2

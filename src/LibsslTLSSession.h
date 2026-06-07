@@ -52,6 +52,17 @@ public:
   virtual ~OpenSSLTLSSession();
   virtual int init(sock_t sockfd) CXX11_OVERRIDE;
   virtual int setSNIHostname(const std::string& hostname) CXX11_OVERRIDE;
+  virtual bool supportsSNIHostnameOverride() const CXX11_OVERRIDE
+  {
+#ifdef SSL_CTRL_SET_TLSEXT_HOSTNAME
+    return true;
+#else  // !SSL_CTRL_SET_TLSEXT_HOSTNAME
+    return false;
+#endif // !SSL_CTRL_SET_TLSEXT_HOSTNAME
+  }
+  virtual int setAlpnProtocols(const std::vector<std::string>& protocols)
+      CXX11_OVERRIDE;
+  virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE;
   virtual int closeConnection() CXX11_OVERRIDE;
   virtual int checkDirection() CXX11_OVERRIDE;
   virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE;

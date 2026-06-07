@@ -51,6 +51,10 @@ public:
   ~GnuTLSSession();
   virtual int init(sock_t sockfd) CXX11_OVERRIDE;
   virtual int setSNIHostname(const std::string& hostname) CXX11_OVERRIDE;
+  virtual bool supportsSNIHostnameOverride() const CXX11_OVERRIDE
+  {
+    return true;
+  }
   virtual int closeConnection() CXX11_OVERRIDE;
   virtual int checkDirection() CXX11_OVERRIDE;
   virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE;

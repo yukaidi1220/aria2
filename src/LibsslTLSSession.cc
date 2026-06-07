@@ -91,9 +91,61 @@ int OpenSSLTLSSession::setSNIHostname(const std::string& hostname)
   // TLS extensions: SNI.  There is not documentation about the
   // return code for this function (actually this is macro
   // wrapping SSL_ctrl at the time of this writing).
-  SSL_set_tlsext_host_name(ssl_, hostname.c_str());
+  auto rv = SSL_set_tlsext_host_name(ssl_, hostname.c_str());
+  return rv == 1 ? TLS_ERR_OK : TLS_ERR_ERROR;
+#else  // !SSL_CTRL_SET_TLSEXT_HOSTNAME
+  if (!hostname.empty()) {
+    return TLS_ERR_ERROR;
+  }
 #endif // SSL_CTRL_SET_TLSEXT_HOSTNAME
   return TLS_ERR_OK;
+}
+
+int OpenSSLTLSSession::setAlpnProtocols(
+    const std::vector<std::string>& protocols)
+{
+  if (protocols.empty()) {
+    return TLS_ERR_OK;
+  }
+
+#if !defined(OPENSSL_NO_TLSEXT) &&                                          \
+    defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
+  std::vector<unsigned char> wireFormat;
+  for (auto& protocol : protocols) {
+    if (protocol.empty() || protocol.size() > 255) {
+      return TLS_ERR_ERROR;
+    }
+    wireFormat.push_back(static_cast<unsigned char>(protocol.size()));
+    wireFormat.insert(wireFormat.end(), protocol.begin(), protocol.end());
+  }
+
+  ERR_clear_error();
+  auto rv = SSL_set_alpn_protos(ssl_, wireFormat.data(),
+                                static_cast<unsigned int>(wireFormat.size()));
+  return rv == 0 ? TLS_ERR_OK : TLS_ERR_ERROR;
+#else  // !(!defined(OPENSSL_NO_TLSEXT) &&
+       // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
+  return TLS_ERR_ERROR;
+#endif // !(!defined(OPENSSL_NO_TLSEXT) &&
+       // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
+}
+
+std::string OpenSSLTLSSession::getSelectedAlpnProtocol() const
+{
+#if !defined(OPENSSL_NO_TLSEXT) &&                                          \
+    defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
+  const unsigned char* data = nullptr;
+  unsigned int len = 0;
+  SSL_get0_alpn_selected(ssl_, &data, &len);
+  if (len == 0) {
+    return std::string();
+  }
+  return std::string(reinterpret_cast<const char*>(data), len);
+#else  // !(!defined(OPENSSL_NO_TLSEXT) &&
+       // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
+  return std::string();
+#endif // !(!defined(OPENSSL_NO_TLSEXT) &&
+       // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
 }
 
 int OpenSSLTLSSession::closeConnection()

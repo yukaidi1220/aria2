@@ -36,6 +36,10 @@
 #define TLS_SESSION_H
 
 #include "common.h"
+
+#include <string>
+#include <vector>
+
 #include "a2netcompat.h"
 #include "TLSContext.h"
 
@@ -67,6 +71,22 @@ public:
   // client side session. This function returns TLS_ERR_OK if it
   // succeeds, or TLS_ERR_ERROR.
   virtual int setSNIHostname(const std::string& hostname) = 0;
+
+  // Returns true if this backend can send an SNI hostname different
+  // from the certificate verification hostname passed to tlsConnect().
+  virtual bool supportsSNIHostnameOverride() const { return false; }
+
+  // Sets ALPN protocols for client side session. The order is the
+  // preference order. Backend implementations which do not support
+  // ALPN must fail when |protocols| is not empty.
+  virtual int setAlpnProtocols(const std::vector<std::string>& protocols)
+  {
+    return protocols.empty() ? TLS_ERR_OK : TLS_ERR_ERROR;
+  }
+
+  // Returns selected ALPN protocol. Empty string means no protocol was
+  // negotiated or backend does not support ALPN.
+  virtual std::string getSelectedAlpnProtocol() const { return std::string(); }
 
   // Closes the SSL/TLS session. Don't close underlying transport
   // socket. This function returns TLS_ERR_OK if it succeeds, or
