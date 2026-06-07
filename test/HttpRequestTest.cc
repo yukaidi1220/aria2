@@ -35,6 +35,7 @@ class HttpRequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateRequest_endOffsetOverride);
   CPPUNIT_TEST(testCreateRequest_wantDigest);
   CPPUNIT_TEST(testCreateProxyRequest);
+  CPPUNIT_TEST(testIsRangeRequest);
   CPPUNIT_TEST(testIsRangeSatisfied);
   CPPUNIT_TEST(testUserAgent);
   CPPUNIT_TEST(testAddHeader);
@@ -67,6 +68,7 @@ public:
   void testCreateRequest_endOffsetOverride();
   void testCreateRequest_wantDigest();
   void testCreateProxyRequest();
+  void testIsRangeRequest();
   void testIsRangeSatisfied();
   void testUserAgent();
   void testAddHeader();
@@ -722,6 +724,67 @@ void HttpRequestTest::testCreateProxyRequest()
                  "\r\n";
 
   CPPUNIT_ASSERT_EQUAL(expectedText, httpRequest.createProxyRequest());
+}
+
+void HttpRequestTest::testIsRangeRequest()
+{
+  auto request = std::make_shared<Request>();
+  request->supportsPersistentConnection(true);
+  request->setUri("http://localhost/archives/aria2-1.0.0.tar.bz2");
+
+  auto fileEntry = std::make_shared<FileEntry>("file", 10_m, 0);
+
+  HttpRequest httpRequest;
+  httpRequest.setRequest(request);
+  httpRequest.setFileEntry(fileEntry);
+  httpRequest.setAuthConfigFactory(authConfigFactory_.get());
+  httpRequest.setOption(option_.get());
+  httpRequest.setNoWantDigest(true);
+
+  CPPUNIT_ASSERT(!httpRequest.isRangeRequest());
+  httpRequest.createRequest();
+  CPPUNIT_ASSERT(!httpRequest.isRangeRequest());
+
+  auto p = std::make_shared<Piece>(0, 1_m);
+  auto segment = std::make_shared<PiecedSegment>(1_m, p);
+  httpRequest.setSegment(segment);
+
+  httpRequest.createRequest();
+  CPPUNIT_ASSERT(!httpRequest.isRangeRequest());
+
+  request->setPipeliningHint(true);
+
+  httpRequest.createRequest();
+  CPPUNIT_ASSERT(httpRequest.isRangeRequest());
+
+  request->supportsPersistentConnection(false);
+  CPPUNIT_ASSERT(httpRequest.isRangeRequest());
+
+  request->supportsPersistentConnection(true);
+  request->setPipeliningHint(false);
+  httpRequest.setEndOffsetOverride(1_m);
+
+  httpRequest.createRequest();
+  CPPUNIT_ASSERT(httpRequest.isRangeRequest());
+
+  httpRequest.setEndOffsetOverride(0);
+  p.reset(new Piece(1, 1_m));
+  segment.reset(new PiecedSegment(1_m, p));
+  httpRequest.setSegment(segment);
+
+  httpRequest.createRequest();
+  CPPUNIT_ASSERT(httpRequest.isRangeRequest());
+
+  HttpRequest userRangeRequest;
+  userRangeRequest.setRequest(request);
+  userRangeRequest.setFileEntry(fileEntry);
+  userRangeRequest.setAuthConfigFactory(authConfigFactory_.get());
+  userRangeRequest.setOption(option_.get());
+  userRangeRequest.setNoWantDigest(true);
+  userRangeRequest.addHeader("Range: bytes=5-9");
+
+  userRangeRequest.createRequest();
+  CPPUNIT_ASSERT(userRangeRequest.isRangeRequest());
 }
 
 void HttpRequestTest::testIsRangeSatisfied()

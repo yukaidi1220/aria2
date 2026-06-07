@@ -89,6 +89,8 @@ private:
 
   std::string ifModSinceHeader_;
 
+  bool rangeRequest_;
+
   bool contentEncodingEnabled_;
 
   // If true, metalink content types are sent in Accept header field.
@@ -134,6 +136,10 @@ public:
   std::string getURIHost() const;
 
   Range getRange() const;
+
+  // Returns true if the last request created by createRequest() included a
+  // Range header field.
+  bool isRangeRequest() const;
 
   /**
    * Inspects whether the specified response range is satisfiable

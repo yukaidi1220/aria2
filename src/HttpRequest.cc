@@ -64,6 +64,7 @@ HttpRequest::HttpRequest()
       option_(nullptr),
       endOffsetOverride_(0),
       userAgent_(USER_AGENT),
+      rangeRequest_(false),
       contentEncodingEnabled_(true),
       acceptMetalink_(false),
       noCache_(true),
@@ -118,6 +119,11 @@ Range HttpRequest::getRange() const
   return Range(getStartByte(), getEndByte(), fileEntry_->getLength());
 }
 
+bool HttpRequest::isRangeRequest() const
+{
+  return rangeRequest_;
+}
+
 bool HttpRequest::isRangeSatisfied(const Range& range) const
 {
   if (!segment_) {
@@ -144,6 +150,7 @@ std::string getHostText(const std::string& host, uint16_t port)
 std::string HttpRequest::createRequest()
 {
   authConfig_ = authConfigFactory_->createAuthConfig(request_, option_);
+  rangeRequest_ = false;
   auto requestLine = request_->getMethod();
   requestLine += ' ';
   if (proxyRequest_) {
@@ -275,12 +282,18 @@ std::string HttpRequest::createRequest()
       requestLine += ' ';
       requestLine += builtinHd.second;
       requestLine += "\r\n";
+      if (util::istartsWith(builtinHd.first, "Range:")) {
+        rangeRequest_ = true;
+      }
     }
   }
   // append additional headers given by user.
   for (const auto& hd : headers_) {
     requestLine += hd;
     requestLine += "\r\n";
+    if (util::istartsWith(hd, "Range:")) {
+      rangeRequest_ = true;
+    }
   }
   requestLine += "\r\n";
   return requestLine;

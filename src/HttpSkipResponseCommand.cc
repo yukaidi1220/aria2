@@ -79,6 +79,30 @@ bool shouldRetryHttpStatusByDefault(int statusCode)
   }
 }
 
+bool shouldRedirectHttpStatusWithLocation(const HttpResponse& httpResponse)
+{
+  if (!httpResponse.getHttpHeader()) {
+    return false;
+  }
+
+  if (httpResponse.getStatusCode() != 416) {
+    return false;
+  }
+
+  if (!httpResponse.getHttpHeader()->defined(HttpHeader::LOCATION) ||
+      httpResponse.getRedirectURI().empty()) {
+    return false;
+  }
+
+  const auto& httpRequest = httpResponse.getHttpRequest();
+  if (!httpRequest || !httpRequest->isRangeRequest()) {
+    return false;
+  }
+
+  const auto& request = httpRequest->getRequest();
+  return request && request->getMethod() == Request::METHOD_GET;
+}
+
 HttpSkipResponseCommand::HttpSkipResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
@@ -210,7 +234,8 @@ void HttpSkipResponseCommand::poolConnection() const
 
 bool HttpSkipResponseCommand::processResponse()
 {
-  if (httpResponse_->isRedirect()) {
+  if (httpResponse_->isRedirect() ||
+      shouldRedirectHttpStatusWithLocation(*httpResponse_)) {
     int rnum =
         httpResponse_->getHttpRequest()->getRequest()->getRedirectCount();
     if (rnum >= Request::MAX_REDIRECT) {

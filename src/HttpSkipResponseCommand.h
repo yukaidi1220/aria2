@@ -44,6 +44,7 @@ class HttpResponse;
 class StreamFilter;
 
 bool shouldRetryHttpStatusByDefault(int statusCode);
+bool shouldRedirectHttpStatusWithLocation(const HttpResponse& httpResponse);
 
 class HttpSkipResponseCommand : public AbstractCommand {
 private:
