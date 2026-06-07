@@ -53,7 +53,7 @@ struct HttpRequestConnectChain : public ControlChain<ConnectCommand*> {
     auto k = std::make_shared<HttpConnection>(t->getCuid(), t->getSocket(), b);
     auto c = make_unique<HttpRequestCommand>(
         t->getCuid(), t->getRequest(), t->getFileEntry(), t->getRequestGroup(),
-        k, e, t->getSocket());
+        k, e, t->getSocket(), !t->getProxyRequest());
     c->setProxyRequest(t->getProxyRequest());
     c->setStatus(Command::STATUS_ONESHOT_REALTIME);
     e->setNoWait(true);

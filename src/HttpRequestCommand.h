@@ -54,6 +54,8 @@ private:
 
   std::shared_ptr<HttpConnection> httpConnection_;
 
+  bool retryTLSHandshakeWithNextAddress_;
+
 protected:
   virtual bool executeInternal() CXX11_OVERRIDE;
 
@@ -62,7 +64,8 @@ public:
                      const std::shared_ptr<FileEntry>& fileEntry,
                      RequestGroup* requestGroup,
                      const std::shared_ptr<HttpConnection>& httpConnection,
-                     DownloadEngine* e, const std::shared_ptr<SocketCore>& s);
+                     DownloadEngine* e, const std::shared_ptr<SocketCore>& s,
+                     bool retryTLSHandshakeWithNextAddress = false);
   virtual ~HttpRequestCommand();
 
   void setProxyRequest(const std::shared_ptr<Request>& proxyRequest);

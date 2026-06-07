@@ -59,6 +59,8 @@
 #include "LogFactory.h"
 #include "fmt.h"
 #include "SocketRecvBuffer.h"
+#include "InitiateConnectionCommandFactory.h"
+#include "RecoverableException.h"
 
 namespace aria2 {
 
@@ -66,10 +68,12 @@ HttpRequestCommand::HttpRequestCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
     const std::shared_ptr<HttpConnection>& httpConnection, DownloadEngine* e,
-    const std::shared_ptr<SocketCore>& s)
+    const std::shared_ptr<SocketCore>& s,
+    bool retryTLSHandshakeWithNextAddress)
     : AbstractCommand(cuid, req, fileEntry, requestGroup, e, s,
                       httpConnection->getSocketRecvBuffer()),
-      httpConnection_(httpConnection)
+      httpConnection_(httpConnection),
+      retryTLSHandshakeWithNextAddress_(retryTLSHandshakeWithNextAddress)
 {
   setTimeout(std::chrono::seconds(getOption()->getAsInt(PREF_CONNECT_TIMEOUT)));
   disableReadCheckSocket();
@@ -120,6 +124,49 @@ createHttpRequest(const std::shared_ptr<Request>& req,
 }
 } // namespace
 
+#ifdef ENABLE_SSL
+namespace {
+bool isTLSHandshakeFailure(const RecoverableException& e)
+{
+  return util::startsWith(std::string(e.what()), "SSL/TLS handshake failure:");
+}
+
+bool tryRetryTLSHandshakeWithNextAddress(
+    const std::shared_ptr<Request>& req,
+    const std::shared_ptr<Option>& option, DownloadEngine* e, cuid_t cuid,
+    const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup)
+{
+  if (req->getProtocol() != "https" || option->defined(PREF_TLS_SNI_HOST) ||
+      option->getAsBool(PREF_CHECK_CERTIFICATE) ||
+      req->getConnectedAddr().empty()) {
+    return false;
+  }
+
+  const auto& connectedAddr = req->getConnectedAddr();
+  const auto connectedPort = req->getConnectedPort();
+  e->markBadIPAddress(req->getConnectedHostname(), connectedAddr,
+                      connectedPort);
+  if (e->findCachedIPAddress(req->getConnectedHostname(),
+                             connectedPort)
+          .empty()) {
+    e->removeCachedIPAddress(req->getConnectedHostname(),
+                             connectedPort);
+    return false;
+  }
+
+  A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                     " - TLS handshake failed for %s:%u, retrying another "
+                     "resolved address",
+                     cuid, connectedAddr.c_str(), connectedPort));
+  e->setNoWait(true);
+  e->addCommand(
+      InitiateConnectionCommandFactory::createInitiateConnectionCommand(
+          cuid, req, fileEntry, requestGroup, e));
+  return true;
+}
+} // namespace
+#endif // ENABLE_SSL
+
 bool HttpRequestCommand::executeInternal()
 {
   // socket->setBlockingMode();
@@ -132,11 +179,23 @@ bool HttpRequestCommand::executeInternal()
                                        ? getOption()->get(PREF_TLS_SNI_HOST)
                                        : verifyHost,
                                    verifyHost, sniHostOverridden);
-      if (!getSocket()->tlsConnect(tlsParams)) {
-        setReadCheckSocketIf(getSocket(), getSocket()->wantRead());
-        setWriteCheckSocketIf(getSocket(), getSocket()->wantWrite());
-        addCommandSelf();
-        return false;
+      try {
+        if (!getSocket()->tlsConnect(tlsParams)) {
+          setReadCheckSocketIf(getSocket(), getSocket()->wantRead());
+          setWriteCheckSocketIf(getSocket(), getSocket()->wantWrite());
+          addCommandSelf();
+          return false;
+        }
+      }
+      catch (RecoverableException& e) {
+        if (retryTLSHandshakeWithNextAddress_ && !proxyRequest_ &&
+            isTLSHandshakeFailure(e) &&
+            tryRetryTLSHandshakeWithNextAddress(
+                getRequest(), getOption(), getDownloadEngine(), getCuid(),
+                getFileEntry(), getRequestGroup())) {
+          return true;
+        }
+        throw;
       }
       A2_LOG_NETWORK(
           fmt("CUID#%" PRId64 " - HTTPS connection to %s established",
