@@ -33,6 +33,9 @@
  */
 /* copyright --> */
 #include "HttpInitiateConnectionCommand.h"
+
+#include <functional>
+
 #include "Request.h"
 #include "DownloadEngine.h"
 #include "HttpConnection.h"
@@ -58,6 +61,73 @@
 
 namespace aria2 {
 
+namespace {
+
+#ifdef ENABLE_SSL
+TLSHandshakeParams createTLSHandshakeParams(const Request* request,
+                                            const Option* option)
+{
+  const auto& verifyHost = request->getHost();
+  const auto sniHostOverridden = option->defined(PREF_TLS_SNI_HOST);
+  return TLSHandshakeParams(sniHostOverridden ? option->get(PREF_TLS_SNI_HOST)
+                                              : verifyHost,
+                            verifyHost, sniHostOverridden);
+}
+#endif // ENABLE_SSL
+
+#ifdef ENABLE_SSL
+std::function<bool(const std::shared_ptr<SocketCore>&)>
+createTLSSocketReusePredicate(const Request* request, const Option* option)
+{
+  if (request->getProtocol() != "https") {
+    return std::function<bool(const std::shared_ptr<SocketCore>&)>();
+  }
+  auto tlsParams = createTLSHandshakeParams(request, option);
+  return [tlsParams](const std::shared_ptr<SocketCore>& socket) {
+    return socket->matchesTLSHandshakeParams(tlsParams);
+  };
+}
+#endif // ENABLE_SSL
+
+std::shared_ptr<SocketCore>
+popReusablePooledSocket(DownloadEngine* e, const Request* request,
+                        const Option* option,
+                        const std::shared_ptr<Request>& proxyRequest)
+{
+#ifdef ENABLE_SSL
+  auto predicate = createTLSSocketReusePredicate(request, option);
+  if (predicate) {
+    return e->popPooledSocket(request->getHost(), request->getPort(),
+                              proxyRequest->getHost(), proxyRequest->getPort(),
+                              predicate);
+  }
+#else  // !ENABLE_SSL
+  (void)option;
+#endif // ENABLE_SSL
+  return e->popPooledSocket(request->getHost(), request->getPort(),
+                            proxyRequest->getHost(),
+                            proxyRequest->getPort());
+}
+
+std::shared_ptr<SocketCore>
+popReusablePooledSocket(DownloadEngine* e, const Request* request,
+                        const Option* option,
+                        const std::vector<std::string>& resolvedAddresses)
+{
+#ifdef ENABLE_SSL
+  auto predicate = createTLSSocketReusePredicate(request, option);
+  if (predicate) {
+    return e->popPooledSocket(resolvedAddresses, request->getPort(),
+                              predicate);
+  }
+#else  // !ENABLE_SSL
+  (void)option;
+#endif // ENABLE_SSL
+  return e->popPooledSocket(resolvedAddresses, request->getPort());
+}
+
+} // namespace
+
 HttpInitiateConnectionCommand::HttpInitiateConnectionCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
@@ -75,9 +145,8 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
 {
   if (proxyRequest) {
     std::shared_ptr<SocketCore> pooledSocket =
-        getDownloadEngine()->popPooledSocket(
-            getRequest()->getHost(), getRequest()->getPort(),
-            proxyRequest->getHost(), proxyRequest->getPort());
+        popReusablePooledSocket(getDownloadEngine(), getRequest().get(),
+                                getOption().get(), proxyRequest);
     std::string proxyMethod = resolveProxyMethod(getRequest()->getProtocol());
     if (!pooledSocket) {
       A2_LOG_INFO(fmt(MSG_CONNECTING_TO_SERVER, getCuid(), addr.c_str(), port));
@@ -120,8 +189,8 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
   }
   else {
     std::shared_ptr<SocketCore> pooledSocket =
-        getDownloadEngine()->popPooledSocket(resolvedAddresses,
-                                             getRequest()->getPort());
+        popReusablePooledSocket(getDownloadEngine(), getRequest().get(),
+                                getOption().get(), resolvedAddresses);
     if (!pooledSocket) {
       A2_LOG_INFO(fmt(MSG_CONNECTING_TO_SERVER, getCuid(), addr.c_str(), port));
       A2_LOG_NETWORK(

@@ -66,6 +66,7 @@ aria2c_SOURCES = AllTest.cc\
 	LongestSequencePieceSelectorTest.cc\
 	a2algoTest.cc\
 	bitfieldTest.cc\
+	DownloadEngineTest.cc\
 	DownloadContextTest.cc\
 	SessionSerializerTest.cc\
 	ValueBaseTest.cc\

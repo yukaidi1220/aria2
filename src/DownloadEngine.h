@@ -39,6 +39,7 @@
 
 #include <string>
 #include <deque>
+#include <functional>
 #include <map>
 #include <vector>
 #include <memory>
@@ -159,6 +160,11 @@ private:
   std::multimap<std::string, SocketPoolEntry>::iterator
   findSocketPoolEntry(const std::string& key);
 
+  std::multimap<std::string, SocketPoolEntry>::iterator findSocketPoolEntry(
+      const std::string& key,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+          predicate);
+
   std::unique_ptr<RequestGroupMan> requestGroupMan_;
   std::unique_ptr<FileAllocationMan> fileAllocationMan_;
   std::unique_ptr<CheckIntegrityMan> checkIntegrityMan_;
@@ -271,6 +277,12 @@ public:
                                               const std::string& proxyhost,
                                               uint16_t proxyport);
 
+  std::shared_ptr<SocketCore> popPooledSocket(
+      const std::string& ipaddr, uint16_t port, const std::string& proxyhost,
+      uint16_t proxyport,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+          predicate);
+
   std::shared_ptr<SocketCore>
   popPooledSocket(std::string& options, const std::string& ipaddr,
                   uint16_t port, const std::string& username,
@@ -278,6 +290,11 @@ public:
 
   std::shared_ptr<SocketCore>
   popPooledSocket(const std::vector<std::string>& ipaddrs, uint16_t port);
+
+  std::shared_ptr<SocketCore> popPooledSocket(
+      const std::vector<std::string>& ipaddrs, uint16_t port,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+          predicate);
 
   std::shared_ptr<SocketCore>
   popPooledSocket(std::string& options, const std::vector<std::string>& ipaddrs,

@@ -20,6 +20,8 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testVerifyHostname);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testTLSHandshakeParams);
+  CPPUNIT_TEST(testTLSHandshakeParamsComparison);
+  CPPUNIT_TEST(testMatchesTLSHandshakeParams);
   CPPUNIT_TEST(testIsTLSSNIHostname);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
@@ -37,6 +39,8 @@ public:
   void testVerifyHostname();
 #ifdef ENABLE_SSL
   void testTLSHandshakeParams();
+  void testTLSHandshakeParamsComparison();
+  void testMatchesTLSHandshakeParams();
   void testIsTLSSNIHostname();
 #endif // ENABLE_SSL
 };
@@ -300,6 +304,37 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT_EQUAL((size_t)1, params.alpnProtocols.size());
     CPPUNIT_ASSERT(params.sniHostOverridden);
   }
+}
+
+void SocketCoreTest::testTLSHandshakeParamsComparison()
+{
+  TLSHandshakeParams base("example.org");
+  CPPUNIT_ASSERT(base == TLSHandshakeParams("example.org"));
+  CPPUNIT_ASSERT(!(base != TLSHandshakeParams("example.org")));
+  CPPUNIT_ASSERT(base != TLSHandshakeParams("front.example", "example.org"));
+  CPPUNIT_ASSERT(base != TLSHandshakeParams("example.org", "example.org",
+                                            true));
+
+  std::vector<std::string> alpnProtocols;
+  alpnProtocols.push_back("h2");
+  alpnProtocols.push_back("http/1.1");
+  TLSHandshakeParams withAlpn("example.org", "example.org", alpnProtocols);
+  CPPUNIT_ASSERT(withAlpn == TLSHandshakeParams("example.org", "example.org",
+                                                alpnProtocols));
+  CPPUNIT_ASSERT(withAlpn != base);
+
+  std::vector<std::string> reversedAlpnProtocols;
+  reversedAlpnProtocols.push_back("http/1.1");
+  reversedAlpnProtocols.push_back("h2");
+  CPPUNIT_ASSERT(withAlpn != TLSHandshakeParams("example.org", "example.org",
+                                                reversedAlpnProtocols));
+}
+
+void SocketCoreTest::testMatchesTLSHandshakeParams()
+{
+  SocketCore socket;
+  CPPUNIT_ASSERT(!socket.matchesTLSHandshakeParams(
+      TLSHandshakeParams("example.org")));
 }
 
 void SocketCoreTest::testIsTLSSNIHostname()

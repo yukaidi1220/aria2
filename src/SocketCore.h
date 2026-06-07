@@ -101,6 +101,10 @@ struct TLSHandshakeParams {
   }
 };
 
+bool operator==(const TLSHandshakeParams& lhs,
+                const TLSHandshakeParams& rhs);
+bool operator!=(const TLSHandshakeParams& lhs,
+                const TLSHandshakeParams& rhs);
 bool isTLSSNIHostname(const std::string& hostname);
 #endif // ENABLE_SSL
 
@@ -141,6 +145,8 @@ private:
   static std::shared_ptr<TLSContext> svTlsContext_;
 
   std::shared_ptr<TLSSession> tlsSession_;
+  TLSHandshakeParams tlsHandshakeParams_;
+  bool tlsHandshakeParamsSet_;
 
   /**
    * Makes this socket secure. The connection must be established
@@ -346,6 +352,7 @@ public:
   // supplied.
   bool tlsConnect(const std::string& hostname);
   bool tlsConnect(const TLSHandshakeParams& params);
+  bool matchesTLSHandshakeParams(const TLSHandshakeParams& params) const;
 
   std::string getSelectedAlpnProtocol() const;
 #endif // ENABLE_SSL

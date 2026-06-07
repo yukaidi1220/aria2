@@ -100,6 +100,20 @@ namespace aria2 {
 #endif // __MINGW32__
 
 #ifdef ENABLE_SSL
+bool operator==(const TLSHandshakeParams& lhs,
+                const TLSHandshakeParams& rhs)
+{
+  return lhs.sniHost == rhs.sniHost && lhs.verifyHost == rhs.verifyHost &&
+         lhs.alpnProtocols == rhs.alpnProtocols &&
+         lhs.sniHostOverridden == rhs.sniHostOverridden;
+}
+
+bool operator!=(const TLSHandshakeParams& lhs,
+                const TLSHandshakeParams& rhs)
+{
+  return !(lhs == rhs);
+}
+
 bool isTLSSNIHostname(const std::string& hostname)
 {
   if (hostname.empty() || hostname.size() > 253 ||
@@ -214,6 +228,9 @@ void SocketCore::init()
 
   wantRead_ = false;
   wantWrite_ = false;
+#ifdef ENABLE_SSL
+  tlsHandshakeParamsSet_ = false;
+#endif // ENABLE_SSL
 }
 
 SocketCore::~SocketCore() { closeConnection(); }
@@ -681,6 +698,8 @@ void SocketCore::closeConnection()
     tlsSession_->closeConnection();
     tlsSession_.reset();
   }
+  tlsHandshakeParams_ = TLSHandshakeParams();
+  tlsHandshakeParamsSet_ = false;
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2
@@ -967,8 +986,16 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
   wantWrite_ = false;
 
   if (secure_ == A2_TLS_CONNECTED) {
-    // Already connected!
+    if (!matchesTLSHandshakeParams(params)) {
+      throw DL_ABORT_EX(
+          fmt("TLS connection parameters do not match established session"));
+    }
     return true;
+  }
+
+  if (secure_ == A2_TLS_HANDSHAKING && !matchesTLSHandshakeParams(params)) {
+    throw DL_ABORT_EX(
+        fmt("TLS connection parameters changed during handshake"));
   }
 
   if (secure_ == A2_TLS_NONE) {
@@ -1013,6 +1040,8 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
       }
     }
     // Done with the setup, now let handshaking begin immediately.
+    tlsHandshakeParams_ = params;
+    tlsHandshakeParamsSet_ = true;
     secure_ = A2_TLS_HANDSHAKING;
     A2_LOG_DEBUG("TLS Handshaking");
   }
@@ -1101,6 +1130,12 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
   // We should never get here, i.e. all possible states should have been handled
   // and returned from a branch before! Getting here is a bug, of course!
   throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE, "Invalid state (this is a bug!)"));
+}
+
+bool SocketCore::matchesTLSHandshakeParams(
+    const TLSHandshakeParams& params) const
+{
+  return tlsHandshakeParamsSet_ && tlsHandshakeParams_ == params;
 }
 
 std::string SocketCore::getSelectedAlpnProtocol() const
