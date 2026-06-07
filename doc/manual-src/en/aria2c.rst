@@ -432,20 +432,30 @@ HTTP Specific Options
   Verify the peer using certificates specified in :option:`--ca-certificate` option.
   Default: ``true``
 
-.. option:: --tls-sni-host=<HOST>
+.. option:: --tls-sni-host=<HOST|TARGET:SNI[,TARGET:SNI]...>
 
-  Set the hostname sent in the TLS SNI extension. This option only changes the
-  SNI value in the TLS ClientHello. It does not change DNS resolution, TCP
-  connect target, HTTP ``Host`` header, proxy ``CONNECT`` target, cookie scope,
-  or the certificate verification hostname. If this option is not specified,
-  aria2 uses the URI hostname as before. This option requires a TLS backend
-  which supports separate SNI and certificate verification hostnames when
-  ``HOST`` is different from the certificate verification hostname.
+  Set the hostname sent in the TLS SNI extension. Specify a single ``HOST`` to
+  use the same SNI hostname for all HTTPS requests, or specify comma separated
+  ``TARGET:SNI`` mappings to choose the SNI hostname from the current request
+  host. The mapping form is evaluated for each HTTPS request, including the
+  request made after a redirect. If no mapping matches, aria2 uses the current
+  request hostname as before.
 
-  ``HOST`` must be a DNS hostname that is valid for TLS SNI. IP addresses,
-  ``localhost``, single-label names, empty labels, labels with characters other
-  than letters, digits, and hyphen, and labels that start or end with hyphen
-  are rejected.
+  This option only changes the SNI value in the TLS ClientHello. It does not
+  change DNS resolution, TCP connect target, HTTP ``Host`` header, proxy
+  ``CONNECT`` target, cookie scope, or the certificate verification hostname.
+  This option requires a TLS backend which supports separate SNI and
+  certificate verification hostnames when the selected SNI hostname is different
+  from the certificate verification hostname.
+
+  ``TARGET`` may be a DNS hostname, an IPv4 address, or an IPv6 literal address
+  enclosed in square brackets. The ``SNI`` value must be a DNS hostname that is
+  valid for TLS SNI. IP addresses, ``localhost``, single-label names, empty
+  labels, labels with characters other than letters, digits, and hyphen, and
+  labels that start or end with hyphen are rejected as SNI values.
+
+  When multiple mappings use the same ``TARGET``, the first matching entry is
+  used.
 
   Example:
 
@@ -456,6 +466,15 @@ HTTP Specific Options
   In this example, only the TLS SNI hostname is ``front.example``. DNS
   resolution, the TCP connection target, the HTTP ``Host`` header, and
   certificate verification still use ``origin.example``.
+
+  Example with redirects:
+
+  .. code-block:: console
+
+    $ aria2c --tls-sni-host=origin.example:front.example,redirect.example:redirect-front.example https://origin.example/file
+
+  If the first request is redirected to ``redirect.example``, the redirected
+  HTTPS request uses ``redirect-front.example`` as the SNI hostname.
 
 .. option:: --http-accept-gzip [true|false]
 

@@ -48,6 +48,7 @@
 #include "Logger.h"
 #include "LogFactory.h"
 #include "SocketCore.h"
+#include "TLSSNIHostMapping.h"
 #include "message.h"
 #include "prefs.h"
 #include "A2STR.h"
@@ -68,10 +69,9 @@ TLSHandshakeParams createTLSHandshakeParams(const Request* request,
                                             const Option* option)
 {
   const auto& verifyHost = request->getHost();
-  const auto sniHostOverridden = option->defined(PREF_TLS_SNI_HOST);
-  return TLSHandshakeParams(sniHostOverridden ? option->get(PREF_TLS_SNI_HOST)
-                                              : verifyHost,
-                            verifyHost, sniHostOverridden);
+  auto sniHostConfig = getTLSSNIHostConfig(verifyHost, option);
+  return TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
+                            sniHostConfig.overridden);
 }
 #endif // ENABLE_SSL
 

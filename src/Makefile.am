@@ -243,6 +243,7 @@ SRCS =  \
 	TimedHaltCommand.cc TimedHaltCommand.h\
 	TimerA2.cc TimerA2.h\
 	timespec.h\
+	TLSSNIHostMapping.cc TLSSNIHostMapping.h\
 	TorrentAttribute.cc TorrentAttribute.h\
 	TransferStat.cc TransferStat.h\
 	TruncFileAllocationIterator.cc TruncFileAllocationIterator.h\

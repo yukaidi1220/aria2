@@ -46,6 +46,7 @@
 #include "Segment.h"
 #include "Option.h"
 #include "SocketCore.h"
+#include "TLSSNIHostMapping.h"
 #include "prefs.h"
 #include "a2functional.h"
 #include "util.h"
@@ -136,9 +137,13 @@ bool tryRetryTLSHandshakeWithNextAddress(
     const std::shared_ptr<Option>& option, DownloadEngine* e, cuid_t cuid,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup)
 {
-  if (req->getProtocol() != "https" || option->defined(PREF_TLS_SNI_HOST) ||
+  if (req->getProtocol() != "https" ||
       option->getAsBool(PREF_CHECK_CERTIFICATE) ||
       req->getConnectedAddr().empty()) {
+    return false;
+  }
+  auto sniHostConfig = getTLSSNIHostConfig(req->getHost(), option.get());
+  if (sniHostConfig.sniHost != req->getHost()) {
     return false;
   }
 
@@ -174,11 +179,10 @@ bool HttpRequestCommand::executeInternal()
 #ifdef ENABLE_SSL
     if (getRequest()->getProtocol() == "https") {
       const auto& verifyHost = getRequest()->getHost();
-      const auto sniHostOverridden = getOption()->defined(PREF_TLS_SNI_HOST);
-      TLSHandshakeParams tlsParams(sniHostOverridden
-                                       ? getOption()->get(PREF_TLS_SNI_HOST)
-                                       : verifyHost,
-                                   verifyHost, sniHostOverridden);
+      auto sniHostConfig =
+          getTLSSNIHostConfig(verifyHost, getOption().get());
+      TLSHandshakeParams tlsParams(sniHostConfig.sniHost, verifyHost,
+                                   sniHostConfig.overridden);
       try {
         if (!getSocket()->tlsConnect(tlsParams)) {
           setReadCheckSocketIf(getSocket(), getSocket()->wantRead());

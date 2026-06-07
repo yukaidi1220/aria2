@@ -1054,7 +1054,8 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
   }
   {
     OptionHandler* op(new DefaultOptionHandler(
-        PREF_TLS_SNI_HOST, TEXT_TLS_SNI_HOST, NO_DEFAULT_VALUE, "hostname"));
+        PREF_TLS_SNI_HOST, TEXT_TLS_SNI_HOST, NO_DEFAULT_VALUE,
+        "HOST or TARGET:SNI[,TARGET:SNI]..."));
     op->addTag(TAG_ADVANCED);
     op->addTag(TAG_HTTP);
     op->addTag(TAG_HTTPS);

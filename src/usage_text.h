@@ -539,13 +539,12 @@
     "                              in --ca-certificate option.")
 #define TEXT_TLS_SNI_HOST                                               \
   _(" --tls-sni-host=HOST        Set the hostname sent in the TLS SNI extension.\n" \
-    "                              This does not change DNS resolution, TCP connect\n" \
-    "                              target, HTTP Host header, proxy CONNECT target,\n" \
-    "                              cookie scope, or certificate verification\n" \
-    "                              hostname. HOST must be a DNS hostname, not an\n" \
-    "                              IP address or single-label name. A different\n" \
-    "                              HOST requires a TLS backend which supports\n" \
-    "                              separate SNI and verification hostnames.")
+    "                              Use HOST for all HTTPS requests, or comma\n" \
+    "                              separated TARGET:SNI mappings. TARGET may be\n" \
+    "                              a DNS hostname, IPv4 address, or [IPv6]\n" \
+    "                              address. SNI must be a DNS hostname, not an\n" \
+    "                              IP address. Mappings are looked up using the\n" \
+    "                              current request host after redirects.")
 #define TEXT_NO_PROXY                                                   \
   _(" --no-proxy=DOMAINS           Specify comma separated hostnames, domains or\n" \
     "                              network address with or without CIDR block where\n" \
