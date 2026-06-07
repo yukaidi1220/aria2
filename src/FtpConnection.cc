@@ -324,10 +324,14 @@ bool FtpConnection::bulkReceiveResponse(std::pair<int, std::string>& response)
         break;
       }
       else {
+        A2_LOG_NETWORK("FTP: control connection closed unexpectedly, retrying");
         throw DL_RETRY_EX(EX_GOT_EOF);
       }
     }
     if (strbuf_.size() + size > MAX_RECV_BUFFER) {
+      A2_LOG_NETWORK(fmt("FTP: control response exceeded buffer limit (%lu), "
+                         "retrying",
+                         static_cast<unsigned long>(strbuf_.size() + size)));
       throw DL_RETRY_EX(fmt("Max FTP recv buffer reached. length=%lu",
                             static_cast<unsigned long>(strbuf_.size() + size)));
     }
@@ -509,6 +513,9 @@ int FtpConnection::receivePasvResponse(std::pair<std::string, uint16_t>& dest)
         dest.second = 256 * p1 + p2;
       }
       else {
+        A2_LOG_NETWORK(
+            fmt("FTP: invalid PASV response from server: %s, retrying",
+                response.second.c_str()));
         throw DL_RETRY_EX(EX_INVALID_RESPONSE);
       }
     }

@@ -309,6 +309,10 @@ bool AbstractCommand::execute()
           req_->getHost(), req_->getProtocol());
       ss->setError();
 
+      A2_LOG_NETWORK(fmt("CUID#%" PRId64 " - Network problem while talking to %s: "
+                         "%s, retrying",
+                         getCuid(), req_->getUri().c_str(),
+                         socket_->getSocketError().c_str()));
       throw DL_RETRY_EX(
           fmt(MSG_NETWORK_PROBLEM, socket_->getSocketError().c_str()));
     }
@@ -324,6 +328,9 @@ bool AbstractCommand::execute()
         // Purging IP address cache to renew IP address.
         A2_LOG_DEBUG(fmt("CUID#%" PRId64 " - Marking IP address %s as bad",
                          getCuid(), req_->getConnectedAddr().c_str()));
+        A2_LOG_NETWORK(
+            fmt("CUID#%" PRId64 " - Marking IP address %s as bad (timeout)",
+                getCuid(), req_->getConnectedAddr().c_str()));
         e_->markBadIPAddress(req_->getConnectedHostname(),
                              req_->getConnectedAddr(),
                              req_->getConnectedPort());
@@ -334,9 +341,14 @@ bool AbstractCommand::execute()
         A2_LOG_DEBUG(fmt("CUID#%" PRId64 " - All IP addresses were marked bad."
                          " Removing Entry.",
                          getCuid()));
+        A2_LOG_NETWORK(
+            fmt("CUID#%" PRId64 " - All IP addresses for %s were marked bad",
+                getCuid(), req_->getConnectedHostname().c_str()));
         e_->removeCachedIPAddress(req_->getConnectedHostname(),
                                   req_->getConnectedPort());
       }
+      A2_LOG_NETWORK(fmt("CUID#%" PRId64 " - Connection to %s timed out, retrying",
+                         getCuid(), req_->getUri().c_str()));
       throw DL_RETRY_EX2(EX_TIME_OUT, error_code::TIME_OUT);
     }
 
@@ -373,6 +385,13 @@ bool AbstractCommand::execute()
     const int maxTries = getOption()->getAsInt(PREF_MAX_TRIES);
     bool isAbort = maxTries != 0 && req_->getTryCount() >= maxTries;
     if (isAbort) {
+      if (err.getErrorCode() == error_code::TIME_OUT ||
+          err.getErrorCode() == error_code::HTTP_SERVICE_UNAVAILABLE ||
+          err.getErrorCode() == error_code::RESOURCE_NOT_FOUND) {
+        A2_LOG_NETWORK(
+            fmt("CUID#%" PRId64 " - Retries exhausted (max=%d) for %s",
+                getCuid(), maxTries, req_->getUri().c_str()));
+      }
       A2_LOG_INFO(fmt(MSG_MAX_TRY, getCuid(), req_->getTryCount()));
       A2_LOG_ERROR_EX(
           fmt(MSG_DOWNLOAD_ABORTED, getCuid(), req_->getUri().c_str()), err);
@@ -387,6 +406,10 @@ bool AbstractCommand::execute()
     }
 
     if (err.getErrorCode() == error_code::HTTP_SERVICE_UNAVAILABLE) {
+      A2_LOG_NETWORK(fmt(
+          "CUID#%" PRId64
+          " - Service unavailable, waiting %d seconds before retry",
+          getCuid(), getOption()->getAsInt(PREF_RETRY_WAIT)));
       Timer wakeTime(global::wallclock());
       wakeTime.advance(
           std::chrono::seconds(getOption()->getAsInt(PREF_RETRY_WAIT)));
@@ -746,10 +769,16 @@ std::shared_ptr<Request> AbstractCommand::createProxyRequest() const
     proxyRequest = std::make_shared<Request>();
     if (proxyRequest->setUri(proxy)) {
       A2_LOG_DEBUG(fmt("CUID#%" PRId64 " - Using proxy", getCuid()));
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64 " - Using proxy: %s", getCuid(),
+              proxy.c_str()));
     }
     else {
       A2_LOG_DEBUG(
           fmt("CUID#%" PRId64 " - Failed to parse proxy string", getCuid()));
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64 " - Failed to parse proxy URI: %s", getCuid(),
+              proxy.c_str()));
       proxyRequest.reset();
     }
   }
@@ -770,6 +799,9 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     auto ipaddr = addrs.front();
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
                     strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
+    A2_LOG_NETWORK(
+        fmt("DNS: cache hit %s -> %s", hostname.c_str(),
+            strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
     return ipaddr;
   }
 
@@ -858,6 +890,9 @@ bool AbstractCommand::checkIfConnectionEstablished(
 
   A2_LOG_INFO(fmt(MSG_CONNECT_FAILED_AND_RETRY, getCuid(),
                   connectedAddr.c_str(), connectedPort));
+  A2_LOG_NETWORK(
+      fmt("CUID#%" PRId64 " - Connection to %s:%u failed: %s, retrying",
+          getCuid(), connectedAddr.c_str(), connectedPort, error.c_str()));
   e_->setNoWait(true);
   e_->addCommand(
       InitiateConnectionCommandFactory::createInitiateConnectionCommand(

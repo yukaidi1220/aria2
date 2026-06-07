@@ -140,6 +140,10 @@ bool HttpSkipResponseCommand::executeInternal()
       getSocketRecvBuffer()->drain(bufSize);
     }
     if (totalLength_ != 0 && eof) {
+      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64
+                         " - Response body ended before Content-Length was "
+                         "satisfied, retrying",
+                         getCuid()));
       throw DL_RETRY_EX(EX_GOT_EOF);
     }
   }
@@ -218,6 +222,8 @@ bool HttpSkipResponseCommand::processResponse()
         throw DL_ABORT_EX2(MSG_RESOURCE_NOT_FOUND,
                            error_code::RESOURCE_NOT_FOUND);
       }
+      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64 " - HTTP 404 for %s, retrying",
+                         getCuid(), getRequest()->getCurrentUri().c_str()));
       throw DL_RETRY_EX2(MSG_RESOURCE_NOT_FOUND,
                          error_code::RESOURCE_NOT_FOUND);
     case 502:
@@ -225,6 +231,9 @@ bool HttpSkipResponseCommand::processResponse()
       // Only retry if pretry-wait > 0. Hammering 'busy' server is not
       // a good idea.
       if (getOption()->getAsInt(PREF_RETRY_WAIT) > 0) {
+        A2_LOG_NETWORK(
+            fmt("HTTP: CUID#%" PRId64 " - HTTP %d for %s, retrying after wait",
+                getCuid(), statusCode, getRequest()->getCurrentUri().c_str()));
         throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
                            error_code::HTTP_SERVICE_UNAVAILABLE);
       }
@@ -232,6 +241,8 @@ bool HttpSkipResponseCommand::processResponse()
                          error_code::HTTP_SERVICE_UNAVAILABLE);
     case 504:
       // This is Gateway Timeout, so try again
+      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64 " - HTTP 504 for %s, retrying",
+                         getCuid(), getRequest()->getCurrentUri().c_str()));
       throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
                          error_code::HTTP_SERVICE_UNAVAILABLE);
     };

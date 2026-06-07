@@ -47,6 +47,9 @@
 #include "HttpHeader.h"
 #include "DownloadContext.h"
 #include "SocketRecvBuffer.h"
+#include "LogFactory.h"
+#include "Logger.h"
+#include "fmt.h"
 
 namespace aria2 {
 
@@ -72,6 +75,9 @@ bool AbstractProxyResponseCommand::executeInternal()
     return false;
   }
   if (httpResponse->getStatusCode() != 200) {
+    A2_LOG_NETWORK(fmt("HTTP proxy: CUID#%" PRId64
+                       " - CONNECT tunnel failed with status %d, retrying",
+                       getCuid(), httpResponse->getStatusCode()));
     throw DL_RETRY_EX(EX_PROXY_CONNECTION_FAILED);
   }
   getDownloadEngine()->addCommand(getNextCommand());

@@ -458,7 +458,12 @@
     "                              Setting 0 suppresses the output.")
 #define TEXT_LOG_LEVEL                                          \
   _(" --log-level=LEVEL            Set log level to output to file specified using\n" \
-    "                             --log option.")
+    "                             --log option.\n" \
+    "                             Possible values: debug, info, notice, warn, error,\n" \
+    "                             network. network outputs key network events such as\n" \
+    "                             DNS, connect, TLS, HTTP and redirect, plus selected\n" \
+    "                             network retry events, without\n" \
+    "                             filesystem debug noise.")
 #define TEXT_REMOTE_TIME                                                \
   _(" -R, --remote-time[=true|false] Retrieve timestamp of the remote file from the\n" \
     "                              remote HTTP/FTP server and if it is available,\n" \
@@ -1015,7 +1020,9 @@
     "                              this option is not used, new GID is generated\n" \
     "                              by aria2.")
 #define TEXT_CONSOLE_LOG_LEVEL                                          \
-  _(" --console-log-level=LEVEL    Set log level to output to console.")
+  _(" --console-log-level=LEVEL    Set log level to output to console.\n" \
+    "                             Possible values: debug, info, notice, warn, error,\n" \
+    "                             network. See --log-level for details.")
 #define TEXT_SAVE_SESSION_INTERVAL                                      \
   _(" --save-session-interval=SEC  Save error/unfinished downloads to a file\n" \
     "                              specified by --save-session option every SEC\n" \

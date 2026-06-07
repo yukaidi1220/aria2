@@ -810,6 +810,9 @@ bool FtpNegotiationCommand::recvTunnelResponse()
     return false;
   }
   if (httpResponse->getStatusCode() != 200) {
+    A2_LOG_NETWORK(fmt("FTP proxy: CUID#%" PRId64
+                       " - CONNECT tunnel failed with status %d, retrying",
+                       getCuid(), httpResponse->getStatusCode()));
     throw DL_RETRY_EX(EX_PROXY_CONNECTION_FAILED);
   }
   sequence_ = SEQ_SEND_REST_PASV;
