@@ -124,24 +124,52 @@ int SelectEventPoll::SocketEntry::getEvents()
 #ifdef ENABLE_ASYNC_DNS
 
 SelectEventPoll::AsyncNameResolverEntry::AsyncNameResolverEntry(
-    const std::shared_ptr<AsyncNameResolver>& nameResolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& nameResolver, Command* command)
     : nameResolver_(nameResolver), command_(command)
 {
 }
 
-ares_socket_t SelectEventPoll::AsyncNameResolverEntry::getFds(fd_set* rfdsPtr,
-                                                              fd_set* wfdsPtr)
+sock_t SelectEventPoll::AsyncNameResolverEntry::getFds(fd_set* rfdsPtr,
+                                                       fd_set* wfdsPtr)
 {
-  return nameResolver_->getFds(rfdsPtr, wfdsPtr);
+  sock_t nfds = 0;
+  for (const auto& ent : nameResolver_->getsock()) {
+    if (ent.events & EventPoll::EVENT_READ) {
+      FD_SET(ent.fd, rfdsPtr);
+      nfds = std::max(nfds, ent.fd + static_cast<sock_t>(1));
+    }
+
+    if (ent.events & EventPoll::EVENT_WRITE) {
+      FD_SET(ent.fd, wfdsPtr);
+      nfds = std::max(nfds, ent.fd + static_cast<sock_t>(1));
+    }
+  }
+  return nfds;
 }
 
 void SelectEventPoll::AsyncNameResolverEntry::process(fd_set* rfdsPtr,
                                                       fd_set* wfdsPtr)
 {
-  nameResolver_->process(rfdsPtr, wfdsPtr);
+  for (const auto& ent : nameResolver_->getsock()) {
+    auto readfd = AsyncResolver::badSocket();
+    auto writefd = AsyncResolver::badSocket();
+
+    if (FD_ISSET(ent.fd, rfdsPtr) && (ent.events & EventPoll::EVENT_READ)) {
+      readfd = ent.fd;
+    }
+
+    if (FD_ISSET(ent.fd, wfdsPtr) && (ent.events & EventPoll::EVENT_WRITE)) {
+      writefd = ent.fd;
+    }
+
+    if (readfd != AsyncResolver::badSocket() ||
+        writefd != AsyncResolver::badSocket()) {
+      nameResolver_->process(readfd, writefd);
+    }
+  }
   switch (nameResolver_->getStatus()) {
-  case AsyncNameResolver::STATUS_SUCCESS:
-  case AsyncNameResolver::STATUS_ERROR:
+  case AsyncResolver::STATUS_SUCCESS:
+  case AsyncResolver::STATUS_ERROR:
     command_->setStatusActive();
     break;
   default:
@@ -323,7 +351,7 @@ bool SelectEventPoll::deleteEvents(sock_t socket, Command* command,
 
 #ifdef ENABLE_ASYNC_DNS
 bool SelectEventPoll::addNameResolver(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   auto key = std::make_pair(resolver.get(), command);
   auto itr = nameResolverEntries_.lower_bound(key);
@@ -338,7 +366,7 @@ bool SelectEventPoll::addNameResolver(
 }
 
 bool SelectEventPoll::deleteNameResolver(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   auto key = std::make_pair(resolver.get(), command);
   return nameResolverEntries_.erase(key) == 1;

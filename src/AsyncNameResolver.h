@@ -42,29 +42,16 @@
 
 #include <ares.h>
 
-#include "a2netcompat.h"
+#include "AsyncResolver.h"
 
 namespace aria2 {
 
-struct AsyncNameResolverSocketEntry {
-  ares_socket_t fd;
-  int events;
-};
-
-class AsyncNameResolver {
+class AsyncNameResolver : public AsyncResolver {
   friend void callback(void* arg, int status, int timeouts,
                        ares_addrinfo* result);
 
-public:
-  enum STATUS {
-    STATUS_READY,
-    STATUS_QUERYING,
-    STATUS_SUCCESS,
-    STATUS_ERROR,
-  };
-
 private:
-  std::vector<AsyncNameResolverSocketEntry> socks_;
+  std::vector<AsyncResolverSocketEntry> socks_;
   STATUS status_;
   int family_;
   ares_channel channel_;
@@ -76,39 +63,39 @@ private:
 public:
   AsyncNameResolver(int family, const std::string& servers);
 
-  ~AsyncNameResolver();
+  virtual ~AsyncNameResolver();
 
-  void resolve(const std::string& name);
+  virtual void resolve(const std::string& name) CXX11_OVERRIDE;
 
-  const std::vector<std::string>& getResolvedAddresses() const
+  virtual const std::vector<std::string>& getResolvedAddresses() const
+      CXX11_OVERRIDE
   {
     return resolvedAddresses_;
   }
 
-  const std::string& getError() const { return error_; }
+  virtual const std::string& getError() const CXX11_OVERRIDE
+  {
+    return error_;
+  }
 
-  STATUS getStatus() const { return status_; }
+  virtual STATUS getStatus() const CXX11_OVERRIDE { return status_; }
 
-  bool usable() const { return channel_; }
+  virtual bool usable() const CXX11_OVERRIDE { return channel_; }
 
-  ares_socket_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr) const;
+  virtual int getFamily() const CXX11_OVERRIDE { return family_; }
+  virtual const std::vector<AsyncResolverSocketEntry>& getsock() const
+      CXX11_OVERRIDE;
 
-  void process(fd_set* rfdsPtr, fd_set* wfdsPtr);
-
-  int getFamily() const { return family_; }
-#ifdef HAVE_LIBCARES
-
-  const std::vector<AsyncNameResolverSocketEntry>& getsock() const;
-
-  void process(ares_socket_t readfd, ares_socket_t writefd);
-
-#endif // HAVE_LIBCARES
+  virtual void process(sock_t readfd, sock_t writefd) CXX11_OVERRIDE;
 
   bool operator==(const AsyncNameResolver& resolver) const;
 
   void setAddr(const std::string& addrString);
 
-  const std::string& getHostname() const { return hostname_; }
+  virtual const std::string& getHostname() const CXX11_OVERRIDE
+  {
+    return hostname_;
+  }
 
   void handle_sock_state(ares_socket_t sock, int read, int write);
 };

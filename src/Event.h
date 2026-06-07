@@ -45,7 +45,7 @@
 #include "a2netcompat.h"
 #include "Command.h"
 #ifdef ENABLE_ASYNC_DNS
-#  include "AsyncNameResolver.h"
+#  include "AsyncResolver.h"
 #endif // ENABLE_ASYNC_DNS
 
 namespace aria2 {
@@ -126,13 +126,13 @@ public:
 template <typename SocketEntry, typename EventPoll>
 class ADNSEvent : public Event<SocketEntry> {
 private:
-  std::shared_ptr<AsyncNameResolver> resolver_;
+  std::shared_ptr<AsyncResolver> resolver_;
   Command* command_;
   sock_t socket_;
   int events_;
 
 public:
-  ADNSEvent(const std::shared_ptr<AsyncNameResolver>& resolver,
+  ADNSEvent(const std::shared_ptr<AsyncResolver>& resolver,
             Command* command, sock_t socket, int events)
       : resolver_(resolver), command_(command), socket_(socket), events_(events)
   {
@@ -140,28 +140,28 @@ public:
 
   bool operator==(const ADNSEvent& event) const
   {
-    return *resolver_ == *event.resolver_;
+    return resolver_.get() == event.resolver_.get();
   }
 
   virtual int getEvents() const { return events_; }
 
   virtual void processEvents(int events)
   {
-    ares_socket_t readfd;
-    ares_socket_t writefd;
+    sock_t readfd;
+    sock_t writefd;
     if (events &
         (EventPoll::IEV_READ | EventPoll::IEV_ERROR | EventPoll::IEV_HUP)) {
       readfd = socket_;
     }
     else {
-      readfd = ARES_SOCKET_BAD;
+      readfd = AsyncResolver::badSocket();
     }
     if (events &
         (EventPoll::IEV_WRITE | EventPoll::IEV_ERROR | EventPoll::IEV_HUP)) {
       writefd = socket_;
     }
     else {
-      writefd = ARES_SOCKET_BAD;
+      writefd = AsyncResolver::badSocket();
     }
     resolver_->process(readfd, writefd);
     command_->setStatusActive();
@@ -289,14 +289,14 @@ public:
 
 template <typename EventPoll> class AsyncNameResolverEntry {
 private:
-  std::shared_ptr<AsyncNameResolver> nameResolver_;
+  std::shared_ptr<AsyncResolver> nameResolver_;
 
   Command* command_;
 
   std::vector<sock_t> sockets_;
 
 public:
-  AsyncNameResolverEntry(std::shared_ptr<AsyncNameResolver> nameResolver,
+  AsyncNameResolverEntry(std::shared_ptr<AsyncResolver> nameResolver,
                          Command* command)
       : nameResolver_(std::move(nameResolver)), command_(command)
   {
@@ -307,7 +307,8 @@ public:
 
   bool operator==(const AsyncNameResolverEntry& entry)
   {
-    return *nameResolver_ == *entry.nameResolver_ && command_ == entry.command_;
+    return nameResolver_.get() == entry.nameResolver_.get() &&
+           command_ == entry.command_;
   }
 
   bool operator<(const AsyncNameResolverEntry& entry)
@@ -343,12 +344,7 @@ public:
     }
   }
 
-  // Calls AsyncNameResolver::process(ARES_SOCKET_BAD,
-  // ARES_SOCKET_BAD).
-  void processTimeout()
-  {
-    nameResolver_->process(ARES_SOCKET_BAD, ARES_SOCKET_BAD);
-  }
+  void processTimeout() { nameResolver_->processTimeout(); }
 };
 #else  // !ENABLE_ASYNC_DNS
 template <typename EventPoll> class AsyncNameResolverEntry {};

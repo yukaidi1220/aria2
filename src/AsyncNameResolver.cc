@@ -68,6 +68,22 @@ bool hasMultipleServers(const std::string& servers)
   return servers.find(',') != std::string::npos;
 }
 
+ares_socket_t toAresSocket(sock_t fd)
+{
+  if (fd == AsyncResolver::badSocket()) {
+    return ARES_SOCKET_BAD;
+  }
+  return static_cast<ares_socket_t>(fd);
+}
+
+sock_t fromAresSocket(ares_socket_t fd)
+{
+  if (fd == ARES_SOCKET_BAD) {
+    return AsyncResolver::badSocket();
+  }
+  return static_cast<sock_t>(fd);
+}
+
 int configureOptionsForServers(ares_options* opts, const std::string& servers)
 {
   auto optmask = ARES_OPT_SOCK_STATE_CB;
@@ -218,6 +234,7 @@ void sock_state_cb(void* arg, ares_socket_t fd, int read, int write)
 
 void AsyncNameResolver::handle_sock_state(ares_socket_t fd, int read, int write)
 {
+  auto sock = fromAresSocket(fd);
   int events = 0;
 
   if (read) {
@@ -230,13 +247,13 @@ void AsyncNameResolver::handle_sock_state(ares_socket_t fd, int read, int write)
 
   auto it = std::find_if(
       std::begin(socks_), std::end(socks_),
-      [fd](const AsyncNameResolverSocketEntry& ent) { return ent.fd == fd; });
+      [sock](const AsyncResolverSocketEntry& ent) { return ent.fd == sock; });
   if (it == std::end(socks_)) {
     if (!events) {
       return;
     }
 
-    socks_.emplace_back(AsyncNameResolverSocketEntry{fd, events});
+    socks_.emplace_back(AsyncResolverSocketEntry{sock, events});
 
     return;
   }
@@ -318,69 +335,25 @@ void AsyncNameResolver::resolve(const std::string& name)
   ares_getaddrinfo(channel_, name.c_str(), nullptr, &hints, callback, this);
 }
 
-ares_socket_t AsyncNameResolver::getFds(fd_set* rfdsPtr, fd_set* wfdsPtr) const
-{
-  ares_socket_t nfds = 0;
-
-  for (const auto& ent : socks_) {
-    if (ent.events & EventPoll::EVENT_READ) {
-      FD_SET(ent.fd, rfdsPtr);
-      nfds = std::max(nfds, ent.fd + 1);
-    }
-
-    if (ent.events & EventPoll::EVENT_WRITE) {
-      FD_SET(ent.fd, wfdsPtr);
-      nfds = std::max(nfds, ent.fd + 1);
-    }
-  }
-
-  return nfds;
-}
-
-void AsyncNameResolver::process(fd_set* rfdsPtr, fd_set* wfdsPtr)
-{
-  for (const auto& ent : socks_) {
-    ares_socket_t readfd = ARES_SOCKET_BAD;
-    ares_socket_t writefd = ARES_SOCKET_BAD;
-
-    if (FD_ISSET(ent.fd, rfdsPtr) && (ent.events & EventPoll::EVENT_READ)) {
-      readfd = ent.fd;
-    }
-
-    if (FD_ISSET(ent.fd, wfdsPtr) && (ent.events & EventPoll::EVENT_WRITE)) {
-      writefd = ent.fd;
-    }
-
-    if (readfd != ARES_SOCKET_BAD || writefd != ARES_SOCKET_BAD) {
-      process(readfd, writefd);
-    }
-  }
-}
-
-#ifdef HAVE_LIBCARES
-
-const std::vector<AsyncNameResolverSocketEntry>&
-AsyncNameResolver::getsock() const
+const std::vector<AsyncResolverSocketEntry>& AsyncNameResolver::getsock() const
 {
   return socks_;
 }
 
-void AsyncNameResolver::process(ares_socket_t readfd, ares_socket_t writefd)
+void AsyncNameResolver::process(sock_t readfd, sock_t writefd)
 {
   if (!channel_) {
     return;
   }
-  if (A2_LOG_NETWORK_ENABLED && readfd != ARES_SOCKET_BAD) {
-    auto peer = getSocketPeer(readfd);
+  if (A2_LOG_NETWORK_ENABLED && readfd != badSocket()) {
+    auto peer = getSocketPeer(toAresSocket(readfd));
     if (!peer.empty()) {
       A2_LOG_NETWORK(
           fmt("DNS: c-ares socket readable from %s", peer.c_str()));
     }
   }
-  ares_process_fd(channel_, readfd, writefd);
+  ares_process_fd(channel_, toAresSocket(readfd), toAresSocket(writefd));
 }
-
-#endif // HAVE_LIBCARES
 
 bool AsyncNameResolver::operator==(const AsyncNameResolver& resolver) const
 {

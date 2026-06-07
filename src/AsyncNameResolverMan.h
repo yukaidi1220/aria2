@@ -43,7 +43,7 @@
 
 namespace aria2 {
 
-class AsyncNameResolver;
+class AsyncResolver;
 class DownloadEngine;
 class Command;
 class Option;
@@ -91,7 +91,7 @@ private:
   void disableNameResolverCheck(size_t index, DownloadEngine* e,
                                 Command* command);
 
-  std::shared_ptr<AsyncNameResolver> asyncNameResolver_[2];
+  std::shared_ptr<AsyncResolver> asyncNameResolver_[2];
   std::string servers_;
   size_t numResolver_;
   int resolverCheck_;

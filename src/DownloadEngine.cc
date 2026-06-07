@@ -282,13 +282,13 @@ void DownloadEngine::setStatCalc(std::unique_ptr<StatCalc> statCalc)
 
 #ifdef ENABLE_ASYNC_DNS
 bool DownloadEngine::addNameResolverCheck(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   return eventPoll_->addNameResolver(resolver, command);
 }
 
 bool DownloadEngine::deleteNameResolverCheck(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   return eventPoll_->deleteNameResolver(resolver, command);
 }

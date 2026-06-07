@@ -427,6 +427,7 @@ endif # HAVE_LIBSSH2
 if ENABLE_ASYNC_DNS
 SRCS += \
 	AsyncNameResolver.cc AsyncNameResolver.h\
+	AsyncResolver.h\
 	AsyncNameResolverMan.cc AsyncNameResolverMan.h
 endif # ENABLE_ASYNC_DNS
 

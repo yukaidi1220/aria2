@@ -211,7 +211,7 @@ bool PortEventPoll::addEvents(sock_t socket, Command* command,
 
 #ifdef ENABLE_ASYNC_DNS
 bool PortEventPoll::addEvents(sock_t socket, Command* command, int events,
-                              const std::shared_ptr<AsyncNameResolver>& rs)
+                              const std::shared_ptr<AsyncResolver>& rs)
 {
   return addEvents(socket, KADNSEvent(rs, command, socket, events));
 }
@@ -254,7 +254,7 @@ bool PortEventPoll::deleteEvents(sock_t socket,
 
 #ifdef ENABLE_ASYNC_DNS
 bool PortEventPoll::deleteEvents(sock_t socket, Command* command,
-                                 const std::shared_ptr<AsyncNameResolver>& rs)
+                                 const std::shared_ptr<AsyncResolver>& rs)
 {
   return deleteEvents(socket, KADNSEvent(rs, command, socket, 0));
 }
@@ -269,7 +269,7 @@ bool PortEventPoll::deleteEvents(sock_t socket, Command* command,
 
 #ifdef ENABLE_ASYNC_DNS
 bool PortEventPoll::addNameResolver(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   auto entry = std::make_shared<KAsyncNameResolverEntry>(resolver, command);
   KAsyncNameResolverEntrySet::iterator itr = nameResolverEntries_.find(entry);
@@ -284,7 +284,7 @@ bool PortEventPoll::addNameResolver(
 }
 
 bool PortEventPoll::deleteNameResolver(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   auto entry = std::make_shared<KAsyncNameResolverEntry>(resolver, command);
   KAsyncNameResolverEntrySet::iterator itr = nameResolverEntries_.find(entry);

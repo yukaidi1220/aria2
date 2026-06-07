@@ -38,6 +38,7 @@
 #include <utility>
 
 #include "AsyncNameResolver.h"
+#include "AsyncResolver.h"
 #include "DownloadEngine.h"
 #include "Command.h"
 #include "message.h"
@@ -51,16 +52,16 @@
 namespace aria2 {
 
 namespace {
-const char* resolverStatusToString(AsyncNameResolver::STATUS status)
+const char* resolverStatusToString(AsyncResolver::STATUS status)
 {
   switch (status) {
-  case AsyncNameResolver::STATUS_READY:
+  case AsyncResolver::STATUS_READY:
     return "ready";
-  case AsyncNameResolver::STATUS_QUERYING:
+  case AsyncResolver::STATUS_QUERYING:
     return "querying";
-  case AsyncNameResolver::STATUS_SUCCESS:
+  case AsyncResolver::STATUS_SUCCESS:
     return "success";
-  case AsyncNameResolver::STATUS_ERROR:
+  case AsyncResolver::STATUS_ERROR:
     return "error";
   default:
     return "unknown";
@@ -132,8 +133,7 @@ void AsyncNameResolverMan::getResolvedAddress(
     std::vector<std::string>& res) const
 {
   for (size_t i = 0; i < numResolver_; ++i) {
-    if (asyncNameResolver_[i]->getStatus() ==
-        AsyncNameResolver::STATUS_SUCCESS) {
+    if (asyncNameResolver_[i]->getStatus() == AsyncResolver::STATUS_SUCCESS) {
       auto& addrs = asyncNameResolver_[i]->getResolvedAddresses();
       res.insert(std::end(res), std::begin(addrs), std::end(addrs));
     }
@@ -190,13 +190,13 @@ int AsyncNameResolverMan::getStatus() const
   bool ipv4Success = false;
   for (size_t i = 0; i < numResolver_; ++i) {
     switch (asyncNameResolver_[i]->getStatus()) {
-    case AsyncNameResolver::STATUS_SUCCESS:
+    case AsyncResolver::STATUS_SUCCESS:
       ++success;
       if (asyncNameResolver_[i]->getFamily() == AF_INET) {
         ipv4Success = true;
       }
       break;
-    case AsyncNameResolver::STATUS_ERROR:
+    case AsyncResolver::STATUS_ERROR:
       ++error;
       break;
     default:
@@ -222,7 +222,7 @@ int AsyncNameResolverMan::getStatus() const
 const std::string& AsyncNameResolverMan::getLastError() const
 {
   for (size_t i = 0; i < numResolver_; ++i) {
-    if (asyncNameResolver_[i]->getStatus() == AsyncNameResolver::STATUS_ERROR) {
+    if (asyncNameResolver_[i]->getStatus() == AsyncResolver::STATUS_ERROR) {
       // TODO This is not last error chronologically.
       return asyncNameResolver_[i]->getError();
     }
@@ -240,7 +240,7 @@ std::string AsyncNameResolverMan::getQueryStatus() const
     }
     auto entry = fmt("%s=%s", familyToString(resolver->getFamily()),
                      resolverStatusToString(resolver->getStatus()));
-    if (resolver->getStatus() == AsyncNameResolver::STATUS_ERROR &&
+    if (resolver->getStatus() == AsyncResolver::STATUS_ERROR &&
         !resolver->getError().empty()) {
       entry += fmt("(%s)", resolver->getError().c_str());
     }

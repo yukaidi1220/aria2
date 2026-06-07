@@ -46,7 +46,7 @@
 #include "a2functional.h"
 
 #ifdef ENABLE_ASYNC_DNS
-#  include "AsyncNameResolver.h"
+#  include "AsyncResolver.h"
 #endif // ENABLE_ASYNC_DNS
 
 namespace aria2 {
@@ -114,7 +114,7 @@ private:
   typedef std::map<sock_t, KPoll*> KPolls;
 
 #ifdef ENABLE_ASYNC_DNS
-  typedef std::map<std::pair<AsyncNameResolver*, Command*>,
+  typedef std::map<std::pair<AsyncResolver*, Command*>,
                    KAsyncNameResolverEntry>
       KAsyncNameResolverEntrySet;
 #endif // ENABLE_ASYNC_DNS
@@ -133,9 +133,9 @@ private:
 
 #ifdef ENABLE_ASYNC_DNS
   bool addEvents(sock_t socket, Command* command, int events,
-                 const std::shared_ptr<AsyncNameResolver>& rs);
+                 const std::shared_ptr<AsyncResolver>& rs);
   bool deleteEvents(sock_t socket, Command* command,
-                    const std::shared_ptr<AsyncNameResolver>& rs);
+                    const std::shared_ptr<AsyncResolver>& rs);
 #endif
 
   static int translateEvents(EventPoll::EventType events);
@@ -155,10 +155,10 @@ public:
 
 #ifdef ENABLE_ASYNC_DNS
   virtual bool
-  addNameResolver(const std::shared_ptr<AsyncNameResolver>& resolver,
+  addNameResolver(const std::shared_ptr<AsyncResolver>& resolver,
                   Command* command) CXX11_OVERRIDE;
   virtual bool
-  deleteNameResolver(const std::shared_ptr<AsyncNameResolver>& resolver,
+  deleteNameResolver(const std::shared_ptr<AsyncResolver>& resolver,
                      Command* command) CXX11_OVERRIDE;
 #endif // ENABLE_ASYNC_DNS
 

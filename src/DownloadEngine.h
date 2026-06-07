@@ -52,7 +52,7 @@
 #include "CheckIntegrityMan.h"
 #include "DNSCache.h"
 #ifdef ENABLE_ASYNC_DNS
-#  include "AsyncNameResolver.h"
+#  include "AsyncResolver.h"
 #endif // ENABLE_ASYNC_DNS
 
 namespace aria2 {
@@ -199,10 +199,10 @@ public:
 
 #ifdef ENABLE_ASYNC_DNS
 
-  bool addNameResolverCheck(const std::shared_ptr<AsyncNameResolver>& resolver,
+  bool addNameResolverCheck(const std::shared_ptr<AsyncResolver>& resolver,
                             Command* command);
   bool
-  deleteNameResolverCheck(const std::shared_ptr<AsyncNameResolver>& resolver,
+  deleteNameResolverCheck(const std::shared_ptr<AsyncResolver>& resolver,
                           Command* command);
 #endif // ENABLE_ASYNC_DNS
 

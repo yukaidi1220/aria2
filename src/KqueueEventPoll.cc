@@ -210,7 +210,7 @@ bool KqueueEventPoll::addEvents(sock_t socket, Command* command,
 
 #ifdef ENABLE_ASYNC_DNS
 bool KqueueEventPoll::addEvents(sock_t socket, Command* command, int events,
-                                const std::shared_ptr<AsyncNameResolver>& rs)
+                                const std::shared_ptr<AsyncResolver>& rs)
 {
   return addEvents(socket, KADNSEvent(rs, command, socket, events));
 }
@@ -248,7 +248,7 @@ bool KqueueEventPoll::deleteEvents(sock_t socket,
 
 #ifdef ENABLE_ASYNC_DNS
 bool KqueueEventPoll::deleteEvents(sock_t socket, Command* command,
-                                   const std::shared_ptr<AsyncNameResolver>& rs)
+                                   const std::shared_ptr<AsyncResolver>& rs)
 {
   return deleteEvents(socket, KADNSEvent(rs, command, socket, 0));
 }
@@ -263,7 +263,7 @@ bool KqueueEventPoll::deleteEvents(sock_t socket, Command* command,
 
 #ifdef ENABLE_ASYNC_DNS
 bool KqueueEventPoll::addNameResolver(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   auto key = std::make_pair(resolver.get(), command);
   auto itr = nameResolverEntries_.lower_bound(key);
@@ -279,7 +279,7 @@ bool KqueueEventPoll::addNameResolver(
 }
 
 bool KqueueEventPoll::deleteNameResolver(
-    const std::shared_ptr<AsyncNameResolver>& resolver, Command* command)
+    const std::shared_ptr<AsyncResolver>& resolver, Command* command)
 {
   auto key = std::make_pair(resolver.get(), command);
   auto itr = nameResolverEntries_.find(key);

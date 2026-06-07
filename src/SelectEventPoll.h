@@ -42,7 +42,7 @@
 
 #include "a2functional.h"
 #ifdef ENABLE_ASYNC_DNS
-#  include "AsyncNameResolver.h"
+#  include "AsyncResolver.h"
 #endif // ENABLE_ASYNC_DNS
 
 namespace aria2 {
@@ -117,13 +117,13 @@ private:
 
   class AsyncNameResolverEntry {
   private:
-    std::shared_ptr<AsyncNameResolver> nameResolver_;
+    std::shared_ptr<AsyncResolver> nameResolver_;
 
     Command* command_;
 
   public:
     AsyncNameResolverEntry(
-        const std::shared_ptr<AsyncNameResolver>& nameResolver,
+        const std::shared_ptr<AsyncResolver>& nameResolver,
         Command* command);
 
     AsyncNameResolverEntry(const AsyncNameResolverEntry&) = delete;
@@ -131,7 +131,7 @@ private:
 
     bool operator==(const AsyncNameResolverEntry& entry)
     {
-      return *nameResolver_ == *entry.nameResolver_ &&
+      return nameResolver_.get() == entry.nameResolver_.get() &&
              command_ == entry.command_;
     }
 
@@ -142,7 +142,7 @@ private:
               command_ < entry.command_);
     }
 
-    ares_socket_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr);
+    sock_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr);
 
     void process(fd_set* rfdsPtr, fd_set* wfdsPtr);
   };
@@ -160,7 +160,7 @@ private:
   typedef std::map<sock_t, SocketEntry> SocketEntrySet;
   SocketEntrySet socketEntries_;
 #ifdef ENABLE_ASYNC_DNS
-  typedef std::map<std::pair<AsyncNameResolver*, Command*>,
+  typedef std::map<std::pair<AsyncResolver*, Command*>,
                    AsyncNameResolverEntry>
       AsyncNameResolverEntrySet;
   AsyncNameResolverEntrySet nameResolverEntries_;
@@ -183,10 +183,10 @@ public:
 #ifdef ENABLE_ASYNC_DNS
 
   virtual bool
-  addNameResolver(const std::shared_ptr<AsyncNameResolver>& resolver,
+  addNameResolver(const std::shared_ptr<AsyncResolver>& resolver,
                   Command* command) CXX11_OVERRIDE;
   virtual bool
-  deleteNameResolver(const std::shared_ptr<AsyncNameResolver>& resolver,
+  deleteNameResolver(const std::shared_ptr<AsyncResolver>& resolver,
                      Command* command) CXX11_OVERRIDE;
 #endif // ENABLE_ASYNC_DNS
 };
