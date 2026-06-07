@@ -447,6 +447,16 @@ HTTP Specific Options
   than letters, digits, and hyphen, and labels that start or end with hyphen
   are rejected.
 
+  Example:
+
+  .. code-block:: console
+
+    $ aria2c --tls-sni-host=front.example https://origin.example/file
+
+  In this example, only the TLS SNI hostname is ``front.example``. DNS
+  resolution, the TCP connection target, the HTTP ``Host`` header, and
+  certificate verification still use ``origin.example``.
+
 .. option:: --http-accept-gzip [true|false]
 
   Send ``Accept-Encoding: deflate, gzip`` request header and inflate response if

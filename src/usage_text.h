@@ -540,12 +540,12 @@
 #define TEXT_TLS_SNI_HOST                                               \
   _(" --tls-sni-host=HOST        Set the hostname sent in the TLS SNI extension.\n" \
     "                              This does not change DNS resolution, TCP connect\n" \
-    "                              target, HTTP Host header, or certificate\n" \
-    "                              verification hostname. HOST must be a DNS\n" \
-    "                              hostname, not an IP address or single-label\n" \
-    "                              name. A different HOST requires a TLS\n" \
-    "                              backend which supports separate SNI and\n" \
-    "                              verification hostnames.")
+    "                              target, HTTP Host header, proxy CONNECT target,\n" \
+    "                              cookie scope, or certificate verification\n" \
+    "                              hostname. HOST must be a DNS hostname, not an\n" \
+    "                              IP address or single-label name. A different\n" \
+    "                              HOST requires a TLS backend which supports\n" \
+    "                              separate SNI and verification hostnames.")
 #define TEXT_NO_PROXY                                                   \
   _(" --no-proxy=DOMAINS           Specify comma separated hostnames, domains or\n" \
     "                              network address with or without CIDR block where\n" \
