@@ -20,6 +20,7 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testVerifyHostname);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testTLSHandshakeParams);
+  CPPUNIT_TEST(testIsTLSSNIHostname);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
 
@@ -36,6 +37,7 @@ public:
   void testVerifyHostname();
 #ifdef ENABLE_SSL
   void testTLSHandshakeParams();
+  void testIsTLSSNIHostname();
 #endif // ENABLE_SSL
 };
 
@@ -278,6 +280,16 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT_EQUAL(std::string("h2"), params.alpnProtocols[0]);
     CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), params.alpnProtocols[1]);
   }
+}
+
+void SocketCoreTest::testIsTLSSNIHostname()
+{
+  CPPUNIT_ASSERT(isTLSSNIHostname("example.org"));
+  CPPUNIT_ASSERT(isTLSSNIHostname("front.example"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname(""));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("localhost"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("192.168.0.1"));
+  CPPUNIT_ASSERT(!isTLSSNIHostname("2001:db8::1"));
 }
 #endif // ENABLE_SSL
 

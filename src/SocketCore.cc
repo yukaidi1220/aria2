@@ -99,6 +99,14 @@ namespace aria2 {
 #  define CLOSE(X) close(X)
 #endif // __MINGW32__
 
+#ifdef ENABLE_SSL
+bool isTLSSNIHostname(const std::string& hostname)
+{
+  return !hostname.empty() && !util::isNumericHost(hostname) &&
+         hostname.find(".") != std::string::npos;
+}
+#endif // ENABLE_SSL
+
 namespace {
 std::string errorMsg(int errNum)
 {
@@ -938,20 +946,26 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
       tlsSession_.reset();
       throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE, error.c_str()));
     }
-    if (tlsctx->getSide() == TLS_CLIENT && params.sniHost != params.verifyHost &&
-        !tlsSession_->supportsSNIHostnameOverride()) {
+    const auto sniOverride =
+        tlsctx->getSide() == TLS_CLIENT && params.sniHost != params.verifyHost;
+    const auto sniHostname = isTLSSNIHostname(params.sniHost);
+    if (sniOverride && !sniHostname) {
+      throw DL_ABORT_EX(fmt("Invalid TLS SNI hostname override"));
+    }
+    if (sniOverride && !tlsSession_->supportsSNIHostnameOverride()) {
       throw DL_ABORT_EX(
           fmt("SSL/TLS backend does not support SNI hostname override"));
     }
     // Check hostname is not numeric and it includes ".". Setting
     // "localhost" will produce TLS alert with GNUTLS.
-    if (tlsctx->getSide() == TLS_CLIENT &&
-        !util::isNumericHost(params.sniHost) &&
-        params.sniHost.find(".") != std::string::npos) {
+    if (tlsctx->getSide() == TLS_CLIENT && sniHostname) {
       rv = tlsSession_->setSNIHostname(params.sniHost);
       if (rv != TLS_ERR_OK) {
-        throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
-                              tlsSession_->getLastErrorString().c_str()));
+        if (sniOverride) {
+          throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
+                                tlsSession_->getLastErrorString().c_str()));
+        }
+        A2_LOG_DEBUG("TLS SNI hostname was not set");
       }
     }
     if (tlsctx->getSide() == TLS_CLIENT && !params.alpnProtocols.empty()) {

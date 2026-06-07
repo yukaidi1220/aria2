@@ -78,6 +78,8 @@ struct TLSHandshakeParams {
   {
   }
 };
+
+bool isTLSSNIHostname(const std::string& hostname);
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2
