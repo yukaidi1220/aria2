@@ -23,6 +23,7 @@ class AsyncDotNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testTlsWantReadUpdatesSocketEvents);
   CPPUNIT_TEST(testTlsWantWriteUpdatesSocketEvents);
   CPPUNIT_TEST(testWriteWantWriteThenSucceeds);
+  CPPUNIT_TEST(testProcessTimeoutDrainsBufferedReadData);
   CPPUNIT_TEST(testProcessTimeoutDoesNotFailQuery);
   CPPUNIT_TEST(testRejectEmptyServerList);
   CPPUNIT_TEST(testRejectInvalidHostname);
@@ -37,6 +38,7 @@ public:
   void testTlsWantReadUpdatesSocketEvents();
   void testTlsWantWriteUpdatesSocketEvents();
   void testWriteWantWriteThenSucceeds();
+  void testProcessTimeoutDrainsBufferedReadData();
   void testProcessTimeoutDoesNotFailQuery();
   void testRejectEmptyServerList();
   void testRejectInvalidHostname();
@@ -233,6 +235,14 @@ public:
     return nread;
   }
 
+  virtual size_t getRecvBufferedLength() const CXX11_OVERRIDE
+  {
+    if (!recvBufferedLength) {
+      return 0;
+    }
+    return readBuffer.size() - readOffset;
+  }
+
   virtual bool wantRead() const CXX11_OVERRIDE { return wantRead_; }
 
   virtual bool wantWrite() const CXX11_OVERRIDE { return wantWrite_; }
@@ -252,6 +262,7 @@ public:
   std::string readBuffer;
   size_t readOffset = 0;
   size_t maxReadSize = 0;
+  size_t recvBufferedLength = 0;
   bool wantRead_ = false;
   bool wantWrite_ = false;
 };
@@ -458,6 +469,31 @@ void AsyncDotNameResolverTest::testWriteWantWriteThenSucceeds()
 
   driveOnce(resolver, transport);
   CPPUNIT_ASSERT(!transport->written.empty());
+}
+
+void AsyncDotNameResolverTest::testProcessTimeoutDrainsBufferedReadData()
+{
+  FakeDotTransportFactory factory;
+  AsyncDotNameResolver resolver(
+      AF_INET, {{"dns.example.org", 853, "dns.example.org"}},
+      makeTransportFactory(factory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteQueryDone(resolver, factory);
+  auto transport = factory.transports.back();
+  auto response = createAResponse(getQueryId(transport->written),
+                                  "www.example.com");
+  transport->readBuffer = createDotFrame(response);
+  transport->recvBufferedLength = 1;
+
+  resolver.processTimeout();
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL(AsyncDotNameResolver::DOT_DONE, resolver.getDotState());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getResolvedAddresses().size());
+  CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.7"),
+                       resolver.getResolvedAddresses()[0]);
+  CPPUNIT_ASSERT(resolver.getsock().empty());
 }
 
 void AsyncDotNameResolverTest::testProcessTimeoutDoesNotFailQuery()

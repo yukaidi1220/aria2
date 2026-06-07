@@ -67,6 +67,8 @@ public:
 
   virtual size_t readData(void* data, size_t len) = 0;
 
+  virtual size_t getRecvBufferedLength() const = 0;
+
   virtual bool wantRead() const = 0;
 
   virtual bool wantWrite() const = 0;
@@ -134,6 +136,8 @@ private:
   void fail(std::string error);
   void updateSocketEvents();
   int getEventsForWantDirection(int defaultEvent) const;
+  bool canProcessBufferedRead() const;
+  void processBufferedRead();
   bool eventReady(sock_t readfd, sock_t writefd) const;
   TLSHandshakeParams createTLSHandshakeParams() const;
   void processConnecting();

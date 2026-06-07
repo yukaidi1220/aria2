@@ -134,6 +134,11 @@ public:
     return len;
   }
 
+  virtual size_t getRecvBufferedLength() const CXX11_OVERRIDE
+  {
+    return socket_->getRecvBufferedLength();
+  }
+
   virtual bool wantRead() const CXX11_OVERRIDE { return socket_->wantRead(); }
 
   virtual bool wantWrite() const CXX11_OVERRIDE
@@ -340,6 +345,44 @@ bool AsyncDotNameResolver::eventReady(sock_t readfd, sock_t writefd) const
   return readfd == fd || writefd == fd;
 }
 
+bool AsyncDotNameResolver::canProcessBufferedRead() const
+{
+  return transport_ &&
+         (state_ == DOT_READING_RESPONSE_LEN ||
+          state_ == DOT_READING_RESPONSE_BODY) &&
+         transport_->getRecvBufferedLength() > 0;
+}
+
+void AsyncDotNameResolver::processBufferedRead()
+{
+  while (status_ == STATUS_QUERYING && canProcessBufferedRead()) {
+    try {
+      auto prevState = state_;
+      auto prevLengthOffset = responseLengthOffset_;
+      auto prevResponseOffset = responseOffset_;
+      if (state_ == DOT_READING_RESPONSE_LEN) {
+        processReadResponseLength();
+      }
+      else if (state_ == DOT_READING_RESPONSE_BODY) {
+        processReadResponseBody();
+      }
+      else {
+        break;
+      }
+
+      if (state_ == prevState && responseLengthOffset_ == prevLengthOffset &&
+          responseOffset_ == prevResponseOffset) {
+        break;
+      }
+    }
+    catch (Exception& e) {
+      failCurrentServerOrRetry(e.what());
+      break;
+    }
+  }
+  updateSocketEvents();
+}
+
 TLSHandshakeParams AsyncDotNameResolver::createTLSHandshakeParams() const
 {
   const auto& server = servers_[serverIndex_];
@@ -352,6 +395,7 @@ void AsyncDotNameResolver::process(sock_t readfd, sock_t writefd)
 {
   if (status_ != STATUS_QUERYING || !transport_ ||
       !eventReady(readfd, writefd)) {
+    processBufferedRead();
     updateSocketEvents();
     return;
   }
@@ -385,7 +429,7 @@ void AsyncDotNameResolver::process(sock_t readfd, sock_t writefd)
 
 void AsyncDotNameResolver::processTimeout()
 {
-  updateSocketEvents();
+  processBufferedRead();
 }
 
 void AsyncDotNameResolver::processConnecting()
