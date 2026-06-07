@@ -127,6 +127,18 @@ void HttpConnection::sendRequest(std::unique_ptr<HttpRequest> httpRequest,
 {
   A2_LOG_INFO(
       fmt(MSG_SENDING_REQUEST, cuid_, eraseConfidentialInfo(request).c_str()));
+  if (A2_LOG_NETWORK_ENABLED) {
+    // Extract first line (method + URI) for network log on demand.
+    auto nlpos = request.find('\n');
+    if (nlpos != std::string::npos) {
+      auto firstLine = request.substr(0, nlpos);
+      if (!firstLine.empty() && firstLine.back() == '\r') {
+        firstLine.pop_back();
+      }
+      A2_LOG_NETWORK(
+          fmt("HTTP: CUID#%" PRId64 " - %s", cuid_, firstLine.c_str()));
+    }
+  }
   socketBuffer_.pushStr(std::move(request));
   socketBuffer_.send();
   outstandingHttpRequests_.push_back(
@@ -153,6 +165,8 @@ std::unique_ptr<HttpResponse> HttpConnection::receiveResponse()
   if (socketRecvBuffer_->bufferEmpty()) {
     if (socketRecvBuffer_->recv() == 0 && !socket_->wantRead() &&
         !socket_->wantWrite()) {
+      A2_LOG_NETWORK(
+          fmt("HTTP: CUID#%" PRId64 " - Server closed connection", cuid_));
       throw DL_RETRY_EX(EX_GOT_EOF);
     }
   }
@@ -163,6 +177,9 @@ std::unique_ptr<HttpResponse> HttpConnection::receiveResponse()
     A2_LOG_INFO(fmt(MSG_RECEIVE_RESPONSE, cuid_,
                     eraseConfidentialInfo(proc->getHeaderString()).c_str()));
     auto result = proc->getResult();
+    A2_LOG_NETWORK(
+        fmt("HTTP: CUID#%" PRId64 " - Response status: %d",
+            cuid_, result->getStatusCode()));
     if (result->getStatusCode() / 100 == 1) {
       socketRecvBuffer_->drain(proc->getLastBytesProcessed());
       outstandingHttpRequests_.front()->resetHttpHeaderProcessor();

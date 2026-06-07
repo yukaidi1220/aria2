@@ -45,6 +45,7 @@
 #include "Option.h"
 #include "SocketCore.h"
 #include "prefs.h"
+#include "a2functional.h"
 
 namespace aria2 {
 
@@ -69,6 +70,11 @@ void AsyncNameResolverMan::startAsync(const std::string& hostname,
                                       DownloadEngine* e, Command* command)
 {
   numResolver_ = 0;
+  A2_LOG_NETWORK(
+      fmt("DNS: start resolving %s using c-ares", hostname.c_str()));
+  A2_LOG_NETWORK(
+      fmt("DNS: query families: A=%s, AAAA=%s",
+          ipv4_ ? "yes" : "no", ipv6_ ? "yes" : "no"));
   // Set IPv6 resolver first, so that we can push IPv6 address in
   // front of IPv6 address in getResolvedAddress().
   if (ipv6_) {
@@ -101,6 +107,12 @@ void AsyncNameResolverMan::getResolvedAddress(
         AsyncNameResolver::STATUS_SUCCESS) {
       auto& addrs = asyncNameResolver_[i]->getResolvedAddresses();
       res.insert(std::end(res), std::begin(addrs), std::end(addrs));
+    }
+  }
+  if (!res.empty()) {
+    if (A2_LOG_NETWORK_ENABLED) {
+      auto joined = strjoin(std::begin(res), std::end(res), ", ");
+      A2_LOG_NETWORK(fmt("DNS: final address order: %s", joined.c_str()));
     }
   }
   return;
@@ -218,6 +230,12 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
     asyncNameResolverMan->setIPv6(false);
   }
   asyncNameResolverMan->setServers(option->get(PREF_ASYNC_DNS_SERVER));
+#ifdef ENABLE_ASYNC_DNS
+  A2_LOG_NETWORK(
+      fmt("DNS: async resolver %s, servers=%s",
+          option->getAsBool(PREF_ASYNC_DNS) ? "enabled" : "disabled",
+          option->get(PREF_ASYNC_DNS_SERVER).c_str()));
+#endif // ENABLE_ASYNC_DNS
 }
 
 } // namespace aria2

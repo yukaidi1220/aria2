@@ -89,9 +89,15 @@ bool ConnectCommand::executeInternal()
   if (backupConnectionInfo_ && !backupConnectionInfo_->ipaddr.empty()) {
     A2_LOG_INFO(fmt("CUID#%" PRId64 " - Use backup connection address %s",
                     getCuid(), backupConnectionInfo_->ipaddr.c_str()));
+    A2_LOG_NETWORK(
+        fmt("CUID#%" PRId64 " - Using backup connection address %s",
+            getCuid(), backupConnectionInfo_->ipaddr.c_str()));
     getDownloadEngine()->markBadIPAddress(getRequest()->getConnectedHostname(),
                                           getRequest()->getConnectedAddr(),
                                           getRequest()->getConnectedPort());
+    A2_LOG_NETWORK(
+        fmt("CUID#%" PRId64 " - Marking IP %s as bad",
+            getCuid(), getRequest()->getConnectedAddr().c_str()));
 
     getRequest()->setConnectedAddrInfo(getRequest()->getConnectedHostname(),
                                        backupConnectionInfo_->ipaddr,

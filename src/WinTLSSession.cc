@@ -179,6 +179,7 @@ int WinTLSSession::closeConnection()
 
   if (state_ == st_connected) {
     A2_LOG_DEBUG("WinTLS: Closing connection");
+    A2_LOG_NETWORK("TLS: closing connection");
     state_ = st_closing;
 
     DWORD dwShut = SCHANNEL_SHUTDOWN;
@@ -684,6 +685,7 @@ restart:
       }
       if (read == 0) {
         A2_LOG_DEBUG("WinTLS: Connection abruptly closed during handshake!");
+        A2_LOG_NETWORK("TLS: connection closed during handshake");
         status_ = SEC_E_INCOMPLETE_MESSAGE;
         state_ = st_error;
         return TLS_ERR_ERROR;
@@ -764,6 +766,7 @@ restart:
                        "not fulfill requested flags. "
                        "Excepted: %lu Actual: %lu",
                        kReqFlags, flags));
+      A2_LOG_NETWORK("TLS: handshake failed: channel setup error");
       status_ = SEC_E_INTERNAL_ERROR;
       state_ = st_error;
       return TLS_ERR_ERROR;
@@ -787,6 +790,9 @@ restart:
     state_ = st_connected;
     A2_LOG_INFO(
         fmt("WinTLS: connected with: %s", getCipherSuite(&handle_).c_str()));
+    A2_LOG_NETWORK(
+        fmt("TLS: handshake completed, cipher=%s",
+            getCipherSuite(&handle_).c_str()));
     switch (getProtocolVersion(&handle_)) {
     case 0x302:
       version = TLS_PROTO_TLS11;

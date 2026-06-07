@@ -41,15 +41,21 @@
 #include "SocketCore.h"
 #include "util.h"
 #include "EventPoll.h"
+#include "fmt.h"
 
 namespace aria2 {
 
 void callback(void* arg, int status, int timeouts, ares_addrinfo* result)
 {
   AsyncNameResolver* resolverPtr = reinterpret_cast<AsyncNameResolver*>(arg);
+  const auto& hostname = resolverPtr->getHostname();
+  const auto famStr = resolverPtr->getFamily() == AF_INET6 ? "AAAA" : "A";
   if (status != ARES_SUCCESS) {
     resolverPtr->error_ = ares_strerror(status);
     resolverPtr->status_ = AsyncNameResolver::STATUS_ERROR;
+    A2_LOG_NETWORK(
+        fmt("DNS: %s %s failed: %s", famStr, hostname.c_str(),
+            resolverPtr->error_.c_str()));
     return;
   }
   for (auto ap = result->nodes; ap; ap = ap->ai_next) {
@@ -64,9 +70,18 @@ void callback(void* arg, int status, int timeouts, ares_addrinfo* result)
   if (resolverPtr->resolvedAddresses_.empty()) {
     resolverPtr->error_ = "no address returned or address conversion failed";
     resolverPtr->status_ = AsyncNameResolver::STATUS_ERROR;
+    A2_LOG_NETWORK(
+        fmt("DNS: %s %s failed: %s", famStr, hostname.c_str(),
+            resolverPtr->error_.c_str()));
   }
   else {
     resolverPtr->status_ = AsyncNameResolver::STATUS_SUCCESS;
+    if (A2_LOG_NETWORK_ENABLED) {
+      auto addrs = strjoin(std::begin(resolverPtr->resolvedAddresses_),
+                           std::end(resolverPtr->resolvedAddresses_), ", ");
+      A2_LOG_NETWORK(
+          fmt("DNS: %s %s -> %s", famStr, hostname.c_str(), addrs.c_str()));
+    }
   }
 }
 
@@ -126,6 +141,10 @@ AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers)
     if (ares_set_servers_csv(channel_, servers.c_str()) != ARES_SUCCESS) {
       A2_LOG_DEBUG("ares_set_servers_csv failed");
     }
+    else {
+      A2_LOG_NETWORK(
+          fmt("DNS: async resolver servers=%s", servers.c_str()));
+    }
   }
 }
 
@@ -139,6 +158,8 @@ void AsyncNameResolver::resolve(const std::string& name)
   ares_addrinfo_hints hints{};
   hints.ai_family = family_;
 
+  const auto famStr = family_ == AF_INET6 ? "AAAA" : "A";
+  A2_LOG_NETWORK(fmt("DNS: query %s %s using c-ares", famStr, name.c_str()));
   ares_getaddrinfo(channel_, name.c_str(), nullptr, &hints, callback, this);
 }
 

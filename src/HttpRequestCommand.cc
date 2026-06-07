@@ -132,6 +132,9 @@ bool HttpRequestCommand::executeInternal()
         addCommandSelf();
         return false;
       }
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64 " - HTTPS connection to %s established",
+              getCuid(), getRequest()->getHost().c_str()));
     }
 #endif // ENABLE_SSL
     if (getSegments().empty()) {

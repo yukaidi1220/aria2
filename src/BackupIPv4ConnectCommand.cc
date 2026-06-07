@@ -94,6 +94,9 @@ bool BackupIPv4ConnectCommand::execute()
           A2_LOG_INFO(fmt("CUID#%" PRId64 " - Backup connection to %s "
                           "established",
                           getCuid(), ipaddr_.c_str()));
+          A2_LOG_NETWORK(
+              fmt("CUID#%" PRId64 " - Backup connection to %s:%u established",
+                  getCuid(), ipaddr_.c_str(), port_));
           info_->ipaddr = ipaddr_;
           e_->deleteSocketForWriteCheck(socket_, this);
           info_->socket.swap(socket_);
@@ -104,6 +107,9 @@ bool BackupIPv4ConnectCommand::execute()
         else {
           A2_LOG_INFO(fmt("CUID#%" PRId64 " - Backup connection failed: %s",
                           getCuid(), error.c_str()));
+          A2_LOG_NETWORK(
+              fmt("CUID#%" PRId64 " - Backup connection to %s:%u failed: %s",
+                  getCuid(), ipaddr_.c_str(), port_, error.c_str()));
           retval = true;
         }
       }
@@ -122,6 +128,9 @@ bool BackupIPv4ConnectCommand::execute()
         std::chrono::milliseconds(300)) {
       socket_ = std::make_shared<SocketCore>();
       try {
+        A2_LOG_NETWORK(
+            fmt("CUID#%" PRId64 " - Starting backup connection to %s:%u",
+                getCuid(), ipaddr_.c_str(), port_));
         socket_->establishConnection(ipaddr_, port_);
         e_->addSocketForWriteCheck(socket_, this);
         timeoutCheck_ = global::wallclock();

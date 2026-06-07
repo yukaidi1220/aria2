@@ -305,6 +305,9 @@ bool OpenSSLTLSContext::addSystemTrustedCACerts()
         }
         if (ok) {
           A2_LOG_INFO("Embedded trusted CA certificates were successfully added.");
+          A2_LOG_NETWORK(
+              fmt("TLS: embedded CA bundle loaded (%d certs)",
+                  static_cast<int>(ncerts)));
           return true;
         }
       }
@@ -314,10 +317,12 @@ bool OpenSSLTLSContext::addSystemTrustedCACerts()
   if (SSL_CTX_set_default_verify_paths(sslCtx_) != 1) {
     A2_LOG_INFO(fmt(MSG_LOADING_SYSTEM_TRUSTED_CA_CERTS_FAILED,
                     ERR_error_string(ERR_get_error(), nullptr)));
+    A2_LOG_NETWORK("TLS: failed to load system trusted CA certs");
     return false;
   }
   else {
     A2_LOG_INFO("System trusted CA certificates were successfully added.");
+    A2_LOG_NETWORK("TLS: system trusted CA certs loaded");
     return true;
   }
 }
@@ -327,10 +332,14 @@ bool OpenSSLTLSContext::addTrustedCACertFile(const std::string& certfile)
   if (SSL_CTX_load_verify_locations(sslCtx_, certfile.c_str(), nullptr) != 1) {
     A2_LOG_ERROR(fmt(MSG_LOADING_TRUSTED_CA_CERT_FAILED, certfile.c_str(),
                      ERR_error_string(ERR_get_error(), nullptr)));
+    A2_LOG_NETWORK(
+        fmt("TLS: failed to load CA cert file: %s", certfile.c_str()));
     return false;
   }
   else {
     A2_LOG_INFO("Trusted CA certificates were successfully added.");
+    A2_LOG_NETWORK(
+        fmt("TLS: user CA cert file loaded: %s", certfile.c_str()));
     return true;
   }
 }

@@ -81,6 +81,9 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
     std::string proxyMethod = resolveProxyMethod(getRequest()->getProtocol());
     if (!pooledSocket) {
       A2_LOG_INFO(fmt(MSG_CONNECTING_TO_SERVER, getCuid(), addr.c_str(), port));
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64 " - Connecting to %s:%u (via proxy)",
+              getCuid(), addr.c_str(), port));
       createSocket();
       getSocket()->establishConnection(addr, port);
 
@@ -121,6 +124,9 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
                                              getRequest()->getPort());
     if (!pooledSocket) {
       A2_LOG_INFO(fmt(MSG_CONNECTING_TO_SERVER, getCuid(), addr.c_str(), port));
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64 " - Connecting to %s:%u",
+              getCuid(), addr.c_str(), port));
       createSocket();
       getSocket()->establishConnection(addr, port);
 

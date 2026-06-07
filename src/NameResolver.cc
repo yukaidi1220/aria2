@@ -42,6 +42,7 @@
 #include "util.h"
 #include "SocketCore.h"
 #include "error_code.h"
+#include "LogFactory.h"
 
 namespace aria2 {
 
@@ -50,11 +51,15 @@ NameResolver::NameResolver() : socktype_(0), family_(AF_UNSPEC) {}
 void NameResolver::resolve(std::vector<std::string>& resolvedAddresses,
                            const std::string& hostname)
 {
+  A2_LOG_NETWORK(fmt("DNS: resolving %s using getaddrinfo", hostname.c_str()));
   struct addrinfo* res;
   int s;
   s = callGetaddrinfo(&res, hostname.c_str(), nullptr, family_, socktype_, 0,
                       0);
   if (s) {
+    A2_LOG_NETWORK(
+        fmt("DNS: getaddrinfo %s failed: %s", hostname.c_str(),
+            gai_strerror(s)));
     throw DL_ABORT_EX2(
         fmt(EX_RESOLVE_HOSTNAME, hostname.c_str(), gai_strerror(s)),
         error_code::NAME_RESOLVE_ERROR);
@@ -65,6 +70,12 @@ void NameResolver::resolve(std::vector<std::string>& resolvedAddresses,
   for (rp = res; rp; rp = rp->ai_next) {
     auto endpoint = util::getNumericNameInfo(rp->ai_addr, rp->ai_addrlen);
     resolvedAddresses.push_back(endpoint.addr);
+  }
+  if (!resolvedAddresses.empty()) {
+    auto joined = strjoin(std::begin(resolvedAddresses),
+                                std::end(resolvedAddresses), ", ");
+    A2_LOG_NETWORK(
+        fmt("DNS: getaddrinfo %s -> %s", hostname.c_str(), joined.c_str()));
   }
 }
 
