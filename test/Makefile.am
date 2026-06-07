@@ -4,6 +4,7 @@ check_PROGRAMS = $(TESTS)
 aria2c_SOURCES = AllTest.cc\
 	TestUtil.cc TestUtil.h\
 	SocketCoreTest.cc\
+	DnsMessageTest.cc\
 	HostMappingTest.cc\
 	TLSSNIHostMappingTest.cc\
 	array_funTest.cc\
