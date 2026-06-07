@@ -54,7 +54,9 @@ Logger::Logger()
     : logLevel_(Logger::A2_DEBUG),
       consoleLogLevel_(Logger::A2_NOTICE),
       consoleOutput_(true),
-      colorOutput_(global::cout()->supportsColor())
+      colorOutput_(global::cout()->supportsColor()),
+      networkLogEnabled_(false),
+      networkConsoleLogEnabled_(false)
 {
 }
 
@@ -229,6 +231,80 @@ void Logger::log(LEVEL level, const char* sourceFile, int lineNum,
                  const std::string& msg, const Exception& ex)
 {
   log(level, sourceFile, lineNum, msg.c_str(), ex);
+}
+
+bool Logger::shouldLogNetwork()
+{
+  return fileLogEnabled(A2_DEBUG) || (networkLogEnabled_ && fpp_) ||
+         consoleLogEnabled(A2_DEBUG) ||
+         (networkConsoleLogEnabled_ && consoleOutput_);
+}
+
+namespace {
+// Write a file log header with [NETWORK] tag instead of a severity level.
+template <typename Output>
+void writeNetworkHeader(Output& fp, const char* sourceFile, int lineNum)
+{
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  char datestr[20]; // 'YYYY-MM-DD hh:mm:ss'+'\0' = 20 bytes
+  struct tm tm;
+  time_t timesec = tv.tv_sec;
+  localtime_r(&timesec, &tm);
+  size_t dateLength =
+      strftime(datestr, sizeof(datestr), "%Y-%m-%d %H:%M:%S", &tm);
+  assert(dateLength <= (size_t)20);
+  fp.printf("%s.%06ld [NETWORK] [%s:%d] ", datestr,
+            (unsigned long)tv.tv_usec, sourceFile, lineNum);
+}
+
+// Write a console log header with [NETWORK] tag.
+template <typename Output>
+void writeNetworkHeaderConsole(Output& fp, bool useColor)
+{
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  char datestr[15]; // 'MM/DD hh:mm:ss'+'\0' = 15 bytes
+  struct tm tm;
+  time_t timesec = tv.tv_sec;
+  localtime_r(&timesec, &tm);
+  size_t dateLength =
+      strftime(datestr, sizeof(datestr), "%m/%d %H:%M:%S", &tm);
+  assert(dateLength <= (size_t)15);
+  if (useColor) {
+    fp.printf("%s [\033[1;35mNETWORK\033[0m] ", datestr);
+  }
+  else {
+    fp.printf("%s [NETWORK] ", datestr);
+  }
+}
+} // namespace
+
+void Logger::logNetwork(const char* sourceFile, int lineNum, const char* msg)
+{
+  // Network mode can be enabled independently for file and console output.
+  // Keep these checks in sync with shouldLogNetwork() so message formatting is
+  // skipped when there is no sink.
+  bool doFile = fileLogEnabled(A2_DEBUG) || (networkLogEnabled_ && fpp_);
+  bool doConsole = consoleLogEnabled(A2_DEBUG) ||
+                   (networkConsoleLogEnabled_ && consoleOutput_);
+  if (doFile) {
+    writeNetworkHeader(*fpp_, sourceFile, lineNum);
+    fpp_->printf("%s\n", msg);
+    fpp_->flush();
+  }
+  if (doConsole) {
+    global::cout()->printf("\n");
+    writeNetworkHeaderConsole(*global::cout(), colorOutput_);
+    global::cout()->printf("%s\n", msg);
+    global::cout()->flush();
+  }
+}
+
+void Logger::logNetwork(const char* sourceFile, int lineNum,
+                        const std::string& msg)
+{
+  logNetwork(sourceFile, lineNum, msg.c_str());
 }
 
 } // namespace aria2

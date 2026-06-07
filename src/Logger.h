@@ -64,6 +64,10 @@ private:
   // true if console log output is enabled.
   bool consoleOutput_;
   bool colorOutput_;
+  // true if network log mode is enabled for file output.
+  bool networkLogEnabled_;
+  // true if network log mode is enabled for console output.
+  bool networkConsoleLogEnabled_;
   // Don't allow copying
   Logger(const Logger&);
   Logger& operator=(const Logger&);
@@ -102,6 +106,13 @@ public:
 
   void setConsoleLogLevel(LEVEL level) { consoleLogLevel_ = level; }
 
+  void setNetworkLogEnabled(bool enabled) { networkLogEnabled_ = enabled; }
+
+  void setNetworkConsoleLogEnabled(bool enabled)
+  {
+    networkConsoleLogEnabled_ = enabled;
+  }
+
   void setConsoleOutput(bool enabled);
 
   void setColorOutput(bool enabled);
@@ -109,6 +120,16 @@ public:
   // Returns true if this logger actually writes debug log message to
   // either file or stdout.
   bool levelEnabled(LEVEL level);
+
+  // Returns true if network log output should be performed for either
+  // file or console.  Network logs are output when debug level is active or
+  // when network mode is explicitly enabled and the corresponding sink exists.
+  bool shouldLogNetwork();
+
+  // Log a network-related message.  The message is output if debug level is
+  // active or network mode is explicitly enabled for an available sink.
+  void logNetwork(const char* sourceFile, int lineNum, const char* msg);
+  void logNetwork(const char* sourceFile, int lineNum, const std::string& msg);
 };
 
 } // namespace aria2

@@ -128,6 +128,7 @@ const std::string V_FALLOC("falloc");
 const std::string V_TRUNC("trunc");
 const std::string V_DEBUG("debug");
 const std::string V_INFO("info");
+const std::string V_NETWORK("network");
 const std::string V_NOTICE("notice");
 const std::string V_WARN("warn");
 const std::string V_ERROR("error");

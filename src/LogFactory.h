@@ -52,6 +52,8 @@ private:
   static Logger::LEVEL logLevel_;
   static Logger::LEVEL consoleLogLevel_;
   static bool colorOutput_;
+  static bool networkLogEnabled_;
+  static bool networkConsoleLogEnabled_;
 
   static void openLogger(const std::shared_ptr<Logger>& logger);
 
@@ -85,7 +87,7 @@ public:
 
   /**
    * Set log level to output to file by string representation of log
-   * level.  Possible values are: debug, info, notice, warn, error
+   * level.  Possible values are: debug, info, notice, warn, error, network
    */
   static void setLogLevel(const std::string& level);
 
@@ -96,7 +98,7 @@ public:
 
   /**
    * Set log level to output to console by string representation of log
-   * level.  Possible values are: debug, info, notice, warn, error
+   * level.  Possible values are: debug, info, notice, warn, error, network
    */
   static void setConsoleLogLevel(const std::string& level);
 
@@ -146,6 +148,17 @@ public:
 
 #define A2_LOG_ERROR(msg) A2_LOG(Logger::A2_ERROR, msg)
 #define A2_LOG_ERROR_EX(msg, ex) A2_LOG_EX(Logger::A2_ERROR, msg, ex)
+
+#define A2_LOG_NETWORK_ENABLED                                                 \
+  aria2::LogFactory::getInstance()->shouldLogNetwork()
+
+#define A2_LOG_NETWORK(msg)                                                    \
+  do {                                                                         \
+    const std::shared_ptr<aria2::Logger>& logger =                             \
+        aria2::LogFactory::getInstance();                                      \
+    if (logger->shouldLogNetwork())                                            \
+      logger->logNetwork(__FILE__, __LINE__, msg);                             \
+  } while (0)
 
 } // namespace aria2
 

@@ -49,7 +49,7 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
 {
   std::vector<OptionHandler*> handlers;
   static const std::string logLevels[] = {V_DEBUG, V_INFO, V_NOTICE, V_WARN,
-                                          V_ERROR};
+                                          V_ERROR, V_NETWORK};
   // General Options
   {
     OptionHandler* op(new BooleanOptionHandler(PREF_ALLOW_OVERWRITE,

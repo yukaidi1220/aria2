@@ -49,6 +49,8 @@ bool LogFactory::consoleOutput_ = true;
 Logger::LEVEL LogFactory::logLevel_ = Logger::A2_DEBUG;
 Logger::LEVEL LogFactory::consoleLogLevel_ = Logger::A2_NOTICE;
 bool LogFactory::colorOutput_ = true;
+bool LogFactory::networkLogEnabled_ = false;
+bool LogFactory::networkConsoleLogEnabled_ = false;
 
 void LogFactory::openLogger(const std::shared_ptr<Logger>& logger)
 {
@@ -61,6 +63,8 @@ void LogFactory::openLogger(const std::shared_ptr<Logger>& logger)
   logger->setConsoleLogLevel(consoleLogLevel_);
   logger->setConsoleOutput(consoleOutput_);
   logger->setColorOutput(colorOutput_);
+  logger->setNetworkLogEnabled(networkLogEnabled_);
+  logger->setNetworkConsoleLogEnabled(networkConsoleLogEnabled_);
 }
 
 void LogFactory::adjustDependentLevels()
@@ -143,25 +147,45 @@ Logger::LEVEL toLogLevel(const std::string& level)
 
 void LogFactory::setLogLevel(Logger::LEVEL level)
 {
+  networkLogEnabled_ = false;
   logLevel_ = level;
   adjustDependentLevels();
 }
 
 void LogFactory::setLogLevel(const std::string& level)
 {
-  logLevel_ = toLogLevel(level);
+  if (level == V_NETWORK) {
+    networkLogEnabled_ = true;
+    // Use A2_INFO so that INFO/NOTICE/WARN/ERROR are still output.
+    // Debug noise is suppressed; network events are added by A2_LOG_NETWORK.
+    logLevel_ = Logger::A2_INFO;
+  }
+  else {
+    networkLogEnabled_ = false;
+    logLevel_ = toLogLevel(level);
+  }
   adjustDependentLevels();
 }
 
 void LogFactory::setConsoleLogLevel(Logger::LEVEL level)
 {
+  networkConsoleLogEnabled_ = false;
   consoleLogLevel_ = level;
   adjustDependentLevels();
 }
 
 void LogFactory::setConsoleLogLevel(const std::string& level)
 {
-  consoleLogLevel_ = toLogLevel(level);
+  if (level == V_NETWORK) {
+    networkConsoleLogEnabled_ = true;
+    // Use A2_INFO so that INFO/NOTICE/WARN/ERROR are still output.
+    // Debug noise is suppressed; network events are added by A2_LOG_NETWORK.
+    consoleLogLevel_ = Logger::A2_INFO;
+  }
+  else {
+    networkConsoleLogEnabled_ = false;
+    consoleLogLevel_ = toLogLevel(level);
+  }
   adjustDependentLevels();
 }
 

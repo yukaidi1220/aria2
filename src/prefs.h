@@ -85,6 +85,7 @@ extern const std::string V_FALLOC;
 extern const std::string V_TRUNC;
 extern const std::string V_DEBUG;
 extern const std::string V_INFO;
+extern const std::string V_NETWORK;
 extern const std::string V_NOTICE;
 extern const std::string V_WARN;
 extern const std::string V_ERROR;
