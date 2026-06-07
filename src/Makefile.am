@@ -76,6 +76,7 @@ SRCS =  \
 	DlRetryEx.cc DlRetryEx.h\
 	DNSCache.cc DNSCache.h\
 	DnsMessage.cc DnsMessage.h\
+	AsyncDnsServerConfig.cc AsyncDnsServerConfig.h\
 	DownloadCommand.cc DownloadCommand.h\
 	DownloadContext.cc DownloadContext.h\
 	DownloadEngine.cc DownloadEngine.h\
