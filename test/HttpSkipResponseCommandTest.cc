@@ -1,14 +1,21 @@
 #include "HttpSkipResponseCommand.h"
 
+#include <memory>
+#include <string>
+#include <utility>
+
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "AuthConfigFactory.h"
 #include "FileEntry.h"
 #include "HttpHeader.h"
 #include "HttpRequest.h"
 #include "HttpResponse.h"
+#include "Option.h"
 #include "Piece.h"
 #include "PiecedSegment.h"
 #include "Request.h"
+#include "prefs.h"
 
 namespace aria2 {
 
@@ -53,7 +60,9 @@ std::unique_ptr<HttpResponse> createResponse(int statusCode,
                                              size_t pieceIndex,
                                              bool pipelining,
                                              int64_t endOffsetOverride,
-                                             const std::string& method)
+                                             const std::string& method,
+                                             bool closeAfterRequest = false,
+                                             const char* userHeader = nullptr)
 {
   auto httpHeader = make_unique<HttpHeader>();
   httpHeader->setStatusCode(statusCode);
@@ -76,6 +85,19 @@ std::unique_ptr<HttpResponse> createResponse(int statusCode,
   httpRequest->setSegment(segment);
   httpRequest->setFileEntry(fileEntry);
   httpRequest->setEndOffsetOverride(endOffsetOverride);
+  auto authConfigFactory = make_unique<AuthConfigFactory>();
+  auto option = make_unique<Option>();
+  option->put(PREF_HTTP_AUTH_CHALLENGE, A2_V_TRUE);
+  httpRequest->setAuthConfigFactory(authConfigFactory.get());
+  httpRequest->setOption(option.get());
+  httpRequest->setNoWantDigest(true);
+  if (userHeader) {
+    httpRequest->addHeader(userHeader);
+  }
+  httpRequest->createRequest();
+  if (closeAfterRequest) {
+    request->supportsPersistentConnection(false);
+  }
 
   auto httpResponse = make_unique<HttpResponse>();
   httpResponse->setHttpHeader(std::move(httpHeader));
@@ -101,6 +123,17 @@ std::unique_ptr<HttpResponse> createResponseWithoutSegment()
   return httpResponse;
 }
 
+std::unique_ptr<HttpResponse> createResponseWithoutHttpRequest()
+{
+  auto httpHeader = make_unique<HttpHeader>();
+  httpHeader->setStatusCode(416);
+  httpHeader->put(HttpHeader::LOCATION, "http://bucket.example.org/object");
+
+  auto httpResponse = make_unique<HttpResponse>();
+  httpResponse->setHttpHeader(std::move(httpHeader));
+  return httpResponse;
+}
+
 } // namespace
 
 void HttpSkipResponseCommandTest::testShouldRedirectHttpStatusWithLocation()
@@ -118,6 +151,12 @@ void HttpSkipResponseCommandTest::testShouldRedirectHttpStatusWithLocation()
   CPPUNIT_ASSERT(shouldRedirectHttpStatusWithLocation(
       *createResponse(416, "http://bucket.example.org/object", 0, false, 1_m,
                       Request::METHOD_GET)));
+  CPPUNIT_ASSERT(shouldRedirectHttpStatusWithLocation(
+      *createResponse(416, "http://bucket.example.org/object", 0, true, 0,
+                      Request::METHOD_GET, true)));
+  CPPUNIT_ASSERT(shouldRedirectHttpStatusWithLocation(
+      *createResponse(416, "http://bucket.example.org/object", 0, false, 0,
+                      Request::METHOD_GET, false, "Range: bytes=5-9")));
 
   CPPUNIT_ASSERT(!shouldRedirectHttpStatusWithLocation(
       *createResponse(416, nullptr, 1, false, 0, Request::METHOD_GET)));
@@ -134,6 +173,8 @@ void HttpSkipResponseCommandTest::testShouldRedirectHttpStatusWithLocation()
                       Request::METHOD_HEAD)));
   CPPUNIT_ASSERT(!shouldRedirectHttpStatusWithLocation(
       *createResponseWithoutSegment()));
+  CPPUNIT_ASSERT(!shouldRedirectHttpStatusWithLocation(
+      *createResponseWithoutHttpRequest()));
 }
 
 } // namespace aria2
