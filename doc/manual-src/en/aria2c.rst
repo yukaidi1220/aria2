@@ -432,6 +432,15 @@ HTTP Specific Options
   Verify the peer using certificates specified in :option:`--ca-certificate` option.
   Default: ``true``
 
+.. option:: --tls-sni-host=<HOST>
+
+  Set the hostname sent in the TLS SNI extension. This option only changes the
+  SNI value in the TLS ClientHello. It does not change DNS resolution, TCP
+  connect target, HTTP ``Host`` header, proxy ``CONNECT`` target, cookie scope,
+  or the certificate verification hostname. If this option is not specified,
+  aria2 uses the URI hostname as before. This option requires a TLS backend
+  which supports separate SNI and certificate verification hostnames.
+
 .. option:: --http-accept-gzip [true|false]
 
   Send ``Accept-Encoding: deflate, gzip`` request header and inflate response if
