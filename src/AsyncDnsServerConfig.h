@@ -49,6 +49,13 @@ struct AsyncDnsServerConfig {
   std::string tlsHost;
 };
 
+struct AsyncDohServerConfig {
+  std::string connectHost;
+  uint16_t port;
+  std::string tlsHost;
+  std::string path;
+};
+
 AsyncDnsServerConfig parseAsyncDnsDotServerConfig(const std::string& value);
 
 std::vector<AsyncDnsServerConfig>
@@ -56,6 +63,14 @@ parseAsyncDnsDotServerConfigList(const std::string& value);
 
 void validateAsyncDnsDotServerConfigForDirectConnect(
     const std::vector<AsyncDnsServerConfig>& configs);
+
+AsyncDohServerConfig parseAsyncDnsDohServerConfig(const std::string& value);
+
+std::vector<AsyncDohServerConfig>
+parseAsyncDnsDohServerConfigList(const std::string& value);
+
+void validateAsyncDnsDohServerConfigForDirectConnect(
+    const std::vector<AsyncDohServerConfig>& configs);
 
 } // namespace aria2
 

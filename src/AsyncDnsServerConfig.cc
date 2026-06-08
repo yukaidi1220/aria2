@@ -37,16 +37,23 @@
 
 #include "DlAbortEx.h"
 #include "fmt.h"
+#include "uri.h"
 #include "util.h"
 
 namespace aria2 {
 
 namespace {
 const uint16_t DEFAULT_DOT_PORT = 853;
+const uint16_t DEFAULT_DOH_PORT = 443;
 
 void throwBadDotServerConfig(const std::string& value)
 {
   throw DL_ABORT_EX(fmt("Bad async DNS DoT server '%s'", value.c_str()));
+}
+
+void throwBadDohServerConfig(const std::string& value)
+{
+  throw DL_ABORT_EX(fmt("Bad async DNS DoH server '%s'", value.c_str()));
 }
 
 uint16_t parsePort(const std::string& port, const std::string& value)
@@ -65,6 +72,17 @@ uint16_t parsePort(const std::string& port, const std::string& value)
 std::string defaultTLSHost(const std::string& host)
 {
   return util::isNumericHost(host) ? std::string() : host;
+}
+
+void validateDirectConnectHost(const std::string& scheme,
+                               const std::string& host)
+{
+  if (!util::isNumericHost(host)) {
+    throw DL_ABORT_EX(
+        fmt("Bad async DNS %s server '%s': direct connect requires a "
+            "numeric host",
+            scheme.c_str(), host.c_str()));
+  }
 }
 } // namespace
 
@@ -137,12 +155,66 @@ void validateAsyncDnsDotServerConfigForDirectConnect(
     throw DL_ABORT_EX("No async DNS DoT server configured");
   }
   for (const auto& config : configs) {
-    if (!util::isNumericHost(config.connectHost)) {
-      throw DL_ABORT_EX(
-          fmt("Bad async DNS DoT server '%s': direct connect requires a "
-              "numeric host",
-              config.connectHost.c_str()));
-    }
+    validateDirectConnectHost("DoT", config.connectHost);
+  }
+}
+
+AsyncDohServerConfig parseAsyncDnsDohServerConfig(const std::string& value)
+{
+  auto entry = util::strip(value);
+  if (entry.empty()) {
+    throwBadDohServerConfig(value);
+  }
+
+  uri::UriStruct us;
+  if (!uri::parse(us, entry) || us.protocol != "https" || us.host.empty()) {
+    throwBadDohServerConfig(value);
+  }
+  if (!us.username.empty() || us.hasPassword) {
+    throwBadDohServerConfig(value);
+  }
+  uri_split_result splitResult;
+  if (uri_split(&splitResult, entry.c_str()) != 0 ||
+      !(splitResult.field_set & (1 << USR_PATH)) ||
+      ((splitResult.field_set & (1 << USR_PORT)) && splitResult.port == 0) ||
+      (splitResult.field_set & (1 << USR_FRAGMENT))) {
+    throwBadDohServerConfig(value);
+  }
+
+  auto path = us.dir + us.file + us.query;
+  if (path.empty() || path[0] != '/') {
+    throwBadDohServerConfig(value);
+  }
+
+  return {us.host, us.port == 0 ? DEFAULT_DOH_PORT : us.port,
+          defaultTLSHost(us.host), path};
+}
+
+std::vector<AsyncDohServerConfig>
+parseAsyncDnsDohServerConfigList(const std::string& value)
+{
+  std::vector<AsyncDohServerConfig> result;
+  if (value.empty()) {
+    return result;
+  }
+
+  std::vector<std::string> entries;
+  util::split(std::begin(value), std::end(value), std::back_inserter(entries),
+              ',', true, true);
+  for (const auto& entry : entries) {
+    result.push_back(parseAsyncDnsDohServerConfig(entry));
+  }
+  return result;
+}
+
+void validateAsyncDnsDohServerConfigForDirectConnect(
+    const std::vector<AsyncDohServerConfig>& configs)
+{
+  if (configs.empty()) {
+    throw DL_ABORT_EX("No async DNS DoH server configured");
+  }
+  for (const auto& config : configs) {
+    validateDirectConnectHost("DoH", config.connectHost);
   }
 }
 
