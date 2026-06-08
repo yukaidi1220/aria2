@@ -12,12 +12,14 @@ class HttpProtocolTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(HttpProtocolTest);
   CPPUNIT_TEST(testAlpnProtocolNames);
   CPPUNIT_TEST(testHttpProtocolFromSelectedAlpn);
+  CPPUNIT_TEST(testDecideHttpProtocolFromSelectedAlpn);
   CPPUNIT_TEST(testValidateHttpSelectedAlpnProtocol);
   CPPUNIT_TEST_SUITE_END();
 
 public:
   void testAlpnProtocolNames();
   void testHttpProtocolFromSelectedAlpn();
+  void testDecideHttpProtocolFromSelectedAlpn();
   void testValidateHttpSelectedAlpnProtocol();
 };
 
@@ -37,6 +39,27 @@ void HttpProtocolTest::testHttpProtocolFromSelectedAlpn()
                  httpProtocolFromSelectedAlpn(HTTP_ALPN_HTTP11));
   CPPUNIT_ASSERT(HTTP_PROTOCOL_H2 == httpProtocolFromSelectedAlpn(HTTP_ALPN_H2));
   CPPUNIT_ASSERT(HTTP_PROTOCOL_UNKNOWN == httpProtocolFromSelectedAlpn("h3"));
+}
+
+void HttpProtocolTest::testDecideHttpProtocolFromSelectedAlpn()
+{
+  CPPUNIT_ASSERT(HTTP_PROTOCOL_HTTP1 ==
+                 decideHttpProtocolFromSelectedAlpn("", false));
+  CPPUNIT_ASSERT(HTTP_PROTOCOL_HTTP1 ==
+                 decideHttpProtocolFromSelectedAlpn("", true));
+  CPPUNIT_ASSERT(HTTP_PROTOCOL_HTTP1 ==
+                 decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_HTTP11, false));
+  CPPUNIT_ASSERT(HTTP_PROTOCOL_HTTP1 ==
+                 decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_HTTP11, true));
+
+  CPPUNIT_ASSERT_THROW(
+      decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_H2, false), Exception);
+  CPPUNIT_ASSERT_THROW(decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_H2, true),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(decideHttpProtocolFromSelectedAlpn("h3", false),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(decideHttpProtocolFromSelectedAlpn("h3", true),
+                       Exception);
 }
 
 void HttpProtocolTest::testValidateHttpSelectedAlpnProtocol()

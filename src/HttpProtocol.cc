@@ -53,18 +53,30 @@ HttpProtocol httpProtocolFromSelectedAlpn(const std::string& selectedAlpn)
   return HTTP_PROTOCOL_UNKNOWN;
 }
 
-void validateHttpSelectedAlpnProtocol(const std::string& selectedAlpn)
+HttpProtocol decideHttpProtocolFromSelectedAlpn(const std::string& selectedAlpn,
+                                                bool enableHttp2)
 {
   switch (httpProtocolFromSelectedAlpn(selectedAlpn)) {
   case HTTP_PROTOCOL_HTTP1:
-    return;
+    return HTTP_PROTOCOL_HTTP1;
   case HTTP_PROTOCOL_H2:
-    throw DL_ABORT_EX("HTTP/2 is not implemented yet");
+    if (!enableHttp2) {
+      throw DL_ABORT_EX(
+          "HTTP/2 was selected by ALPN but --enable-http2=false");
+    }
+    throw DL_ABORT_EX(
+        "HTTP/2 was selected by ALPN but the download path is not implemented "
+        "yet");
   case HTTP_PROTOCOL_UNKNOWN:
     break;
   }
   throw DL_ABORT_EX(
       fmt("Unsupported HTTP ALPN protocol '%s'", selectedAlpn.c_str()));
+}
+
+void validateHttpSelectedAlpnProtocol(const std::string& selectedAlpn)
+{
+  decideHttpProtocolFromSelectedAlpn(selectedAlpn, false);
 }
 
 } // namespace aria2

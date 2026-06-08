@@ -202,7 +202,9 @@ bool HttpRequestCommand::executeInternal()
         }
         throw;
       }
-      validateHttpSelectedAlpnProtocol(getSocket()->getSelectedAlpnProtocol());
+      decideHttpProtocolFromSelectedAlpn(getSocket()->getSelectedAlpnProtocol(),
+                                         getOption()->getAsBool(
+                                             PREF_ENABLE_HTTP2));
       A2_LOG_NETWORK(
           fmt("CUID#%" PRId64 " - HTTPS connection to %s established",
               getCuid(), getRequest()->getHost().c_str()));
