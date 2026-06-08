@@ -38,12 +38,21 @@
 
 #  include "Http2HeaderBlock.h"
 #  include "HttpRequest.h"
+#  include "Http2Transport.h"
 
 namespace aria2 {
 
 Http2SingleStreamExchange::Http2SingleStreamExchange(
     Http2Transport& transport)
-    : transport_(transport), transaction_(), pump_(transaction_, transport_)
+    : ownedTransport_(), transport_(transport), transaction_(),
+      pump_(transaction_, transport_)
+{
+}
+
+Http2SingleStreamExchange::Http2SingleStreamExchange(
+    std::unique_ptr<Http2Transport> transport)
+    : ownedTransport_(std::move(transport)), transport_(*ownedTransport_),
+      transaction_(), pump_(transaction_, transport_)
 {
 }
 

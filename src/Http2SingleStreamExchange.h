@@ -54,12 +54,15 @@ class Http2Transport;
 
 class Http2SingleStreamExchange {
 private:
+  std::unique_ptr<Http2Transport> ownedTransport_;
   Http2Transport& transport_;
   Http2Transaction transaction_;
   Http2TransactionPump pump_;
 
 public:
   explicit Http2SingleStreamExchange(Http2Transport& transport);
+  explicit Http2SingleStreamExchange(
+      std::unique_ptr<Http2Transport> transport);
   ~Http2SingleStreamExchange();
 
   Http2SingleStreamExchange(const Http2SingleStreamExchange&) = delete;

@@ -16,12 +16,14 @@
 #  include "HttpResponse.h"
 #  include "Option.h"
 #  include "Request.h"
+#  include "a2functional.h"
 
 namespace aria2 {
 
 class Http2SingleStreamExchangeTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2SingleStreamExchangeTest);
   CPPUNIT_TEST(testSubmitPumpHeadersAndDrainBody);
+  CPPUNIT_TEST(testOwnedTransportSubmitAndFlush);
   CPPUNIT_TEST(testWantReadAndWriteReflectTransportState);
   CPPUNIT_TEST(testTransportFailuresThrow);
   CPPUNIT_TEST(testRejectSecondRequestWhileActive);
@@ -29,6 +31,7 @@ class Http2SingleStreamExchangeTest : public CppUnit::TestFixture {
 
 public:
   void testSubmitPumpHeadersAndDrainBody();
+  void testOwnedTransportSubmitAndFlush();
   void testWantReadAndWriteReflectTransportState();
   void testTransportFailuresThrow();
   void testRejectSecondRequestWhileActive();
@@ -91,6 +94,24 @@ void Http2SingleStreamExchangeTest::testSubmitPumpHeadersAndDrainBody()
   auto event = exchange.popResponseEvent();
   CPPUNIT_ASSERT(event);
   CPPUNIT_ASSERT(!exchange.hasActiveStream());
+}
+
+void Http2SingleStreamExchangeTest::testOwnedTransportSubmitAndFlush()
+{
+  auto transport = make_unique<http2test::MemoryHttp2Transport>();
+  auto rawTransport = transport.get();
+  Http2SingleStreamExchange exchange(std::move(transport));
+  auto request = std::make_shared<Request>();
+  CPPUNIT_ASSERT(request->setUri("https://origin.example/file.bin"));
+  Option option;
+  AuthConfigFactory authConfigFactory;
+  HttpRequest httpRequest;
+  configureRequest(httpRequest, request, &option, &authConfigFactory);
+
+  exchange.submitRequest(httpRequest);
+  CPPUNIT_ASSERT(exchange.hasActiveStream());
+  CPPUNIT_ASSERT(exchange.flushOutboundData());
+  CPPUNIT_ASSERT(!rawTransport->drainOutboundData().empty());
 }
 
 void Http2SingleStreamExchangeTest::testWantReadAndWriteReflectTransportState()
