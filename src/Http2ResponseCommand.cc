@@ -37,7 +37,6 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include "DlAbortEx.h"
-#  include "DlRetryEx.h"
 #  include "DownloadEngine.h"
 #  include "Http2DownloadCommand.h"
 #  include "Http2SingleStreamExchange.h"
@@ -45,9 +44,9 @@
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
 #  include "HttpSkipResponseCommand.h"
+#  include "Request.h"
 #  include "SocketCore.h"
 #  include "StreamFilter.h"
-#  include "message.h"
 
 #  include <utility>
 
@@ -126,7 +125,8 @@ bool Http2ResponseCommand::skipResponseBody(
   skippedBodyLength_ = 0;
   expectedSkipBodyLength_ = 0;
   expectedSkipBodyLengthKnown_ = false;
-  if (skipHttpResponse_->getHttpHeader()->defined(HttpHeader::CONTENT_LENGTH)) {
+  if (getRequest()->getMethod() != Request::METHOD_HEAD &&
+      skipHttpResponse_->getHttpHeader()->defined(HttpHeader::CONTENT_LENGTH)) {
     expectedSkipBodyLength_ = skipHttpResponse_->getContentLength();
     expectedSkipBodyLengthKnown_ = true;
   }
@@ -163,10 +163,6 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
   if (state.streamClosed) {
-    if (expectedSkipBodyLengthKnown_ &&
-        skippedBodyLength_ != expectedSkipBodyLength_) {
-      throw DL_RETRY_EX(EX_GOT_EOF);
-    }
     exchange_->popResponseEvent();
     return processSkippedHttpResponse(
         this, skipHttpResponse_, [this]() { return prepareForRetry(0); });
