@@ -32,62 +32,59 @@
  * all source files in the program, then also delete it here.
  */
 /* copyright --> */
-#include "Http2ResponseAdapter.h"
+#include "Http2Connection.h"
 
 #ifdef HAVE_LIBNGHTTP2
 
-#  include "Http2Session.h"
-#  include "DlAbortEx.h"
-#  include "HttpHeader.h"
+#  include "Http2ResponseAdapter.h"
 #  include "HttpResponse.h"
-#  include "a2functional.h"
-#  include "util.h"
-
-#  include <utility>
 
 namespace aria2 {
 
-namespace {
-bool isHttp2ConnectionSpecificHeader(const std::string& name)
+Http2Connection::Http2Connection() = default;
+
+Http2Connection::~Http2Connection() = default;
+
+int32_t Http2Connection::submitRequest(const Http2HeaderBlock& headers)
 {
-  return name == "connection" || name == "keep-alive" ||
-         name == "proxy-connection" || name == "transfer-encoding" ||
-         name == "upgrade";
+  return session_.submitRequestHeaders(headers);
 }
-} // namespace
 
-std::unique_ptr<HttpResponse>
-createHttpResponseFromHttp2Event(const Http2ResponseEvent& event)
+std::string Http2Connection::drainOutboundData()
 {
-  if (!event.headersComplete) {
-    throw DL_ABORT_EX("HTTP/2 response headers are incomplete");
+  return session_.drainOutboundData();
+}
+
+void Http2Connection::feedInboundData(const std::string& data)
+{
+  session_.feedInboundData(data);
+}
+
+bool Http2Connection::hasResponseEvent(int32_t streamId) const
+{
+  return session_.hasResponseEvent(streamId);
+}
+
+const Http2ResponseEvent*
+Http2Connection::findResponseEvent(int32_t streamId) const
+{
+  return session_.findResponseEvent(streamId);
+}
+
+std::unique_ptr<Http2ResponseEvent>
+Http2Connection::popResponseEvent(int32_t streamId)
+{
+  return session_.popResponseEvent(streamId);
+}
+
+std::unique_ptr<HttpResponse> Http2Connection::popHttpResponse(int32_t streamId)
+{
+  auto event = session_.findResponseEvent(streamId);
+  if (!event) {
+    return nullptr;
   }
-  if (event.status < 100 || event.status > 999) {
-    throw DL_ABORT_EX("Malformed HTTP/2 response status");
-  }
-
-  auto header = make_unique<HttpHeader>();
-  header->setVersion("HTTP/2");
-  header->setStatusCode(event.status);
-
-  for (const auto& field : event.headers) {
-    if (field.name.empty() || field.name[0] == ':') {
-      continue;
-    }
-
-    auto name = util::toLower(field.name);
-    if (isHttp2ConnectionSpecificHeader(name)) {
-      continue;
-    }
-
-    auto fieldId = idInterestingHeader(name.c_str());
-    if (fieldId != HttpHeader::MAX_INTERESTING_HEADER) {
-      header->put(fieldId, util::strip(field.value));
-    }
-  }
-
-  auto response = make_unique<HttpResponse>();
-  response->setHttpHeader(std::move(header));
+  auto response = createHttpResponseFromHttp2Event(*event);
+  session_.popResponseEvent(streamId);
   return response;
 }
 

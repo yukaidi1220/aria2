@@ -39,11 +39,13 @@
 #  include <algorithm>
 #  include <iterator>
 #  include <map>
+#  include <memory>
 #  include <utility>
 #  include <vector>
 
 #  include <nghttp2/nghttp2.h>
 
+#  include "a2functional.h"
 #  include "DlAbortEx.h"
 #  include "fmt.h"
 #  include "util.h"
@@ -302,6 +304,19 @@ const Http2ResponseEvent* Http2Session::findResponseEvent(
     return nullptr;
   }
   return &itr->second;
+}
+
+std::unique_ptr<Http2ResponseEvent>
+Http2Session::popResponseEvent(int32_t streamId)
+{
+  auto itr = impl_->responses.find(streamId);
+  if (itr == impl_->responses.end()) {
+    return nullptr;
+  }
+
+  auto event = make_unique<Http2ResponseEvent>(std::move(itr->second));
+  impl_->responses.erase(itr);
+  return event;
 }
 
 } // namespace aria2

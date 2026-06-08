@@ -40,6 +40,7 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include <cstdint>
+#  include <memory>
 #  include <string>
 
 #  include "Http2HeaderBlock.h"
@@ -73,6 +74,7 @@ public:
   void feedInboundData(const std::string& data);
   bool hasResponseEvent(int32_t streamId) const;
   const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;
+  std::unique_ptr<Http2ResponseEvent> popResponseEvent(int32_t streamId);
 };
 
 } // namespace aria2

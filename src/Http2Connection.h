@@ -32,65 +32,46 @@
  * all source files in the program, then also delete it here.
  */
 /* copyright --> */
-#include "Http2ResponseAdapter.h"
+#ifndef D_HTTP2_CONNECTION_H
+#define D_HTTP2_CONNECTION_H
+
+#include "common.h"
 
 #ifdef HAVE_LIBNGHTTP2
 
-#  include "Http2Session.h"
-#  include "DlAbortEx.h"
-#  include "HttpHeader.h"
-#  include "HttpResponse.h"
-#  include "a2functional.h"
-#  include "util.h"
+#  include <cstdint>
+#  include <memory>
+#  include <string>
 
-#  include <utility>
+#  include "Http2Session.h"
 
 namespace aria2 {
 
-namespace {
-bool isHttp2ConnectionSpecificHeader(const std::string& name)
-{
-  return name == "connection" || name == "keep-alive" ||
-         name == "proxy-connection" || name == "transfer-encoding" ||
-         name == "upgrade";
-}
-} // namespace
+class HttpResponse;
 
-std::unique_ptr<HttpResponse>
-createHttpResponseFromHttp2Event(const Http2ResponseEvent& event)
-{
-  if (!event.headersComplete) {
-    throw DL_ABORT_EX("HTTP/2 response headers are incomplete");
-  }
-  if (event.status < 100 || event.status > 999) {
-    throw DL_ABORT_EX("Malformed HTTP/2 response status");
-  }
+class Http2Connection {
+private:
+  Http2Session session_;
 
-  auto header = make_unique<HttpHeader>();
-  header->setVersion("HTTP/2");
-  header->setStatusCode(event.status);
+public:
+  Http2Connection();
+  ~Http2Connection();
 
-  for (const auto& field : event.headers) {
-    if (field.name.empty() || field.name[0] == ':') {
-      continue;
-    }
+  Http2Connection(const Http2Connection&) = delete;
+  Http2Connection& operator=(const Http2Connection&) = delete;
 
-    auto name = util::toLower(field.name);
-    if (isHttp2ConnectionSpecificHeader(name)) {
-      continue;
-    }
+  int32_t submitRequest(const Http2HeaderBlock& headers);
+  std::string drainOutboundData();
+  void feedInboundData(const std::string& data);
 
-    auto fieldId = idInterestingHeader(name.c_str());
-    if (fieldId != HttpHeader::MAX_INTERESTING_HEADER) {
-      header->put(fieldId, util::strip(field.value));
-    }
-  }
-
-  auto response = make_unique<HttpResponse>();
-  response->setHttpHeader(std::move(header));
-  return response;
-}
+  bool hasResponseEvent(int32_t streamId) const;
+  const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;
+  std::unique_ptr<Http2ResponseEvent> popResponseEvent(int32_t streamId);
+  std::unique_ptr<HttpResponse> popHttpResponse(int32_t streamId);
+};
 
 } // namespace aria2
 
 #endif // HAVE_LIBNGHTTP2
+
+#endif // D_HTTP2_CONNECTION_H
