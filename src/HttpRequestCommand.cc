@@ -40,6 +40,11 @@
 #include "DownloadEngine.h"
 #include "RequestGroup.h"
 #include "HttpResponseCommand.h"
+#ifdef HAVE_LIBNGHTTP2
+#  include "Http2ResponseCommand.h"
+#  include "Http2SingleStreamExchange.h"
+#  include "Http2SocketCoreTransport.h"
+#endif // HAVE_LIBNGHTTP2
 #include "HttpConnection.h"
 #include "HttpRequest.h"
 #include "SegmentMan.h"
@@ -125,6 +130,69 @@ createHttpRequest(const std::shared_ptr<Request>& req,
   }
   return httpRequest;
 }
+
+void setConditionalGetHeader(HttpRequest* httpRequest,
+                             const std::shared_ptr<Request>& request,
+                             const std::shared_ptr<FileEntry>& fileEntry,
+                             const std::shared_ptr<Option>& option)
+{
+  if (!option->getAsBool(PREF_CONDITIONAL_GET) ||
+      (request->getProtocol() != "http" && request->getProtocol() != "https")) {
+    return;
+  }
+
+  std::string path;
+  if (fileEntry->getPath().empty()) {
+    auto& file = request->getFile();
+    path = util::createSafePath(
+        option->get(PREF_DIR),
+        (request->getFile().empty()
+             ? Request::DEFAULT_FILE
+             : util::percentDecode(std::begin(file), std::end(file))));
+  }
+  else {
+    path = fileEntry->getPath();
+  }
+
+  File ctrlfile(path + DefaultBtProgressInfoFile::getSuffix());
+  File file(path);
+  if (!ctrlfile.exists() && file.exists()) {
+    httpRequest->setIfModifiedSinceHeader(file.getModifiedTime().toHTTPDate());
+  }
+}
+
+int64_t getSegmentEndOffset(const std::shared_ptr<Request>& request,
+                            const std::shared_ptr<FileEntry>& fileEntry,
+                            RequestGroup* requestGroup,
+                            const std::shared_ptr<PieceStorage>& pieceStorage,
+                            const std::shared_ptr<Segment>& segment)
+{
+  if (request->getProtocol() != "ftp" && requestGroup->getTotalLength() > 0 &&
+      pieceStorage) {
+    size_t nextIndex =
+        pieceStorage->getNextUsedIndex(segment->getIndex());
+    return std::min(
+        fileEntry->getLength(),
+        fileEntry->gtoloff(static_cast<int64_t>(segment->getSegmentLength()) *
+                           nextIndex));
+  }
+  return 0;
+}
+
+std::unique_ptr<HttpRequest>
+createHttpRequestForSegment(const std::shared_ptr<Request>& request,
+                            const std::shared_ptr<FileEntry>& fileEntry,
+                            RequestGroup* requestGroup, DownloadEngine* e,
+                            const std::shared_ptr<Option>& option,
+                            const std::shared_ptr<Request>& proxyRequest,
+                            const std::shared_ptr<PieceStorage>& pieceStorage,
+                            const std::shared_ptr<Segment>& segment)
+{
+  auto endOffset = getSegmentEndOffset(request, fileEntry, requestGroup,
+                                       pieceStorage, segment);
+  return createHttpRequest(request, fileEntry, segment, option, requestGroup, e,
+                           proxyRequest, endOffset);
+}
 } // namespace
 
 #ifdef ENABLE_SSL
@@ -179,6 +247,7 @@ bool tryRetryTLSHandshakeWithNextAddress(
 bool HttpRequestCommand::executeInternal()
 {
   // socket->setBlockingMode();
+  HttpProtocol httpProtocol = HTTP_PROTOCOL_HTTP1;
   if (httpConnection_->sendBufferIsEmpty()) {
 #ifdef ENABLE_SSL
     if (getRequest()->getProtocol() == "https") {
@@ -202,70 +271,64 @@ bool HttpRequestCommand::executeInternal()
         }
         throw;
       }
-      decideHttpProtocolFromSelectedAlpn(getSocket()->getSelectedAlpnProtocol(),
-                                         getOption()->getAsBool(
-                                             PREF_ENABLE_HTTP2));
+      httpProtocol = decideHttpProtocolFromSelectedAlpn(
+          getSocket()->getSelectedAlpnProtocol(),
+          getOption()->getAsBool(PREF_ENABLE_HTTP2));
       A2_LOG_NETWORK(
           fmt("CUID#%" PRId64 " - HTTPS connection to %s established",
               getCuid(), getRequest()->getHost().c_str()));
     }
 #endif // ENABLE_SSL
+#ifdef HAVE_LIBNGHTTP2
+    if (httpProtocol == HTTP_PROTOCOL_H2) {
+      if (getSegments().size() > 1) {
+        A2_LOG_INFO(
+            "HTTP/2 single-stream download does not support pipelined "
+            "segments. Retrying with one segment.");
+        return prepareForRetry(0);
+      }
+
+      std::unique_ptr<HttpRequest> httpRequest;
+      if (getSegments().empty()) {
+        httpRequest = createHttpRequest(
+            getRequest(), getFileEntry(), std::shared_ptr<Segment>(),
+            getOption(), getRequestGroup(), getDownloadEngine(), proxyRequest_);
+        setConditionalGetHeader(httpRequest.get(), getRequest(), getFileEntry(),
+                                getOption());
+      }
+      else {
+        httpRequest = createHttpRequestForSegment(
+            getRequest(), getFileEntry(), getRequestGroup(),
+            getDownloadEngine(), getOption(), proxyRequest_, getPieceStorage(),
+            getSegments().front());
+      }
+
+      auto exchange = std::make_shared<Http2SingleStreamExchange>(
+          make_unique<Http2SocketCoreTransport>(getSocket()));
+      exchange->submitRequest(*httpRequest);
+      exchange->flushOutboundData();
+      getDownloadEngine()->addCommand(make_unique<Http2ResponseCommand>(
+          getCuid(), getRequest(), getFileEntry(), getRequestGroup(), exchange,
+          std::move(httpRequest), getDownloadEngine(), getSocket()));
+      return true;
+    }
+#endif // HAVE_LIBNGHTTP2
     if (getSegments().empty()) {
       auto httpRequest = createHttpRequest(
           getRequest(), getFileEntry(), std::shared_ptr<Segment>(), getOption(),
           getRequestGroup(), getDownloadEngine(), proxyRequest_);
-      if (getOption()->getAsBool(PREF_CONDITIONAL_GET) &&
-          (getRequest()->getProtocol() == "http" ||
-           getRequest()->getProtocol() == "https")) {
-
-        std::string path;
-
-        if (getFileEntry()->getPath().empty()) {
-          auto& file = getRequest()->getFile();
-
-          // If filename part of URI is empty, we just use
-          // Request::DEFAULT_FILE, since it is the name we use to
-          // store file in disk.
-
-          path = util::createSafePath(
-              getOption()->get(PREF_DIR),
-              (getRequest()->getFile().empty()
-                   ? Request::DEFAULT_FILE
-                   : util::percentDecode(std::begin(file), std::end(file))));
-        }
-        else {
-          path = getFileEntry()->getPath();
-        }
-
-        File ctrlfile(path + DefaultBtProgressInfoFile::getSuffix());
-        File file(path);
-
-        if (!ctrlfile.exists() && file.exists()) {
-          httpRequest->setIfModifiedSinceHeader(
-              file.getModifiedTime().toHTTPDate());
-        }
-      }
+      setConditionalGetHeader(httpRequest.get(), getRequest(), getFileEntry(),
+                              getOption());
       httpConnection_->sendRequest(std::move(httpRequest));
     }
     else {
       for (auto& segment : getSegments()) {
         if (!httpConnection_->isIssued(segment)) {
-          int64_t endOffset = 0;
-          // FTP via HTTP proxy does not support end byte marker
-          if (getRequest()->getProtocol() != "ftp" &&
-              getRequestGroup()->getTotalLength() > 0 && getPieceStorage()) {
-            size_t nextIndex =
-                getPieceStorage()->getNextUsedIndex(segment->getIndex());
-            endOffset =
-                std::min(getFileEntry()->getLength(),
-                         getFileEntry()->gtoloff(
-                             static_cast<int64_t>(segment->getSegmentLength()) *
-                             nextIndex));
-          }
           httpConnection_->sendRequest(
-              createHttpRequest(getRequest(), getFileEntry(), segment,
-                                getOption(), getRequestGroup(),
-                                getDownloadEngine(), proxyRequest_, endOffset));
+              createHttpRequestForSegment(
+                  getRequest(), getFileEntry(), getRequestGroup(),
+                  getDownloadEngine(), getOption(), proxyRequest_,
+                  getPieceStorage(), segment));
         }
       }
     }

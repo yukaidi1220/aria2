@@ -6,6 +6,7 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "HttpProtocol.h"
 #include "Option.h"
 #include "Request.h"
 #include "prefs.h"
@@ -16,6 +17,8 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(HttpTLSHandshakeParamsTest);
   CPPUNIT_TEST(testDefaultHost);
   CPPUNIT_TEST(testDefaultAlpnProtocolsEmpty);
+  CPPUNIT_TEST(testHttp2AlpnProtocolsWhenEnabled);
+  CPPUNIT_TEST(testHttp2AlpnProtocolsDisabledByPipelining);
   CPPUNIT_TEST(testHostsMappingControlsVerifyHost);
   CPPUNIT_TEST(testExplicitSNIOverridesMappedVerifyHost);
   CPPUNIT_TEST(testMappedSNIRequestHostBeatsDefaultHost);
@@ -24,6 +27,8 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
 public:
   void testDefaultHost();
   void testDefaultAlpnProtocolsEmpty();
+  void testHttp2AlpnProtocolsWhenEnabled();
+  void testHttp2AlpnProtocolsDisabledByPipelining();
   void testHostsMappingControlsVerifyHost();
   void testExplicitSNIOverridesMappedVerifyHost();
   void testMappedSNIRequestHostBeatsDefaultHost();
@@ -48,6 +53,33 @@ void HttpTLSHandshakeParamsTest::testDefaultHost()
 void HttpTLSHandshakeParamsTest::testDefaultAlpnProtocolsEmpty()
 {
   Option option;
+
+  auto protocols = createHttpAlpnProtocols(&option);
+
+  CPPUNIT_ASSERT(protocols.empty());
+}
+
+void HttpTLSHandshakeParamsTest::testHttp2AlpnProtocolsWhenEnabled()
+{
+  Option option;
+  option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+
+  auto protocols = createHttpAlpnProtocols(&option);
+
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT_EQUAL((size_t)2, protocols.size());
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_H2), protocols[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_HTTP11), protocols[1]);
+#else  // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(protocols.empty());
+#endif // !HAVE_LIBNGHTTP2
+}
+
+void HttpTLSHandshakeParamsTest::testHttp2AlpnProtocolsDisabledByPipelining()
+{
+  Option option;
+  option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_TRUE);
 
   auto protocols = createHttpAlpnProtocols(&option);
 

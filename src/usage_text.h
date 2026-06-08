@@ -558,8 +558,11 @@
   _(" --enable-ech[=false]       Reserve the ECH option name. Encrypted ClientHello\n" \
     "                              is not implemented; setting true fails fast.")
 #define TEXT_ENABLE_HTTP2                                               \
-  _(" --enable-http2[=false]     Reserve the HTTP/2 option name. HTTP/2 is not\n" \
-    "                              implemented; setting true fails fast.")
+  _(" --enable-http2[=false]     Enable experimental HTTP/2 downloads over HTTPS\n" \
+    "                              when aria2 is built with nghttp2. Unsupported\n" \
+    "                              builds reject true. HTTP/2 currently uses one\n" \
+    "                              stream per connection and is disabled when\n" \
+    "                              HTTP pipelining is enabled.")
 #define TEXT_HOSTS_MAPPING                                              \
   _(" --hosts-mapping=HOST:IPADDR[,IPADDR:HOST]...\n"                   \
     "                              Set host mappings. HOST:IPADDR connects HOST\n" \

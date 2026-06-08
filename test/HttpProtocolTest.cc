@@ -73,8 +73,13 @@ void HttpProtocolTest::testDecideHttpProtocolFromSelectedAlpn()
 
   CPPUNIT_ASSERT_THROW(
       decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_H2, false), Exception);
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(HTTP_PROTOCOL_H2 ==
+                 decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_H2, true));
+#else  // !HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT_THROW(decideHttpProtocolFromSelectedAlpn(HTTP_ALPN_H2, true),
                        Exception);
+#endif // !HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT_THROW(decideHttpProtocolFromSelectedAlpn("h3", false),
                        Exception);
   CPPUNIT_ASSERT_THROW(decideHttpProtocolFromSelectedAlpn("h3", true),

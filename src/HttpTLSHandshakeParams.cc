@@ -39,16 +39,27 @@
 #include <vector>
 
 #include "HostMapping.h"
+#include "HttpProtocol.h"
 #include "Option.h"
 #include "Request.h"
 #include "TLSSNIHostMapping.h"
+#include "prefs.h"
 
 namespace aria2 {
 
 std::vector<std::string> createHttpAlpnProtocols(const Option* option)
 {
+  std::vector<std::string> protocols;
+#ifdef HAVE_LIBNGHTTP2
+  if (option && option->getAsBool(PREF_ENABLE_HTTP2) &&
+      !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING)) {
+    protocols.push_back(HTTP_ALPN_H2);
+    protocols.push_back(HTTP_ALPN_HTTP11);
+  }
+#else  // !HAVE_LIBNGHTTP2
   (void)option;
-  return {};
+#endif // !HAVE_LIBNGHTTP2
+  return protocols;
 }
 
 TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,

@@ -76,9 +76,12 @@ HttpProtocol decideHttpProtocolFromSelectedAlpn(const std::string& selectedAlpn,
   case HTTP_PROTOCOL_HTTP1:
     return HTTP_PROTOCOL_HTTP1;
   case HTTP_PROTOCOL_H2:
+#ifdef HAVE_LIBNGHTTP2
+    return HTTP_PROTOCOL_H2;
+#else  // !HAVE_LIBNGHTTP2
     throw DL_ABORT_EX(
-        "HTTP/2 was selected by ALPN but the download path is not implemented "
-        "yet");
+        "HTTP/2 was selected by ALPN but aria2 was built without nghttp2");
+#endif // !HAVE_LIBNGHTTP2
   case HTTP_PROTOCOL_UNKNOWN:
     break;
   }
