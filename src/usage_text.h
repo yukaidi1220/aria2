@@ -843,14 +843,16 @@
     "                              option value. See\n" \
     "                              --keep-unfinished-download-result option.")
 #define TEXT_ASYNC_DNS_SERVER                   \
-  _(" --async-dns-server=IPADDRESS[,...] Comma separated list of DNS server address\n" \
-    "                              used in asynchronous DNS resolver. Usually\n" \
-    "                              asynchronous DNS resolver reads DNS server\n" \
+  _(" --async-dns-server=SERVER[,...] Comma separated list of DNS server entries\n" \
+    "                              used in asynchronous DNS resolver. With cares,\n" \
+    "                              specify DNS server IP addresses. With dot,\n" \
+    "                              specify numeric DoT servers as IP, IP:PORT,\n" \
+    "                              [IPv6], or [IPv6]:PORT. With doh, specify numeric\n" \
+    "                              HTTPS URLs such as https://1.1.1.1/dns-query.\n" \
+    "                              Usually asynchronous DNS resolver reads DNS server\n" \
     "                              addresses from /etc/resolv.conf. When this option\n" \
     "                              is used, it uses DNS servers specified in this\n" \
-    "                              option instead of ones in /etc/resolv.conf. You\n" \
-    "                              can specify both IPv4 and IPv6 address. Use\n" \
-    "                              [IPv6]:PORT format when specifying port. This\n" \
+    "                              option instead of ones in /etc/resolv.conf. This\n" \
     "                              option is useful when the system does not have\n" \
     "                              /etc/resolv.conf and user does not have the\n" \
     "                              permission to create it.")
