@@ -33,9 +33,10 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 语义：
 
 - `--tls-sni-host=front.example`：所有 HTTPS 请求的 TLS ClientHello SNI 都使用 `front.example`。
-- `--tls-sni-host=origin.example:front.example,redirect.example:redirect-front.example`：按当前请求 host 匹配；重定向后的请求也会重新匹配。
+- `--tls-sni-host=origin.example:front.example,redirect.example:redirect-front.example`：优先按当前请求 host 匹配；没有命中时，再按逻辑/默认 host 回退匹配。重定向后的请求会重新计算这两个 host。
 - `TARGET` 可以是 DNS 主机名、IPv4 地址或 `[IPv6]`。IPv6 映射必须加方括号，例如 `[2001:db8::1]:front.example`。
 - `SNI` 必须是可用于 TLS SNI 的 DNS 主机名；`isTLSSNIHostname()` 会拒绝 IP、`localhost`、单标签名、空标签、下划线、标签首尾 `-` 等。
+- 同一个 `TARGET` 如果写了多次，`getTLSSNIHostConfig()` 会保留最先命中的配置；当前请求 host 的匹配优先级高于逻辑/默认 host 的匹配。
 - 这个选项只改 TLS SNI，不改 DNS 解析、TCP 连接目标、HTTP `Host` 头、代理 `CONNECT` 目标、cookie 作用域、证书校验主机。
 
 示例：
@@ -75,7 +76,7 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 
 - 每个条目是 `LEFT:RIGHT`，一边必须是 DNS 主机名，另一边必须是 IP 地址。
 - `HOST:IPADDR`：请求 URL 仍是 `HOST`，但 TCP 连接直接去 `IPADDR`，不查 DNS。HTTP `Host`、默认 TLS SNI、证书校验主机仍是 `HOST`。
-- `IPADDR:HOST`：URL 写 IP，但逻辑 HTTP/TLS 主机改为 `HOST`；TCP 仍连 IP。适合老系统/代理前置场景。
+- `IPADDR:HOST`：URL 写 IP，但逻辑 HTTP/TLS 主机改为 `HOST`；TCP 仍连 IP，`HttpRequest::getBuiltinHeaders()` 生成的 HTTP `Host:` 也会使用这个逻辑主机。适合老系统/代理前置场景。
 - IPv6 字面量必须写方括号。`HostMapping.cc` 会拒绝两边都是 IP 或两边都不是 IP 的配置。
 - 映射只用于直连 HTTP/HTTPS；通过 HTTP 代理或 HTTPS `CONNECT` 时，代理侧解析仍由代理控制。
 
@@ -86,6 +87,7 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 - `src/OptionHandlerFactory.cc` 在 `ENABLE_ASYNC_DNS` 下注册 `--async-dns`、`--async-dns-mode`、`--async-dns-server`。
 - `--async-dns-mode` 在 `ENABLE_SSL` 下允许 `cares|dot|doh`；无 SSL 构建只允许 `cares`。
 - `src/AsyncNameResolverMan.cc::resolverModeFromOption()` 选择后端。
+- `src/AsyncNameResolverMan.cc::validateAsyncNameResolverConfig()` 在解析期校验后端配置；DoT/DoH 模式没有 server 会直接失败。
 - `src/AsyncNameResolverMan.cc::createResolver()` 创建 `AsyncNameResolver`、`AsyncDotNameResolver` 或 `AsyncDohNameResolver`。
 - `src/AsyncDnsServerConfig.cc` 解析和校验 DoT/DoH server 格式。
 - `src/AsyncDotNameResolver.cc` / `src/AsyncDohNameResolver.cc` 驱动网络状态机并写 `A2_LOG_NETWORK`。
@@ -103,15 +105,18 @@ aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://[2606:47
 DoT 规则：
 
 - 格式为 `IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。
+- `--async-dns-mode=dot` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoT server configured”。
 - `AsyncDnsServerConfig.cc::validateAsyncDnsDotServerConfigForDirectConnect()` 要求 server host 是数值地址，避免解析 DNS 服务器本身时递归套娃。
 - `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 默认不会形成普通 DNS SNI。
 
 DoH 规则：
 
 - 格式必须是数值 HTTPS URL，例如 `https://1.1.1.1/dns-query` 或 `https://[2606:4700:4700::1111]/dns-query`，默认端口 `443`。
+- `--async-dns-mode=doh` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoH server configured”。
+- URL 必须有 path，拒绝 userinfo、密码、fragment；query 允许作为 path 的一部分发送。
 - `AsyncDohNameResolver.cc::createDohRequest()` 发送 HTTP/1.1 `POST`，`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
 - 当前 DoH resolver 自己不启用 HTTP/2/ALPN；英文 manual 对此已有说明。
-- 响应必须是 HTTP 200，必须有有效 `Content-Length`，不支持 `Transfer-Encoding`。
+- 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。
 
 双栈解析：
 
@@ -134,8 +139,8 @@ XP/Win7 注意：
 - `src/HttpTLSHandshakeParams.cc::createHttpAlpnProtocols()`：有 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时，ALPN 顺序为 `h2`、`http/1.1`。
 - `src/SocketCore.cc::SocketCore::tlsConnect()` 调用 `TLSSession::setAlpnProtocols()`。
 - `src/HttpProtocol.cc::decideHttpProtocolFromSelectedAlpn()` 根据服务端选中的 ALPN 判定 HTTP/1.1 或 HTTP/2。
-- `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2SingleStreamExchange`、`Http2SocketCoreTransport`、`Http2ResponseCommand`。
-- H2 内部目前涉及 `Http2Connection`、`Http2Session`、`Http2Transaction`、`Http2TransactionPump`；当前分支还增加了 `Http2MultiplexExchange` 作为单连接多 stream 核心，但实际下载路径仍按 `Http2SingleStreamExchange` 的 one stream per connection 行为启用。
+- `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2MultiplexExchange`、`Http2SocketCoreTransport`、`Http2ResponseCommand`。
+- H2 内部目前涉及 `Http2Connection`、`Http2Session`、`Http2TransactionPump` 和 `Http2MultiplexExchange`；下载命令已经按 streamId 消费响应，但入口仍保持 one stream per connection 的行为。
 
 限制：
 
@@ -143,7 +148,7 @@ XP/Win7 注意：
 - 依赖 libnghttp2 构建。
 - `usage_text.h` 明确写着当前 HTTP/2 “one stream per connection”，且 HTTP pipelining 开启时禁用。
 - `HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
-- TLS 后端必须支持 ALPN；`TLSSession` 基类在协议列表非空时默认失败，当前 OpenSSL 后端实现了 ALPN，WinTLS/AppleTLS/GnuTLS 是否可用要以当前后端实现为准。
+- TLS 后端必须支持 ALPN；`TLSSession` 基类在协议列表非空时默认失败，当前源码里只有 OpenSSL 后端实现了 `setAlpnProtocols()`。其他 TLS 后端即使能普通 TLS/SNI，也可能在启用 H2 时快速失败，但不应崩溃。
 
 重要差异：
 
@@ -371,7 +376,7 @@ aria2c --enable-http2=true --log-level=network --console-log-level=network https
 | `--always-resume [true\|false]` | `true` | 总是尝试断点续传；失败次数受 `--max-resume-failure-tries` 影响。 |
 | `--async-dns [true\|false]` | 非 Android 默认 `true`，Android 默认 `false` | 启用异步 DNS。 |
 | `--async-dns-mode=<cares\|dot\|doh>` | `cares` | 异步 DNS 后端，详见 2.3。 |
-| `--async-dns-server=<SERVER>[,...]` | 系统 resolv.conf / 无 | 指定异步 DNS server，格式随 mode 变化。 |
+| `--async-dns-server=<SERVER>[,...]` | cares 读系统配置；DoT/DoH 必填 | 指定异步 DNS server，格式随 mode 变化。 |
 | `--enable-async-dns6 [true\|false]` | 已废弃 | 旧 IPv6 异步 DNS 开关；当前使用 `--disable-ipv6` 控制。 |
 | `--auto-file-renaming [true\|false]` | `true` | 同名文件自动追加 `.1` 到 `.9999`。 |
 | `--auto-save-interval=<SEC>` | `60` | 定期保存 `.aria2` 控制文件。 |
@@ -492,8 +497,8 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 
 ## 6. 待主线程补齐/确认
 
-- HTTP/2 已有 `Http2MultiplexExchange*` 多 stream 核心，但下载命令接入仍保持 one stream per connection；后续要补真正 multiplex 下载、连接复用、错误恢复、Range/redirect 行为。
+- HTTP/2 已有 `Http2MultiplexExchange*` 多 stream 核心，响应/下载命令也已按 streamId 消费；入口仍保持 one stream per connection。后续要补真正 multiplex 下载、连接复用、错误恢复、Range/redirect 行为。
 - `doc/manual-src/en/aria2c.rst` 中 `--enable-http2` 仍是“未实现保留名”的旧说法，需要主线程同步英文 manual，否则中文/英文文档会冲突。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
-- WinTLS/AppleTLS/GnuTLS 的 ALPN 和 SNI override 能力需要按最终 TLS 后端实现再做矩阵表；当前只能确定 OpenSSL 后端有 ALPN 与 SNI override 声明，GnuTLS 有 SNI override 声明，WinTLS 未声明 SNI override，基类 ALPN 默认失败。
+- WinTLS/AppleTLS/GnuTLS 的 ALPN 和 SNI override 能力需要按最终 TLS 后端实现再做矩阵表；当前只能确定 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override，WinTLS 未声明 SNI override，基类 ALPN 默认失败。
