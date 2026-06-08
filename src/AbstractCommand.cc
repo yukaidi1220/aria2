@@ -236,6 +236,39 @@ void addAsyncDnsCacheCommand(
   command->start();
   e->addCommand(std::move(command));
 }
+
+void continueAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
+                               uint16_t port,
+                               AsyncNameResolverMan* asyncNameResolverMan,
+                               Command* command)
+{
+  if (!asyncNameResolverMan->started()) {
+    return;
+  }
+
+  auto pendingResolvers = asyncNameResolverMan->detachPendingResolvers(e,
+                                                                       command);
+  asyncNameResolverMan->reset(e, command);
+  addAsyncDnsCacheCommand(e, hostname, port, std::move(pendingResolvers));
+}
+
+void preserveAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
+                               uint16_t port,
+                               AsyncNameResolverMan* asyncNameResolverMan,
+                               Command* command)
+{
+  if (!asyncNameResolverMan->started()) {
+    return;
+  }
+
+  std::vector<std::string> resolvedAddrs;
+  asyncNameResolverMan->getResolvedAddress(resolvedAddrs);
+  for (const auto& addr : resolvedAddrs) {
+    e->cacheIPAddress(hostname, addr, port);
+  }
+
+  continueAsyncDnsCacheFill(e, hostname, port, asyncNameResolverMan, command);
+}
 #endif // ENABLE_ASYNC_DNS
 } // namespace
 
@@ -1065,6 +1098,14 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
 
   e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
   if (!addrs.empty()) {
+#ifdef ENABLE_ASYNC_DNS
+    if (getOption()->getAsBool(PREF_ASYNC_DNS)) {
+      preserveAsyncDnsCacheFill(e_, hostname, port, asyncNameResolverMan_.get(),
+                                this);
+      addrs.clear();
+      e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
+    }
+#endif // ENABLE_ASYNC_DNS
     auto ipaddr = selectIPAddress(addrs, getCuid());
     prioritizeIPAddress(addrs, ipaddr);
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
@@ -1124,9 +1165,8 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   }
 #ifdef ENABLE_ASYNC_DNS
   if (asyncDnsUsed) {
-    addAsyncDnsCacheCommand(
-        e_, hostname, port,
-        asyncNameResolverMan_->detachPendingResolvers(e_, this));
+    continueAsyncDnsCacheFill(e_, hostname, port, asyncNameResolverMan_.get(),
+                              this);
   }
 #endif // ENABLE_ASYNC_DNS
   std::vector<std::string> cachedAddrs;
