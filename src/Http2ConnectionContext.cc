@@ -43,8 +43,11 @@ namespace aria2 {
 Http2ConnectionContext::Http2ConnectionContext(
     const std::shared_ptr<RequestGroup>& requestGroup,
     const std::shared_ptr<Http2MultiplexExchange>& exchange,
-    const std::shared_ptr<SocketCore>& socket)
-    : requestGroup_(requestGroup), exchange_(exchange), socket_(socket)
+    const std::shared_ptr<SocketCore>& socket, bool proxied)
+    : requestGroup_(requestGroup),
+      exchange_(exchange),
+      socket_(socket),
+      proxied_(proxied)
 {
   if (requestGroup_) {
     requestGroup_->increaseStreamConnection();

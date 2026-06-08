@@ -52,12 +52,13 @@ private:
   std::shared_ptr<RequestGroup> requestGroup_;
   std::shared_ptr<Http2MultiplexExchange> exchange_;
   std::shared_ptr<SocketCore> socket_;
+  bool proxied_;
 
 public:
   Http2ConnectionContext(
       const std::shared_ptr<RequestGroup>& requestGroup,
       const std::shared_ptr<Http2MultiplexExchange>& exchange,
-      const std::shared_ptr<SocketCore>& socket);
+      const std::shared_ptr<SocketCore>& socket, bool proxied = false);
   ~Http2ConnectionContext();
 
   Http2ConnectionContext(const Http2ConnectionContext&) = delete;
@@ -72,6 +73,8 @@ public:
   const std::shared_ptr<SocketCore>& getSocket() const { return socket_; }
 
   RequestGroup* getRequestGroup() const { return requestGroup_.get(); }
+
+  bool isProxied() const { return proxied_; }
 };
 
 } // namespace aria2

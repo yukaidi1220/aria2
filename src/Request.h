@@ -72,6 +72,8 @@ private:
   int maxPipelinedRequest_;
   std::shared_ptr<PeerStat> peerStat_;
   bool removalRequested_;
+  bool http2OriginCoalesced_;
+  bool http2OriginCoalescingBlocked_;
   uint16_t connectedPort_;
   Timer wakeTime_;
 
@@ -156,6 +158,21 @@ public:
   void requestRemoval() { removalRequested_ = true; }
 
   bool removalRequested() const { return removalRequested_; }
+
+  void setHttp2OriginCoalesced(bool f) { http2OriginCoalesced_ = f; }
+
+  bool isHttp2OriginCoalesced() const { return http2OriginCoalesced_; }
+
+  void blockHttp2OriginCoalescing()
+  {
+    http2OriginCoalescingBlocked_ = true;
+    http2OriginCoalesced_ = false;
+  }
+
+  bool http2OriginCoalescingBlocked() const
+  {
+    return http2OriginCoalescingBlocked_;
+  }
 
   void setConnectedAddrInfo(const std::string& hostname,
                             const std::string& addr, uint16_t port);

@@ -147,10 +147,11 @@ XP/Win7 注意：
 - `src/SocketCore.cc::SocketCore::tlsHandshake()` 先检查 `TLSSession::supportsAlpnProtocols()`；支持时调用 `setAlpnProtocols()`，不支持时跳过 ALPN 设置并继续普通 TLS 握手。
 - `src/HttpProtocol.cc::decideHttpProtocolFromSelectedAlpn()` 根据服务端选中的 ALPN 判定 HTTP/1.1 或 HTTP/2。
 - `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2MultiplexExchange`、`Http2SocketCoreTransport` 和 `Http2ConnectionContext`，提交首个 stream 后调用 `DownloadEngine::registerActiveHttp2Connection()` 登记 active H2 context。
-- `src/DownloadEngine.cc` 维护 active H2 context registry 与 same-origin idle H2 pool：key 由 URL 协议/host/port 加已连接的 hostname/address/port 组成；active pool 用弱引用，idle pool 用强引用持有 `Http2ConnectionContext`。
+- `src/DownloadEngine.cc` 维护 active H2 context registry 与 idle H2 pool：key 由 URL 协议/host/port 加已连接的 hostname/address/port 组成；active pool 用弱引用，idle pool 用强引用持有 `Http2ConnectionContext`。exact key 未命中时，会按严格条件尝试 HTTP/2 origin coalescing。
 - `src/HttpInitiateConnectionCommand.cc` 在新请求建连前先调用 `DownloadEngine::findActiveHttp2Connection()`，再调用 `DownloadEngine::popIdleHttp2Connection()`；命中后直接在既有 `Http2MultiplexExchange` 上 `submitRequest()` 创建新 stream。
 - `src/Http2ResponseCommand.cc` 和 `src/Http2DownloadCommand.cc` 都按 `streamId` 取响应/正文，并在 `executeInternal()` 中调用 `exchange_->pump()` 驱动共享连接；最后一个 active stream 结束后会把连接放入 idle pool。
 - `src/Http2ConnectionContext.cc` 持有 `shared_ptr<RequestGroup>`，并在构造/析构时调用 `RequestGroup::increaseStreamConnection()` / `decreaseStreamConnection()` 持有连接计数；H2 stream command 传入 `incNumConnection=false`，避免每个 stream 都重复占用普通连接计数。
+- `src/TLSSession.h` 提供 `peerCertificateMatchesHostname()`；OpenSSL/GnuTLS 后端复用握手阶段的 SAN/CN 解析和 `net::verifyHostname()`，WinTLS/AppleTLS 等未实现后端默认返回 false。
 
 限制：
 
@@ -160,7 +161,9 @@ XP/Win7 注意：
 - 首条 H2 连接仍要求当前下载最多 1 个 segment；`HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
 - active registry 只保存仍有 active stream 的 H2 连接；最后一个 stream 完成后，同 origin 连接可进入 idle pool，默认保留 15 秒。
 - 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。命令行多个流式 URL 默认通常是同一个下载项的镜像 URI；独立下载项之间即使 host 相同，也不会复用这里的 active/idle H2 context。
-- 复用还要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate；这不是 HTTP/2 origin coalescing。
+- same-origin 复用要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate。
+- origin coalescing 只在 same-origin key 未命中后尝试，且要求当前请求不走代理、候选连接也不是代理连接、当前连接实际 peer 地址/端口等于本次目标解析出的地址/端口、目标没有显式 SNI override、当前 TLS peer certificate 覆盖目标 verify host、ALPN 已选中 `h2`。任一条件不满足就走普通新连接。
+- 如果 coalesced stream 收到 HTTP 421 Misdirected Request，`HttpSkipResponseCommand.cc` 会屏蔽该 request 后续 coalescing 并立即重试，避免反复复用同一条不被服务端接受的连接。
 - idle pool 命中前会检查 socket 仍打开、未超时、不可读；socket 可读时按保守策略视为可能 EOF/GOAWAY，直接驱逐而不复用。
 - `EvictSocketPoolCommand.cc` 会随普通 socket pool 定时扫描一起调用 `DownloadEngine::evictIdleHttp2Connections()`，避免 idle H2 context 长时间强持有 `RequestGroup`。
 - active stream 上限使用本地保守上限 `MAX_ACTIVE_HTTP2_STREAMS = 8` 与 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 的较小值；服务端未发 SETTINGS 限制时退回本地 8 条上限。
@@ -522,7 +525,7 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 
 ## 6. 待主线程补齐/确认
 
-- HTTP/2 目前已有同 origin active/idle 复用。后续阶段还要补 HTTP/2 origin coalescing，以及继续完善错误恢复、Range/redirect 行为。
+- HTTP/2 目前已有同 origin active/idle 复用和保守 origin coalescing；后续阶段还要补 421 行为的端到端测试，以及继续完善错误恢复、Range/redirect 行为。
 - `doc/manual-src/en/aria2c.rst` 中 `--enable-http2` 仍是“未实现保留名”的旧说法，需要主线程同步英文 manual，否则中文/英文文档会冲突。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。

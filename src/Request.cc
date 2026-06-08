@@ -62,6 +62,8 @@ Request::Request()
       pipeliningHint_(false),
       maxPipelinedRequest_(1),
       removalRequested_(false),
+      http2OriginCoalesced_(false),
+      http2OriginCoalescingBlocked_(false),
       connectedPort_(0),
       wakeTime_(global::wallclock())
 {
@@ -85,6 +87,8 @@ std::string removeFragment(const std::string& uri)
 bool Request::setUri(const std::string& uri)
 {
   supportsPersistentConnection_ = true;
+  http2OriginCoalesced_ = false;
+  http2OriginCoalescingBlocked_ = false;
   resetConnectedAddrInfo();
   uri_ = uri;
   return parseUri(uri_);
@@ -93,6 +97,8 @@ bool Request::setUri(const std::string& uri)
 bool Request::resetUri()
 {
   supportsPersistentConnection_ = true;
+  http2OriginCoalesced_ = false;
+  http2OriginCoalescingBlocked_ = false;
   resetConnectedAddrInfo();
   return parseUri(uri_);
 }
@@ -105,6 +111,8 @@ void Request::setReferer(const std::string& uri)
 bool Request::redirectUri(const std::string& uri)
 {
   supportsPersistentConnection_ = true;
+  http2OriginCoalesced_ = false;
+  http2OriginCoalescingBlocked_ = false;
   resetConnectedAddrInfo();
   ++redirectCount_;
   if (uri.empty()) {
@@ -201,6 +209,7 @@ void Request::setConnectedAddrInfo(const std::string& hostname,
   connectedAddr_ = addr;
   connectedPort_ = port;
   connectedAddrConfirmed_ = false;
+  http2OriginCoalesced_ = false;
 }
 
 void Request::resetConnectedAddrInfo()

@@ -144,6 +144,17 @@ bool processSkippedHttpResponse(
                          command->getRequest()->getCurrentUri().c_str()));
       throw DL_RETRY_EX2(MSG_RESOURCE_NOT_FOUND,
                          error_code::RESOURCE_NOT_FOUND);
+    case 421:
+      if (command->getRequest()->isHttp2OriginCoalesced()) {
+        A2_LOG_NETWORK(
+            fmt("HTTP: CUID#%" PRId64
+                " - HTTP 421 for coalesced HTTP/2 request %s, retrying",
+                command->getCuid(),
+                command->getRequest()->getCurrentUri().c_str()));
+        command->getRequest()->blockHttp2OriginCoalescing();
+        return prepareForRetry();
+      }
+      break;
     case 502:
     case 503:
       if (command->getOption()->getAsInt(PREF_RETRY_WAIT) > 0) {

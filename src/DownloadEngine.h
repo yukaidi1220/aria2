@@ -220,6 +220,7 @@ public:
     std::shared_ptr<Http2ConnectionContext> context;
     std::shared_ptr<Http2MultiplexExchange> exchange;
     std::shared_ptr<SocketCore> socket;
+    bool originCoalesced = false;
 
     bool isActive() const { return context && exchange && socket; }
   };
@@ -358,7 +359,10 @@ public:
       RequestGroup* requestGroup, const Request* request,
       const std::string& connectedHostname, const std::string& connectedAddr,
       uint16_t connectedPort,
-      const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate);
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+          coalescingPredicate =
+              std::function<bool(const std::shared_ptr<SocketCore>&)>());
 
   void poolIdleHttp2Connection(
       const Request* request,
@@ -369,7 +373,10 @@ public:
       RequestGroup* requestGroup, const Request* request,
       const std::string& connectedHostname, const std::string& connectedAddr,
       uint16_t connectedPort,
-      const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate);
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+          coalescingPredicate =
+              std::function<bool(const std::shared_ptr<SocketCore>&)>());
 
   void evictActiveHttp2Connections();
   void evictIdleHttp2Connections();

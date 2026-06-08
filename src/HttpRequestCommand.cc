@@ -211,7 +211,7 @@ bool HttpRequestCommand::executeInternal()
         throw DL_ABORT_EX("HTTP/2 request group was not registered");
       }
       auto connectionContext = std::make_shared<Http2ConnectionContext>(
-          requestGroup, exchange, getSocket());
+          requestGroup, exchange, getSocket(), proxyRequest_ != nullptr);
       auto streamId = exchange->submitRequest(*httpRequest);
       getDownloadEngine()->registerActiveHttp2Connection(getRequest().get(),
                                                           connectionContext);

@@ -27,6 +27,7 @@ class RequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetURIHost);
   CPPUNIT_TEST(testConnectedAddrConfirmation);
   CPPUNIT_TEST(testResetConnectedAddrInfo);
+  CPPUNIT_TEST(testHttp2OriginCoalescingState);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -45,6 +46,7 @@ public:
   void testGetURIHost();
   void testConnectedAddrConfirmation();
   void testResetConnectedAddrInfo();
+  void testHttp2OriginCoalescingState();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(RequestTest);
@@ -272,6 +274,29 @@ void RequestTest::testRedirectUri_supportsPersistentConnection()
   CPPUNIT_ASSERT(!req.supportsPersistentConnection());
   req.redirectUri("http://host/file");
   CPPUNIT_ASSERT(req.supportsPersistentConnection());
+}
+
+void RequestTest::testHttp2OriginCoalescingState()
+{
+  Request req;
+  CPPUNIT_ASSERT(req.setUri("https://example.org/file"));
+  req.setHttp2OriginCoalesced(true);
+  CPPUNIT_ASSERT(req.isHttp2OriginCoalesced());
+
+  req.blockHttp2OriginCoalescing();
+  CPPUNIT_ASSERT(!req.isHttp2OriginCoalesced());
+  CPPUNIT_ASSERT(req.http2OriginCoalescingBlocked());
+
+  req.setConnectedAddrInfo("example.org", "192.0.2.1", 443);
+  req.setHttp2OriginCoalesced(true);
+  CPPUNIT_ASSERT(req.isHttp2OriginCoalesced());
+  req.setConnectedAddrInfo("example.org", "192.0.2.2", 443);
+  CPPUNIT_ASSERT(!req.isHttp2OriginCoalesced());
+  CPPUNIT_ASSERT(req.http2OriginCoalescingBlocked());
+
+  CPPUNIT_ASSERT(req.redirectUri("https://cdn.example/file"));
+  CPPUNIT_ASSERT(!req.isHttp2OriginCoalesced());
+  CPPUNIT_ASSERT(!req.http2OriginCoalescingBlocked());
 }
 
 void RequestTest::testRedirectUri_uriNormalization()

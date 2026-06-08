@@ -385,6 +385,30 @@ std::string createActiveHttp2PoolKey(const Request* request,
 }
 #endif // HAVE_LIBNGHTTP2
 
+bool getPeerInfo(Endpoint& res, const std::shared_ptr<SocketCore>& socket)
+{
+  try {
+    res = socket->getPeerInfo();
+    return true;
+  }
+  catch (RecoverableException& e) {
+    // socket->getPeerInfo() can fail if the socket has been
+    // disconnected.
+    A2_LOG_INFO_EX("Getting peer info failed. Pooling socket canceled.", e);
+    return false;
+  }
+}
+
+#ifdef HAVE_LIBNGHTTP2
+bool matchesPeerEndpoint(const std::shared_ptr<SocketCore>& socket,
+                         const std::string& addr, uint16_t port)
+{
+  Endpoint peerInfo;
+  return getPeerInfo(peerInfo, socket) && peerInfo.addr == addr &&
+         peerInfo.port == port;
+}
+#endif // HAVE_LIBNGHTTP2
+
 std::string createSockPoolKey(const std::string& host, uint16_t port,
                               const std::string& username,
                               const std::string& proxyhost, uint16_t proxyport)
@@ -444,7 +468,9 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
     RequestGroup* requestGroup, const Request* request,
     const std::string& connectedHostname, const std::string& connectedAddr,
     uint16_t connectedPort,
-    const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate)
+    const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate,
+    const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+        coalescingPredicate)
 {
   ActiveHttp2Connection res;
   if (!requestGroup || !request || request->getProtocol() != "https" ||
@@ -481,6 +507,45 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
     A2_LOG_NETWORK(fmt("Reusing active HTTP/2 connection for %s", key.c_str()));
     return res;
   }
+
+  if (!coalescingPredicate) {
+    return res;
+  }
+
+  for (auto i = activeHttp2Pool_.begin(); i != activeHttp2Pool_.end();) {
+    if ((*i).first == key) {
+      ++i;
+      continue;
+    }
+    auto context = (*i).second.getContext();
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+    if (!isReusableHttp2Context(context, exchange, socket) ||
+        !exchange->hasActiveStreams()) {
+      i = activeHttp2Pool_.erase(i);
+      continue;
+    }
+    if (context->isProxied() || context->getRequestGroup() != requestGroup ||
+        !matchesPeerEndpoint(socket, connectedAddr, connectedPort)) {
+      ++i;
+      continue;
+    }
+    auto maxActiveStreams = std::min(
+        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    if (exchange->countActiveStreams() >= maxActiveStreams ||
+        !coalescingPredicate(socket)) {
+      ++i;
+      continue;
+    }
+    res.context = std::move(context);
+    res.exchange = std::move(exchange);
+    res.socket = std::move(socket);
+    res.originCoalesced = true;
+    A2_LOG_NETWORK(
+        fmt("Coalescing active HTTP/2 connection for %s via %s",
+            key.c_str(), (*i).first.c_str()));
+    return res;
+  }
   return res;
 }
 
@@ -515,7 +580,9 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::popIdleHttp2Connection(
     RequestGroup* requestGroup, const Request* request,
     const std::string& connectedHostname, const std::string& connectedAddr,
     uint16_t connectedPort,
-    const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate)
+    const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate,
+    const std::function<bool(const std::shared_ptr<SocketCore>&)>&
+        coalescingPredicate)
 {
   ActiveHttp2Connection res;
   if (!requestGroup || !request || request->getProtocol() != "https" ||
@@ -552,6 +619,46 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::popIdleHttp2Connection(
     res.socket = std::move(socket);
     idleHttp2Pool_.erase(i);
     A2_LOG_NETWORK(fmt("Reusing idle HTTP/2 connection for %s", key.c_str()));
+    return res;
+  }
+
+  if (!coalescingPredicate) {
+    return res;
+  }
+
+  for (auto i = idleHttp2Pool_.begin(); i != idleHttp2Pool_.end();) {
+    if ((*i).first == key) {
+      ++i;
+      continue;
+    }
+    auto context = (*i).second.getContext();
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+    if ((*i).second.isTimeout() ||
+        !isReusableHttp2Context(context, exchange, socket) ||
+        exchange->hasActiveStreams() || socket->isReadable(0)) {
+      i = idleHttp2Pool_.erase(i);
+      continue;
+    }
+    if (context->isProxied() || context->getRequestGroup() != requestGroup ||
+        !matchesPeerEndpoint(socket, connectedAddr, connectedPort) ||
+        !coalescingPredicate(socket)) {
+      ++i;
+      continue;
+    }
+    auto maxActiveStreams = std::min(
+        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    if (maxActiveStreams == 0) {
+      i = idleHttp2Pool_.erase(i);
+      continue;
+    }
+    res.context = std::move(context);
+    res.exchange = std::move(exchange);
+    res.socket = std::move(socket);
+    res.originCoalesced = true;
+    idleHttp2Pool_.erase(i);
+    A2_LOG_NETWORK(
+        fmt("Coalescing idle HTTP/2 connection for %s", key.c_str()));
     return res;
   }
   return res;
@@ -614,22 +721,6 @@ void DownloadEngine::poolSocket(const std::string& ipaddr, uint16_t port,
   poolSocket(createSockPoolKey(ipaddr, port, A2STR::NIL, proxyhost, proxyport),
              e);
 }
-
-namespace {
-bool getPeerInfo(Endpoint& res, const std::shared_ptr<SocketCore>& socket)
-{
-  try {
-    res = socket->getPeerInfo();
-    return true;
-  }
-  catch (RecoverableException& e) {
-    // socket->getPeerInfo() can fail if the socket has been
-    // disconnected.
-    A2_LOG_INFO_EX("Getting peer info failed. Pooling socket canceled.", e);
-    return false;
-  }
-}
-} // namespace
 
 void DownloadEngine::poolSocket(const std::shared_ptr<Request>& request,
                                 const std::shared_ptr<Request>& proxyRequest,

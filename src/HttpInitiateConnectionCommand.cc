@@ -44,6 +44,7 @@
 #  include "Http2MultiplexExchange.h"
 #  include "Http2ResponseCommand.h"
 #  include "HttpRequestFactory.h"
+#  include "HttpProtocol.h"
 #endif // HAVE_LIBNGHTTP2
 #include "Segment.h"
 #include "HttpRequestCommand.h"
@@ -82,6 +83,28 @@ createTLSSocketReusePredicate(const Request* request, const Option* option)
   };
 }
 #endif // ENABLE_SSL
+
+#if defined(ENABLE_SSL) && defined(HAVE_LIBNGHTTP2)
+std::function<bool(const std::shared_ptr<SocketCore>&)>
+createTLSHttp2OriginCoalescingPredicate(const Request* request,
+                                        const Option* option)
+{
+  if (request->getProtocol() != "https" ||
+      request->http2OriginCoalescingBlocked()) {
+    return std::function<bool(const std::shared_ptr<SocketCore>&)>();
+  }
+
+  auto tlsParams = createHttpTLSHandshakeParams(request, option);
+  if (tlsParams.verifyHost.empty() || tlsParams.sniHostOverridden) {
+    return std::function<bool(const std::shared_ptr<SocketCore>&)>();
+  }
+
+  return [tlsParams](const std::shared_ptr<SocketCore>& socket) {
+    return socket->getSelectedAlpnProtocol() == HTTP_ALPN_H2 &&
+           socket->peerCertificateMatchesHostname(tlsParams.verifyHost);
+  };
+}
+#endif // ENABLE_SSL && HAVE_LIBNGHTTP2
 
 std::shared_ptr<SocketCore>
 popReusablePooledSocket(DownloadEngine* e, const Request* request,
@@ -159,15 +182,24 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
 #  ifdef ENABLE_SSL
     auto predicate =
         createTLSSocketReusePredicate(getRequest().get(), getOption().get());
+    auto coalescingPredicate = createTLSHttp2OriginCoalescingPredicate(
+        getRequest().get(), getOption().get());
 #  else  // !ENABLE_SSL
     std::function<bool(const std::shared_ptr<SocketCore>&)> predicate;
+    std::function<bool(const std::shared_ptr<SocketCore>&)>
+        coalescingPredicate;
 #  endif // ENABLE_SSL
+    if (proxyRequest) {
+      coalescingPredicate =
+          std::function<bool(const std::shared_ptr<SocketCore>&)>();
+    }
     auto activeHttp2 = getDownloadEngine()->findActiveHttp2Connection(
         getRequestGroup(), getRequest().get(), hostname, addr, port,
-        predicate);
+        predicate, coalescingPredicate);
     if (activeHttp2.isActive()) {
       getRequest()->setConnectedAddrInfo(hostname, addr, port);
       getRequest()->confirmConnectedAddrInfo();
+      getRequest()->setHttp2OriginCoalesced(activeHttp2.originCoalesced);
 
       std::unique_ptr<HttpRequest> httpRequest;
       if (getSegments().empty()) {
@@ -195,10 +227,11 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
 
     auto idleHttp2 = getDownloadEngine()->popIdleHttp2Connection(
         getRequestGroup(), getRequest().get(), hostname, addr, port,
-        predicate);
+        predicate, coalescingPredicate);
     if (idleHttp2.isActive()) {
       getRequest()->setConnectedAddrInfo(hostname, addr, port);
       getRequest()->confirmConnectedAddrInfo();
+      getRequest()->setHttp2OriginCoalesced(idleHttp2.originCoalesced);
 
       std::unique_ptr<HttpRequest> httpRequest;
       if (getSegments().empty()) {
