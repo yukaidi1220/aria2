@@ -41,6 +41,7 @@
 #include "AsyncResolver.h"
 #ifdef ENABLE_SSL
 #  include "AsyncDnsServerConfig.h"
+#  include "AsyncDohNameResolver.h"
 #  include "AsyncDotNameResolver.h"
 #endif // ENABLE_SSL
 #include "DownloadEngine.h"
@@ -85,6 +86,8 @@ const char* resolverModeToString(AsyncNameResolverMan::ResolverMode mode)
 #ifdef ENABLE_SSL
   case AsyncNameResolverMan::RESOLVER_DOT:
     return "DoT";
+  case AsyncNameResolverMan::RESOLVER_DOH:
+    return "DoH";
 #endif // ENABLE_SSL
   }
   abort();
@@ -166,6 +169,12 @@ std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
     validateAsyncDnsDotServerConfigForDirectConnect(dotServers);
     return std::make_shared<AsyncDotNameResolver>(family,
                                                   std::move(dotServers));
+  }
+  case RESOLVER_DOH: {
+    auto dohServers = parseAsyncDnsDohServerConfigList(servers_);
+    validateAsyncDnsDohServerConfigForDirectConnect(dohServers);
+    return std::make_shared<AsyncDohNameResolver>(family,
+                                                  std::move(dohServers));
   }
 #endif // ENABLE_SSL
   }
@@ -327,6 +336,11 @@ void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
   case AsyncNameResolverMan::RESOLVER_DOT: {
     auto dotServers = parseAsyncDnsDotServerConfigList(servers);
     validateAsyncDnsDotServerConfigForDirectConnect(dotServers);
+    break;
+  }
+  case AsyncNameResolverMan::RESOLVER_DOH: {
+    auto dohServers = parseAsyncDnsDohServerConfigList(servers);
+    validateAsyncDnsDohServerConfigForDirectConnect(dohServers);
     break;
   }
 #endif // ENABLE_SSL

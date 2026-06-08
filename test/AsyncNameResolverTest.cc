@@ -1,5 +1,6 @@
 #include "AsyncNameResolver.h"
 #ifdef ENABLE_SSL
+#  include "AsyncDohNameResolver.h"
 #  include "AsyncDotNameResolver.h"
 #endif // ENABLE_SSL
 #include "AsyncNameResolverMan.h"
@@ -24,9 +25,15 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateDotResolver);
   CPPUNIT_TEST(testCreateDotResolverRejectsDomainServer);
   CPPUNIT_TEST(testCreateDotResolverRejectsEmptyServerList);
+  CPPUNIT_TEST(testCreateDohResolver);
+  CPPUNIT_TEST(testCreateDohResolverRejectsDomainServer);
+  CPPUNIT_TEST(testCreateDohResolverRejectsEmptyServerList);
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
   CPPUNIT_TEST(testValidateConfigRejectsDotDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
+  CPPUNIT_TEST(testValidateConfigAcceptsDohIpServers);
+  CPPUNIT_TEST(testValidateConfigRejectsDohDomainServer);
+  CPPUNIT_TEST(testValidateConfigRejectsDohEmptyServerList);
   CPPUNIT_TEST(testConfigureAcceptsDotIpServers);
   CPPUNIT_TEST(testConfigureRejectsDotDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDotEmptyServerList);
@@ -44,9 +51,15 @@ public:
   void testCreateDotResolver();
   void testCreateDotResolverRejectsDomainServer();
   void testCreateDotResolverRejectsEmptyServerList();
+  void testCreateDohResolver();
+  void testCreateDohResolverRejectsDomainServer();
+  void testCreateDohResolverRejectsEmptyServerList();
   void testValidateConfigAcceptsDotIpServers();
   void testValidateConfigRejectsDotDomainServer();
   void testValidateConfigRejectsDotEmptyServerList();
+  void testValidateConfigAcceptsDohIpServers();
+  void testValidateConfigRejectsDohDomainServer();
+  void testValidateConfigRejectsDohEmptyServerList();
   void testConfigureAcceptsDotIpServers();
   void testConfigureRejectsDotDomainServer();
   void testConfigureRejectsDotEmptyServerList();
@@ -98,6 +111,35 @@ void AsyncNameResolverTest::testCreateDotResolverRejectsEmptyServerList()
   CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
 }
 
+void AsyncNameResolverTest::testCreateDohResolver()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOH);
+  resolverMan.setServers("https://1.1.1.1/dns-query");
+
+  auto resolver = resolverMan.createResolver(AF_INET);
+
+  CPPUNIT_ASSERT(dynamic_cast<AsyncDohNameResolver*>(resolver.get()));
+  CPPUNIT_ASSERT_EQUAL(AF_INET, resolver->getFamily());
+}
+
+void AsyncNameResolverTest::testCreateDohResolverRejectsDomainServer()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOH);
+  resolverMan.setServers("https://dns.example.org/dns-query");
+
+  CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
+}
+
+void AsyncNameResolverTest::testCreateDohResolverRejectsEmptyServerList()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOH);
+
+  CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
+}
+
 void AsyncNameResolverTest::testValidateConfigAcceptsDotIpServers()
 {
   validateAsyncNameResolverConfig(
@@ -117,6 +159,29 @@ void AsyncNameResolverTest::testValidateConfigRejectsDotEmptyServerList()
 {
   CPPUNIT_ASSERT_THROW(
       validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOT, ""),
+      Exception);
+}
+
+void AsyncNameResolverTest::testValidateConfigAcceptsDohIpServers()
+{
+  validateAsyncNameResolverConfig(
+      AsyncNameResolverMan::RESOLVER_DOH,
+      "https://1.1.1.1/dns-query,"
+      "https://[2606:4700:4700::1111]:443/dns-query");
+}
+
+void AsyncNameResolverTest::testValidateConfigRejectsDohDomainServer()
+{
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOH,
+                                      "https://dns.example.org/dns-query"),
+      Exception);
+}
+
+void AsyncNameResolverTest::testValidateConfigRejectsDohEmptyServerList()
+{
+  CPPUNIT_ASSERT_THROW(
+      validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOH, ""),
       Exception);
 }
 

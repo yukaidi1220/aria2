@@ -54,6 +54,7 @@ public:
     RESOLVER_CARES,
 #ifdef ENABLE_SSL
     RESOLVER_DOT,
+    RESOLVER_DOH,
 #endif // ENABLE_SSL
   };
 
