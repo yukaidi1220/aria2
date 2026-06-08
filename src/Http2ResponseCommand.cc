@@ -37,16 +37,25 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include "DlAbortEx.h"
+#  include "DlRetryEx.h"
+#  include "DownloadEngine.h"
 #  include "Http2DownloadCommand.h"
 #  include "Http2SingleStreamExchange.h"
+#  include "HttpHeader.h"
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
+#  include "HttpSkipResponseCommand.h"
 #  include "SocketCore.h"
 #  include "StreamFilter.h"
+#  include "message.h"
 
 #  include <utility>
 
 namespace aria2 {
+
+namespace {
+const size_t SKIP_BODY_CHUNK_SIZE = 16_k;
+} // namespace
 
 Http2ResponseCommand::Http2ResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
@@ -56,7 +65,10 @@ Http2ResponseCommand::Http2ResponseCommand(
     const std::shared_ptr<SocketCore>& s)
     : HttpResponseCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr),
       exchange_(std::move(exchange)),
-      httpRequest_(std::move(httpRequest))
+      httpRequest_(std::move(httpRequest)),
+      expectedSkipBodyLength_(0),
+      skippedBodyLength_(0),
+      expectedSkipBodyLengthKnown_(false)
 {
 }
 
@@ -64,6 +76,10 @@ Http2ResponseCommand::~Http2ResponseCommand() = default;
 
 bool Http2ResponseCommand::executeInternal()
 {
+  if (skipHttpResponse_) {
+    return drainSkippedResponseBody();
+  }
+
   exchange_->pump();
 
   auto state = exchange_->getState();
@@ -106,13 +122,69 @@ std::unique_ptr<Command> Http2ResponseCommand::createHttpDownloadCommand(
 bool Http2ResponseCommand::skipResponseBody(
     std::unique_ptr<HttpResponse> httpResponse)
 {
-  (void)httpResponse;
-  throw DL_ABORT_EX("HTTP/2 response body skip is not implemented");
+  skipHttpResponse_ = std::move(httpResponse);
+  skippedBodyLength_ = 0;
+  expectedSkipBodyLength_ = 0;
+  expectedSkipBodyLengthKnown_ = false;
+  if (skipHttpResponse_->getHttpHeader()->defined(HttpHeader::CONTENT_LENGTH)) {
+    expectedSkipBodyLength_ = skipHttpResponse_->getContentLength();
+    expectedSkipBodyLengthKnown_ = true;
+  }
+  return drainSkippedResponseBody();
 }
 
 void Http2ResponseCommand::poolConnection() {}
 
 void Http2ResponseCommand::requeueSelf() { addCommandSelf(); }
+
+bool Http2ResponseCommand::drainSkippedResponseBody()
+{
+  exchange_->pump();
+
+  auto state = exchange_->getState();
+  if (state.errorCode != 0) {
+    throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
+  }
+
+  for (;;) {
+    auto body = exchange_->popResponseBody(SKIP_BODY_CHUNK_SIZE);
+    if (body.empty()) {
+      break;
+    }
+    skippedBodyLength_ += static_cast<int64_t>(body.size());
+    if (expectedSkipBodyLengthKnown_ &&
+        skippedBodyLength_ > expectedSkipBodyLength_) {
+      throw DL_ABORT_EX("HTTP/2 skipped response body exceeds Content-Length");
+    }
+  }
+
+  state = exchange_->getState();
+  if (state.errorCode != 0) {
+    throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
+  }
+  if (state.streamClosed) {
+    if (expectedSkipBodyLengthKnown_ &&
+        skippedBodyLength_ != expectedSkipBodyLength_) {
+      throw DL_RETRY_EX(EX_GOT_EOF);
+    }
+    exchange_->popResponseEvent();
+    return processSkippedHttpResponse(
+        this, skipHttpResponse_, [this]() { return prepareForRetry(0); });
+  }
+
+  auto& socket = getSocket();
+  if (socket) {
+    setReadCheckSocketIf(socket, exchange_->wantRead());
+    setWriteCheckSocketIf(socket, exchange_->wantWrite());
+  }
+  else {
+    disableReadCheckSocket();
+    disableWriteCheckSocket();
+    getDownloadEngine()->setNoWait(true);
+  }
+  requeueSelf();
+  return false;
+}
 
 } // namespace aria2
 

@@ -103,6 +103,82 @@ bool shouldRedirectHttpStatusWithLocation(const HttpResponse& httpResponse)
   return request && request->getMethod() == Request::METHOD_GET;
 }
 
+bool processSkippedHttpResponse(
+    AbstractCommand* command, const std::unique_ptr<HttpResponse>& httpResponse,
+    const std::function<bool()>& prepareForRetry)
+{
+  if (httpResponse->isRedirect() ||
+      shouldRedirectHttpStatusWithLocation(*httpResponse)) {
+    int rnum =
+        httpResponse->getHttpRequest()->getRequest()->getRedirectCount();
+    if (rnum >= Request::MAX_REDIRECT) {
+      throw DL_ABORT_EX2(fmt("Too many redirects: count=%u", rnum),
+                         error_code::HTTP_TOO_MANY_REDIRECTS);
+    }
+    httpResponse->processRedirect();
+    return prepareForRetry();
+  }
+
+  auto statusCode = httpResponse->getStatusCode();
+  if (statusCode >= 400) {
+    switch (statusCode) {
+    case 401:
+      if (command->getOption()->getAsBool(PREF_HTTP_AUTH_CHALLENGE) &&
+          !httpResponse->getHttpRequest()->authenticationUsed() &&
+          command->getDownloadEngine()
+              ->getAuthConfigFactory()
+              ->activateBasicCred(command->getRequest()->getHost(),
+                                  command->getRequest()->getPort(),
+                                  command->getRequest()->getDir(),
+                                  command->getOption().get())) {
+        return prepareForRetry();
+      }
+      throw DL_ABORT_EX2(EX_AUTH_FAILED, error_code::HTTP_AUTH_FAILED);
+    case 404:
+      if (command->getOption()->getAsInt(PREF_MAX_FILE_NOT_FOUND) == 0) {
+        throw DL_ABORT_EX2(MSG_RESOURCE_NOT_FOUND,
+                           error_code::RESOURCE_NOT_FOUND);
+      }
+      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64 " - HTTP 404 for %s, retrying",
+                         command->getCuid(),
+                         command->getRequest()->getCurrentUri().c_str()));
+      throw DL_RETRY_EX2(MSG_RESOURCE_NOT_FOUND,
+                         error_code::RESOURCE_NOT_FOUND);
+    case 502:
+    case 503:
+      if (command->getOption()->getAsInt(PREF_RETRY_WAIT) > 0) {
+        A2_LOG_NETWORK(
+            fmt("HTTP: CUID#%" PRId64 " - HTTP %d for %s, retrying after wait",
+                command->getCuid(), statusCode,
+                command->getRequest()->getCurrentUri().c_str()));
+        throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
+                           error_code::HTTP_SERVICE_UNAVAILABLE);
+      }
+      throw DL_ABORT_EX2(fmt(EX_BAD_STATUS, statusCode),
+                         error_code::HTTP_SERVICE_UNAVAILABLE);
+    case 504:
+      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64 " - HTTP 504 for %s, retrying",
+                         command->getCuid(),
+                         command->getRequest()->getCurrentUri().c_str()));
+      throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
+                         error_code::HTTP_SERVICE_UNAVAILABLE);
+    };
+
+    if (shouldRetryHttpStatusByDefault(statusCode)) {
+      A2_LOG_NETWORK(
+          fmt("HTTP: CUID#%" PRId64 " - HTTP %d for %s, retrying after wait",
+              command->getCuid(), statusCode,
+              command->getRequest()->getCurrentUri().c_str()));
+      throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
+                         error_code::HTTP_PROTOCOL_ERROR);
+    }
+    throw DL_ABORT_EX2(fmt(EX_BAD_STATUS, statusCode),
+                       error_code::HTTP_PROTOCOL_ERROR);
+  }
+
+  return prepareForRetry();
+}
+
 HttpSkipResponseCommand::HttpSkipResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
@@ -234,72 +310,8 @@ void HttpSkipResponseCommand::poolConnection() const
 
 bool HttpSkipResponseCommand::processResponse()
 {
-  if (httpResponse_->isRedirect() ||
-      shouldRedirectHttpStatusWithLocation(*httpResponse_)) {
-    int rnum =
-        httpResponse_->getHttpRequest()->getRequest()->getRedirectCount();
-    if (rnum >= Request::MAX_REDIRECT) {
-      throw DL_ABORT_EX2(fmt("Too many redirects: count=%u", rnum),
-                         error_code::HTTP_TOO_MANY_REDIRECTS);
-    }
-    httpResponse_->processRedirect();
-    return prepareForRetry(0);
-  }
-
-  auto statusCode = httpResponse_->getStatusCode();
-  if (statusCode >= 400) {
-    switch (statusCode) {
-    case 401:
-      if (getOption()->getAsBool(PREF_HTTP_AUTH_CHALLENGE) &&
-          !httpResponse_->getHttpRequest()->authenticationUsed() &&
-          getDownloadEngine()->getAuthConfigFactory()->activateBasicCred(
-              getRequest()->getHost(), getRequest()->getPort(),
-              getRequest()->getDir(), getOption().get())) {
-        return prepareForRetry(0);
-      }
-      throw DL_ABORT_EX2(EX_AUTH_FAILED, error_code::HTTP_AUTH_FAILED);
-    case 404:
-      if (getOption()->getAsInt(PREF_MAX_FILE_NOT_FOUND) == 0) {
-        throw DL_ABORT_EX2(MSG_RESOURCE_NOT_FOUND,
-                           error_code::RESOURCE_NOT_FOUND);
-      }
-      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64 " - HTTP 404 for %s, retrying",
-                         getCuid(), getRequest()->getCurrentUri().c_str()));
-      throw DL_RETRY_EX2(MSG_RESOURCE_NOT_FOUND,
-                         error_code::RESOURCE_NOT_FOUND);
-    case 502:
-    case 503:
-      // Only retry if pretry-wait > 0. Hammering 'busy' server is not
-      // a good idea.
-      if (getOption()->getAsInt(PREF_RETRY_WAIT) > 0) {
-        A2_LOG_NETWORK(
-            fmt("HTTP: CUID#%" PRId64 " - HTTP %d for %s, retrying after wait",
-                getCuid(), statusCode, getRequest()->getCurrentUri().c_str()));
-        throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
-                           error_code::HTTP_SERVICE_UNAVAILABLE);
-      }
-      throw DL_ABORT_EX2(fmt(EX_BAD_STATUS, statusCode),
-                         error_code::HTTP_SERVICE_UNAVAILABLE);
-    case 504:
-      // This is Gateway Timeout, so try again
-      A2_LOG_NETWORK(fmt("HTTP: CUID#%" PRId64 " - HTTP 504 for %s, retrying",
-                         getCuid(), getRequest()->getCurrentUri().c_str()));
-      throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
-                         error_code::HTTP_SERVICE_UNAVAILABLE);
-    };
-
-    if (shouldRetryHttpStatusByDefault(statusCode)) {
-      A2_LOG_NETWORK(
-          fmt("HTTP: CUID#%" PRId64 " - HTTP %d for %s, retrying after wait",
-              getCuid(), statusCode, getRequest()->getCurrentUri().c_str()));
-      throw DL_RETRY_EX2(fmt(EX_BAD_STATUS, statusCode),
-                         error_code::HTTP_PROTOCOL_ERROR);
-    }
-    throw DL_ABORT_EX2(fmt(EX_BAD_STATUS, statusCode),
-                       error_code::HTTP_PROTOCOL_ERROR);
-  }
-
-  return prepareForRetry(0);
+  return processSkippedHttpResponse(this, httpResponse_,
+                                    [this]() { return prepareForRetry(0); });
 }
 
 void HttpSkipResponseCommand::disableSocketCheck()

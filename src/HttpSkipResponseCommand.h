@@ -37,6 +37,8 @@
 
 #include "AbstractCommand.h"
 
+#include <functional>
+
 namespace aria2 {
 
 class HttpConnection;
@@ -45,6 +47,9 @@ class StreamFilter;
 
 bool shouldRetryHttpStatusByDefault(int statusCode);
 bool shouldRedirectHttpStatusWithLocation(const HttpResponse& httpResponse);
+bool processSkippedHttpResponse(
+    AbstractCommand* command, const std::unique_ptr<HttpResponse>& httpResponse,
+    const std::function<bool()>& prepareForRetry);
 
 class HttpSkipResponseCommand : public AbstractCommand {
 private:
@@ -62,9 +67,8 @@ private:
 
   std::unique_ptr<StreamFilter> streamFilter_;
 
-  bool processResponse();
-
   void poolConnection() const;
+  bool processResponse();
 
 protected:
   virtual bool executeInternal() CXX11_OVERRIDE;

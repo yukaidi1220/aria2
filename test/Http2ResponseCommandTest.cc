@@ -13,6 +13,7 @@
 
 #  include "AuthConfigFactory.h"
 #  include "DlAbortEx.h"
+#  include "DlRetryEx.h"
 #  include "DownloadContext.h"
 #  include "DownloadEngine.h"
 #  include "FileEntry.h"
@@ -44,7 +45,11 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDownloadCommandWaitsForEndStreamAcrossSegments);
   CPPUNIT_TEST(testDownloadCommandAbortsBodyLongerThanFile);
   CPPUNIT_TEST(testDownloadCommandAbortsClosedBeforeComplete);
-  CPPUNIT_TEST(testSkipBodyNotImplemented);
+  CPPUNIT_TEST(testSkipBodyRedirectsAfterEndStream);
+  CPPUNIT_TEST(testSkipBodyAborts404AfterEndStream);
+  CPPUNIT_TEST(testSkipBodyAbortsBodyLongerThanContentLength);
+  CPPUNIT_TEST(testSkipBodyRetriesBodyShorterThanContentLength);
+  CPPUNIT_TEST(testSkipBodyAbortsOnStreamError);
   CPPUNIT_TEST(testTransportFailureThrows);
   CPPUNIT_TEST(testStreamClosedBeforeHeadersThrows);
   CPPUNIT_TEST_SUITE_END();
@@ -59,7 +64,11 @@ public:
   void testDownloadCommandWaitsForEndStreamAcrossSegments();
   void testDownloadCommandAbortsBodyLongerThanFile();
   void testDownloadCommandAbortsClosedBeforeComplete();
-  void testSkipBodyNotImplemented();
+  void testSkipBodyRedirectsAfterEndStream();
+  void testSkipBodyAborts404AfterEndStream();
+  void testSkipBodyAbortsBodyLongerThanContentLength();
+  void testSkipBodyRetriesBodyShorterThanContentLength();
+  void testSkipBodyAbortsOnStreamError();
   void testTransportFailureThrows();
   void testStreamClosedBeforeHeadersThrows();
 };
@@ -173,7 +182,9 @@ struct CommandFixture {
     option->put(PREF_MAX_OVERALL_DOWNLOAD_LIMIT, "0");
     option->put(PREF_MAX_HTTP_PIPELINING, "1");
     option->put(PREF_HTTP_ACCEPT_GZIP, A2_V_FALSE);
+    option->put(PREF_MAX_FILE_NOT_FOUND, "0");
     option->put(PREF_NO_NETRC, A2_V_TRUE);
+    option->put(PREF_RETRY_WAIT, "0");
     option->put(PREF_CONTENT_DISPOSITION_DEFAULT_UTF8, A2_V_FALSE);
     option->put(PREF_REMOTE_TIME, A2_V_FALSE);
     option->put(PREF_SELECT_LEAST_USED_HOST, A2_V_FALSE);
@@ -368,13 +379,84 @@ void Http2ResponseCommandTest::testDownloadCommandAbortsClosedBeforeComplete()
   CPPUNIT_ASSERT_THROW(command->execute(), DlAbortEx);
 }
 
-void Http2ResponseCommandTest::testSkipBodyNotImplemented()
+void Http2ResponseCommandTest::testSkipBodyRedirectsAfterEndStream()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  auto headers = createHeaders(302, 4);
+  headers.emplace_back("location", "https://origin.example/next");
+  fixture.submitResponseHeaders(std::move(headers));
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+  CPPUNIT_ASSERT_EQUAL(std::string("https://origin.example/file.bin"),
+                       fixture.request->getCurrentUri());
+
+  fixture.server.submitEndStream(fixture.streamId);
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(command->executeInternal());
+  CPPUNIT_ASSERT_EQUAL(std::string("https://origin.example/next"),
+                       fixture.request->getCurrentUri());
+}
+
+void Http2ResponseCommandTest::testSkipBodyAborts404AfterEndStream()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  fixture.submitResponseHeaders(createHeaders(404, 4));
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+
+  fixture.server.submitEndStream(fixture.streamId);
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+void Http2ResponseCommandTest::testSkipBodyAbortsBodyLongerThanContentLength()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  auto headers = createHeaders(302, 4);
+  headers.emplace_back("location", "https://origin.example/next");
+  fixture.submitResponseHeaders(std::move(headers));
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body!");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+void Http2ResponseCommandTest::testSkipBodyRetriesBodyShorterThanContentLength()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  auto headers = createHeaders(302, 5);
+  headers.emplace_back("location", "https://origin.example/next");
+  fixture.submitResponseHeaders(std::move(headers));
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
+  fixture.server.submitEndStream(fixture.streamId);
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlRetryEx);
+  CPPUNIT_ASSERT_EQUAL(std::string("https://origin.example/file.bin"),
+                       fixture.request->getCurrentUri());
+}
+
+void Http2ResponseCommandTest::testSkipBodyAbortsOnStreamError()
 {
   CommandFixture fixture;
   auto command = fixture.makeCommand();
   auto headers = createHeaders(302, 0);
   headers.emplace_back("location", "https://origin.example/next");
   fixture.submitResponseHeaders(std::move(headers));
+  fixture.server.submitRstStream(fixture.streamId, NGHTTP2_CANCEL);
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
 
   CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
 }

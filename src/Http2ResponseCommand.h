@@ -54,6 +54,12 @@ class Http2ResponseCommand : public HttpResponseCommand {
 private:
   std::shared_ptr<Http2SingleStreamExchange> exchange_;
   std::unique_ptr<HttpRequest> httpRequest_;
+  std::unique_ptr<HttpResponse> skipHttpResponse_;
+  int64_t expectedSkipBodyLength_;
+  int64_t skippedBodyLength_;
+  bool expectedSkipBodyLengthKnown_;
+
+  bool drainSkippedResponseBody();
 
 protected:
   bool executeInternal() CXX11_OVERRIDE;
