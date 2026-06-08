@@ -40,6 +40,7 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include <cstdint>
+#  include <cstddef>
 #  include <memory>
 #  include <string>
 
@@ -48,6 +49,15 @@
 namespace aria2 {
 
 class HttpResponse;
+
+struct Http2TransactionState {
+  bool active = false;
+  bool responseAvailable = false;
+  bool headersComplete = false;
+  bool streamClosed = false;
+  size_t bodyLength = 0;
+  uint32_t errorCode = 0;
+};
 
 class Http2Transaction {
 private:
@@ -67,6 +77,7 @@ public:
 
   bool hasActiveStream() const;
   int32_t getStreamId() const;
+  Http2TransactionState getState() const;
   const Http2ResponseEvent* findResponseEvent() const;
   std::string popResponseBody(size_t maxLen);
   std::unique_ptr<Http2ResponseEvent> popResponseEvent();

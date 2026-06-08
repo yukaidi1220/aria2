@@ -68,6 +68,25 @@ bool Http2Transaction::hasActiveStream() const { return streamId_ != 0; }
 
 int32_t Http2Transaction::getStreamId() const { return streamId_; }
 
+Http2TransactionState Http2Transaction::getState() const
+{
+  Http2TransactionState state;
+  state.active = streamId_ != 0;
+  if (streamId_ == 0) {
+    return state;
+  }
+  auto event = connection_.findResponseEvent(streamId_);
+  if (!event) {
+    return state;
+  }
+  state.responseAvailable = true;
+  state.headersComplete = event->headersComplete;
+  state.streamClosed = event->streamClosed;
+  state.bodyLength = event->body.size();
+  state.errorCode = event->errorCode;
+  return state;
+}
+
 const Http2ResponseEvent* Http2Transaction::findResponseEvent() const
 {
   if (streamId_ == 0) {

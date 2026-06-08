@@ -150,6 +150,19 @@ public:
     CPPUNIT_ASSERT(!callbackFailed_);
   }
 
+  void submitResponseData(int32_t streamId, const std::string& body)
+  {
+    body_ = body;
+    bodyOffset_ = 0;
+    nghttp2_data_provider dataProvider;
+    dataProvider.source.ptr = this;
+    dataProvider.read_callback = readCallback;
+    assertNghttp2Success(nghttp2_submit_data(
+        session_, NGHTTP2_FLAG_NONE, streamId, &dataProvider));
+    assertNghttp2Success(nghttp2_session_send(session_));
+    CPPUNIT_ASSERT(!callbackFailed_);
+  }
+
   std::string drainOutboundData()
   {
     std::string data;

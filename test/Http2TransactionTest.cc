@@ -19,6 +19,7 @@ namespace aria2 {
 class Http2TransactionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2TransactionTest);
   CPPUNIT_TEST(testSubmitRequestStoresSingleStreamId);
+  CPPUNIT_TEST(testGetStateTracksResponseProgress);
   CPPUNIT_TEST(testDrainOutboundDataAfterSubmit);
   CPPUNIT_TEST(testFeedInboundDataPopHttpResponse);
   CPPUNIT_TEST(testPopResponseBodyKeepsActiveStream);
@@ -31,6 +32,7 @@ class Http2TransactionTest : public CppUnit::TestFixture {
 
 public:
   void testSubmitRequestStoresSingleStreamId();
+  void testGetStateTracksResponseProgress();
   void testDrainOutboundDataAfterSubmit();
   void testFeedInboundDataPopHttpResponse();
   void testPopResponseBodyKeepsActiveStream();
@@ -51,6 +53,39 @@ void Http2TransactionTest::testSubmitRequestStoresSingleStreamId()
   CPPUNIT_ASSERT(streamId > 0);
   CPPUNIT_ASSERT(transaction.hasActiveStream());
   CPPUNIT_ASSERT_EQUAL(streamId, transaction.getStreamId());
+}
+
+void Http2TransactionTest::testGetStateTracksResponseProgress()
+{
+  Http2Transaction transaction;
+  auto state = transaction.getState();
+  CPPUNIT_ASSERT(!state.active);
+  CPPUNIT_ASSERT(!state.responseAvailable);
+
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+  state = transaction.getState();
+  CPPUNIT_ASSERT(state.active);
+  CPPUNIT_ASSERT(!state.responseAvailable);
+  CPPUNIT_ASSERT_EQUAL((size_t)0, state.bodyLength);
+
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponseHeaders(streamId, http2test::createResponseHeaders());
+  transaction.feedInboundData(server.drainOutboundData());
+  state = transaction.getState();
+  CPPUNIT_ASSERT(state.active);
+  CPPUNIT_ASSERT(state.responseAvailable);
+  CPPUNIT_ASSERT(state.headersComplete);
+  CPPUNIT_ASSERT(!state.streamClosed);
+  CPPUNIT_ASSERT_EQUAL((size_t)0, state.bodyLength);
+
+  server.submitResponseData(streamId, "body");
+  transaction.feedInboundData(server.drainOutboundData());
+  state = transaction.getState();
+  CPPUNIT_ASSERT(state.active);
+  CPPUNIT_ASSERT(state.streamClosed);
+  CPPUNIT_ASSERT_EQUAL((size_t)4, state.bodyLength);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, state.errorCode);
 }
 
 void Http2TransactionTest::testDrainOutboundDataAfterSubmit()
