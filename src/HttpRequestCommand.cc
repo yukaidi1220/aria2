@@ -47,6 +47,7 @@
 #endif // HAVE_LIBNGHTTP2
 #include "HttpConnection.h"
 #include "HttpRequest.h"
+#include "HttpRequestFactory.h"
 #include "SegmentMan.h"
 #include "Segment.h"
 #include "Option.h"
@@ -89,111 +90,6 @@ HttpRequestCommand::HttpRequestCommand(
 }
 
 HttpRequestCommand::~HttpRequestCommand() = default;
-
-namespace {
-std::unique_ptr<HttpRequest>
-createHttpRequest(const std::shared_ptr<Request>& req,
-                  const std::shared_ptr<FileEntry>& fileEntry,
-                  const std::shared_ptr<Segment>& segment,
-                  const std::shared_ptr<Option>& option, const RequestGroup* rg,
-                  const DownloadEngine* e,
-                  const std::shared_ptr<Request>& proxyRequest,
-                  int64_t endOffset = 0)
-{
-  auto httpRequest = make_unique<HttpRequest>();
-  httpRequest->setUserAgent(option->get(PREF_USER_AGENT));
-  httpRequest->setRequest(req);
-  httpRequest->setFileEntry(fileEntry);
-  httpRequest->setSegment(segment);
-  httpRequest->addHeader(option->get(PREF_HEADER));
-  httpRequest->setCookieStorage(e->getCookieStorage().get());
-  httpRequest->setAuthConfigFactory(e->getAuthConfigFactory().get());
-  httpRequest->setOption(option.get());
-  httpRequest->setProxyRequest(proxyRequest);
-  httpRequest->setAcceptMetalink(rg->getDownloadContext()->getAcceptMetalink());
-  httpRequest->setNoWantDigest(option->getAsBool(PREF_NO_WANT_DIGEST_HEADER));
-
-  if (option->getAsBool(PREF_HTTP_ACCEPT_GZIP)) {
-    httpRequest->enableAcceptGZip();
-  }
-  else {
-    httpRequest->disableAcceptGZip();
-  }
-  if (option->getAsBool(PREF_HTTP_NO_CACHE)) {
-    httpRequest->enableNoCache();
-  }
-  else {
-    httpRequest->disableNoCache();
-  }
-  if (endOffset > 0) {
-    httpRequest->setEndOffsetOverride(endOffset);
-  }
-  return httpRequest;
-}
-
-void setConditionalGetHeader(HttpRequest* httpRequest,
-                             const std::shared_ptr<Request>& request,
-                             const std::shared_ptr<FileEntry>& fileEntry,
-                             const std::shared_ptr<Option>& option)
-{
-  if (!option->getAsBool(PREF_CONDITIONAL_GET) ||
-      (request->getProtocol() != "http" && request->getProtocol() != "https")) {
-    return;
-  }
-
-  std::string path;
-  if (fileEntry->getPath().empty()) {
-    auto& file = request->getFile();
-    path = util::createSafePath(
-        option->get(PREF_DIR),
-        (request->getFile().empty()
-             ? Request::DEFAULT_FILE
-             : util::percentDecode(std::begin(file), std::end(file))));
-  }
-  else {
-    path = fileEntry->getPath();
-  }
-
-  File ctrlfile(path + DefaultBtProgressInfoFile::getSuffix());
-  File file(path);
-  if (!ctrlfile.exists() && file.exists()) {
-    httpRequest->setIfModifiedSinceHeader(file.getModifiedTime().toHTTPDate());
-  }
-}
-
-int64_t getSegmentEndOffset(const std::shared_ptr<Request>& request,
-                            const std::shared_ptr<FileEntry>& fileEntry,
-                            RequestGroup* requestGroup,
-                            const std::shared_ptr<PieceStorage>& pieceStorage,
-                            const std::shared_ptr<Segment>& segment)
-{
-  if (request->getProtocol() != "ftp" && requestGroup->getTotalLength() > 0 &&
-      pieceStorage) {
-    size_t nextIndex =
-        pieceStorage->getNextUsedIndex(segment->getIndex());
-    return std::min(
-        fileEntry->getLength(),
-        fileEntry->gtoloff(static_cast<int64_t>(segment->getSegmentLength()) *
-                           nextIndex));
-  }
-  return 0;
-}
-
-std::unique_ptr<HttpRequest>
-createHttpRequestForSegment(const std::shared_ptr<Request>& request,
-                            const std::shared_ptr<FileEntry>& fileEntry,
-                            RequestGroup* requestGroup, DownloadEngine* e,
-                            const std::shared_ptr<Option>& option,
-                            const std::shared_ptr<Request>& proxyRequest,
-                            const std::shared_ptr<PieceStorage>& pieceStorage,
-                            const std::shared_ptr<Segment>& segment)
-{
-  auto endOffset = getSegmentEndOffset(request, fileEntry, requestGroup,
-                                       pieceStorage, segment);
-  return createHttpRequest(request, fileEntry, segment, option, requestGroup, e,
-                           proxyRequest, endOffset);
-}
-} // namespace
 
 #ifdef ENABLE_SSL
 namespace {
