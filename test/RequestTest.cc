@@ -25,6 +25,8 @@ class RequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testInnerLink);
   CPPUNIT_TEST(testInnerLinkInReferer);
   CPPUNIT_TEST(testGetURIHost);
+  CPPUNIT_TEST(testConnectedAddrConfirmation);
+  CPPUNIT_TEST(testResetConnectedAddrInfo);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -41,6 +43,8 @@ public:
   void testInnerLink();
   void testInnerLinkInReferer();
   void testGetURIHost();
+  void testConnectedAddrConfirmation();
+  void testResetConnectedAddrInfo();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(RequestTest);
@@ -91,6 +95,38 @@ void RequestTest::testSetUri7()
   bool v = req.setUri("http://");
 
   CPPUNIT_ASSERT(!v);
+}
+
+void RequestTest::testConnectedAddrConfirmation()
+{
+  Request req;
+
+  req.setConnectedAddrInfo("example.org", "192.0.2.1", 443);
+  CPPUNIT_ASSERT(!req.connectedAddrInfoConfirmed());
+
+  req.confirmConnectedAddrInfo();
+  CPPUNIT_ASSERT(req.connectedAddrInfoConfirmed());
+
+  req.unconfirmConnectedAddrInfo();
+  CPPUNIT_ASSERT(!req.connectedAddrInfoConfirmed());
+
+  req.confirmConnectedAddrInfo();
+  req.setConnectedAddrInfo("example.org", "2001:db8::1", 443);
+  CPPUNIT_ASSERT(!req.connectedAddrInfoConfirmed());
+}
+
+void RequestTest::testResetConnectedAddrInfo()
+{
+  Request req;
+
+  req.setConnectedAddrInfo("example.org", "192.0.2.1", 443);
+  req.confirmConnectedAddrInfo();
+  req.resetConnectedAddrInfo();
+
+  CPPUNIT_ASSERT_EQUAL(std::string(), req.getConnectedHostname());
+  CPPUNIT_ASSERT_EQUAL(std::string(), req.getConnectedAddr());
+  CPPUNIT_ASSERT_EQUAL((uint16_t)0, req.getConnectedPort());
+  CPPUNIT_ASSERT(!req.connectedAddrInfoConfirmed());
 }
 
 void RequestTest::testRedirectUri()

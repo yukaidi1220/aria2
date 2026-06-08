@@ -245,6 +245,11 @@ std::string getProxyUri(const std::string& protocol, const Option* option);
 // Selects an address for this command from resolved addresses.
 std::string selectIPAddress(const std::vector<std::string>& addrs,
                             cuid_t cuid);
+std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
+                            int preferredFamily);
+std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
+                            const std::shared_ptr<FileEntry>& fileEntry,
+                            const std::string& hostname, uint16_t port);
 
 // Moves ipaddr to the front while preserving the order of other addresses.
 void prioritizeIPAddress(std::vector<std::string>& addrs,

@@ -54,6 +54,7 @@ const std::string Request::DEFAULT_FILE = "index.html";
 
 Request::Request()
     : method_(METHOD_GET),
+      connectedAddrConfirmed_(false),
       tryCount_(0),
       redirectCount_(0),
       supportsPersistentConnection_(true),
@@ -84,6 +85,7 @@ std::string removeFragment(const std::string& uri)
 bool Request::setUri(const std::string& uri)
 {
   supportsPersistentConnection_ = true;
+  resetConnectedAddrInfo();
   uri_ = uri;
   return parseUri(uri_);
 }
@@ -91,7 +93,7 @@ bool Request::setUri(const std::string& uri)
 bool Request::resetUri()
 {
   supportsPersistentConnection_ = true;
-  setConnectedAddrInfo(A2STR::NIL, A2STR::NIL, 0);
+  resetConnectedAddrInfo();
   return parseUri(uri_);
 }
 
@@ -103,6 +105,7 @@ void Request::setReferer(const std::string& uri)
 bool Request::redirectUri(const std::string& uri)
 {
   supportsPersistentConnection_ = true;
+  resetConnectedAddrInfo();
   ++redirectCount_;
   if (uri.empty()) {
     return false;
@@ -197,6 +200,12 @@ void Request::setConnectedAddrInfo(const std::string& hostname,
   connectedHostname_ = hostname;
   connectedAddr_ = addr;
   connectedPort_ = port;
+  connectedAddrConfirmed_ = false;
+}
+
+void Request::resetConnectedAddrInfo()
+{
+  setConnectedAddrInfo(A2STR::NIL, A2STR::NIL, 0);
 }
 
 } // namespace aria2

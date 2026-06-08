@@ -156,6 +156,7 @@ void InitiateConnectionCommand::setConnectedAddrInfo(
 {
   auto endpoint = socket->getPeerInfo();
   req->setConnectedAddrInfo(hostname, endpoint.addr, endpoint.port);
+  req->confirmConnectedAddrInfo();
 }
 
 std::string selectBackupIPAddress(const std::vector<std::string>& addrs,

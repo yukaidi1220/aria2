@@ -7,6 +7,8 @@
 #include "prefs.h"
 #include "SocketCore.h"
 #include "SocketRecvBuffer.h"
+#include "FileEntry.h"
+#include "InorderURISelector.h"
 
 namespace aria2 {
 
@@ -17,6 +19,8 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressReturnsEmptyForEmptyList);
   CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
+  CPPUNIT_TEST(testSelectIPAddressPrefersRequestedDualStackFamily);
+  CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedConfirmedFamily);
   CPPUNIT_TEST(testPrioritizeIPAddress);
   CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
   CPPUNIT_TEST_SUITE_END();
@@ -30,6 +34,8 @@ public:
   void testSelectIPAddressReturnsEmptyForEmptyList();
   void testSelectIPAddressKeepsSingleFamilyOrder();
   void testSelectIPAddressAlternatesDualStackByCuid();
+  void testSelectIPAddressPrefersRequestedDualStackFamily();
+  void testSelectIPAddressPrefersUnderusedConfirmedFamily();
   void testPrioritizeIPAddress();
   void testPrioritizeIPAddressIgnoresUnknownAddress();
 };
@@ -107,6 +113,54 @@ void AbstractCommandTest::testSelectIPAddressAlternatesDualStackByCuid()
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
                        selectIPAddress(addrs, 1));
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
+}
+
+void AbstractCommandTest::testSelectIPAddressPrefersRequestedDualStackFamily()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("2001:db8::1");
+  addrs.push_back("192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 1, AF_INET));
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(addrs, 2, AF_INET6));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, 0));
+}
+
+void AbstractCommandTest::testSelectIPAddressPrefersUnderusedConfirmedFamily()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setMaxConnectionPerServer(2);
+  fileEntry->setUris(std::vector<std::string>{"https://example.org/file",
+                                              "https://example.org/file?part=2"});
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+
+  auto req = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req);
+  auto req2 = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req2);
+  req->setConnectedAddrInfo("example.org", "192.0.2.1", 443);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                       443));
+
+  req->confirmConnectedAddrInfo();
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                       443));
+
+  fileEntry->poolRequest(req);
+  CPPUNIT_ASSERT(!req->connectedAddrInfoConfirmed());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                       443));
 }
 
 void AbstractCommandTest::testPrioritizeIPAddress()

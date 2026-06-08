@@ -110,6 +110,7 @@ bool ConnectCommand::executeInternal()
           getRequest()->getConnectedAddr(), getRequest()->getConnectedPort())) {
     return true;
   }
+  getRequest()->confirmConnectedAddrInfo();
   if (backupConnectionInfo_) {
     backupConnectionInfo_->cancel = true;
     backupConnectionInfo_.reset();

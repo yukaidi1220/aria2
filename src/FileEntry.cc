@@ -222,6 +222,7 @@ std::shared_ptr<Request> FileEntry::getRequest(
   if (i != std::end(requestPool_)) {
     req = *i;
     requestPool_.erase(i);
+    req->resetConnectedAddrInfo();
     A2_LOG_DEBUG(fmt("Picked up from pool: %s", req->getUri().c_str()));
   }
 
@@ -255,6 +256,7 @@ FileEntry::findFasterRequest(const std::shared_ptr<Request>& base)
     // TODO we should consider that "fastest" is very slow.
     std::shared_ptr<Request> fastestRequest = *requestPool_.begin();
     requestPool_.erase(requestPool_.begin());
+    fastestRequest->resetConnectedAddrInfo();
     inFlightRequests_.insert(fastestRequest);
     lastFasterReplace_ = global::wallclock();
     return fastestRequest;
@@ -342,6 +344,7 @@ void FileEntry::poolRequest(const std::shared_ptr<Request>& request)
 {
   removeRequest(request);
   if (!request->removalRequested()) {
+    request->unconfirmConnectedAddrInfo();
     storePool(request);
   }
 }

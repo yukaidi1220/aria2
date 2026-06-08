@@ -58,6 +58,7 @@ private:
   std::string method_;
   std::string connectedHostname_;
   std::string connectedAddr_;
+  bool connectedAddrConfirmed_;
 
   int tryCount_;
   int redirectCount_;
@@ -159,11 +160,19 @@ public:
   void setConnectedAddrInfo(const std::string& hostname,
                             const std::string& addr, uint16_t port);
 
+  void resetConnectedAddrInfo();
+
   const std::string& getConnectedHostname() const { return connectedHostname_; }
 
   const std::string& getConnectedAddr() const { return connectedAddr_; }
 
   uint16_t getConnectedPort() const { return connectedPort_; }
+
+  void confirmConnectedAddrInfo() { connectedAddrConfirmed_ = true; }
+
+  void unconfirmConnectedAddrInfo() { connectedAddrConfirmed_ = false; }
+
+  bool connectedAddrInfoConfirmed() const { return connectedAddrConfirmed_; }
 
   void setWakeTime(Timer timer) { wakeTime_ = timer; }
 

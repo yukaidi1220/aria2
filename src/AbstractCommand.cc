@@ -937,7 +937,7 @@ std::string getProxyUri(const std::string& protocol, const Option* option)
 }
 
 std::string selectIPAddress(const std::vector<std::string>& addrs,
-                            cuid_t cuid)
+                            cuid_t cuid, int preferredFamily)
 {
   if (addrs.empty()) {
     return A2STR::NIL;
@@ -957,12 +957,20 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
     return addrs.front();
   }
 
-  auto family = cuid % 2 == 0 ? AF_INET : AF_INET6;
+  auto family = preferredFamily == AF_INET || preferredFamily == AF_INET6
+                    ? preferredFamily
+                    : (cuid % 2 == 0 ? AF_INET : AF_INET6);
   auto addr = std::find_if(std::begin(addrs), std::end(addrs),
                            [family](const std::string& addr) {
                              return isNumericAddressFamily(addr, family);
                            });
   return addr == std::end(addrs) ? addrs.front() : *addr;
+}
+
+std::string selectIPAddress(const std::vector<std::string>& addrs,
+                            cuid_t cuid)
+{
+  return selectIPAddress(addrs, cuid, 0);
 }
 
 void prioritizeIPAddress(std::vector<std::string>& addrs,
@@ -975,6 +983,61 @@ void prioritizeIPAddress(std::vector<std::string>& addrs,
   auto selected = std::move(*i);
   addrs.erase(i);
   addrs.insert(std::begin(addrs), std::move(selected));
+}
+
+namespace {
+int getLeastUsedConfirmedAddressFamily(
+    const std::shared_ptr<FileEntry>& fileEntry, const std::string& hostname,
+    uint16_t port, const std::vector<std::string>& addrs)
+{
+  if (!fileEntry) {
+    return 0;
+  }
+
+  auto hasIPv4 =
+      std::find_if(std::begin(addrs), std::end(addrs),
+                   [](const std::string& addr) {
+                     return isNumericAddressFamily(addr, AF_INET);
+                   }) != std::end(addrs);
+  auto hasIPv6 =
+      std::find_if(std::begin(addrs), std::end(addrs),
+                   [](const std::string& addr) {
+                     return isNumericAddressFamily(addr, AF_INET6);
+                   }) != std::end(addrs);
+  if (!hasIPv4 || !hasIPv6) {
+    return 0;
+  }
+
+  size_t ipv4 = 0;
+  size_t ipv6 = 0;
+  for (const auto& request : fileEntry->getInFlightRequests()) {
+    if (!request->connectedAddrInfoConfirmed() ||
+        request->getConnectedHostname() != hostname ||
+        request->getConnectedPort() != port) {
+      continue;
+    }
+    const auto& connectedAddr = request->getConnectedAddr();
+    if (isNumericAddressFamily(connectedAddr, AF_INET)) {
+      ++ipv4;
+    }
+    else if (isNumericAddressFamily(connectedAddr, AF_INET6)) {
+      ++ipv6;
+    }
+  }
+  if (ipv4 == ipv6) {
+    return 0;
+  }
+  return ipv4 < ipv6 ? AF_INET : AF_INET6;
+}
+} // namespace
+
+std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
+                            const std::shared_ptr<FileEntry>& fileEntry,
+                            const std::string& hostname, uint16_t port)
+{
+  return selectIPAddress(addrs, cuid,
+                         getLeastUsedConfirmedAddressFamily(
+                             fileEntry, hostname, port, addrs));
 }
 
 namespace {
@@ -1091,7 +1154,8 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     A2_LOG_NETWORK(
         fmt("DNS: hosts mapping %s -> %s", hostname.c_str(),
             strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
-    auto ipaddr = selectIPAddress(addrs, getCuid());
+    auto ipaddr =
+        selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
     prioritizeIPAddress(addrs, ipaddr);
     return ipaddr;
   }
@@ -1106,7 +1170,8 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
       e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
     }
 #endif // ENABLE_ASYNC_DNS
-    auto ipaddr = selectIPAddress(addrs, getCuid());
+    auto ipaddr =
+        selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
     prioritizeIPAddress(addrs, ipaddr);
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
                     strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
@@ -1178,7 +1243,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
                            hostname.c_str(), "No usable address returned"),
                        error_code::NAME_RESOLVE_ERROR);
   }
-  ipaddr = selectIPAddress(addrs, getCuid());
+  ipaddr = selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
   prioritizeIPAddress(addrs, ipaddr);
   return ipaddr;
 }
