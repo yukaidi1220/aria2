@@ -38,12 +38,15 @@
 
 #  include <algorithm>
 #  include <iterator>
+#  include <map>
+#  include <utility>
 #  include <vector>
 
 #  include <nghttp2/nghttp2.h>
 
 #  include "DlAbortEx.h"
 #  include "fmt.h"
+#  include "util.h"
 
 namespace aria2 {
 
@@ -61,10 +64,11 @@ nghttp2_nv makeNV(const Http2Header& header)
   return nv;
 }
 
-void checkNghttp2Result(int rv, const char* context)
+void checkNghttp2Result(ssize_t rv, const char* context)
 {
   if (rv < 0) {
-    throw DL_ABORT_EX(fmt("%s failed: %s", context, nghttp2_strerror(rv)));
+    throw DL_ABORT_EX(
+        fmt("%s failed: %s", context, nghttp2_strerror(static_cast<int>(rv))));
   }
 }
 } // namespace
@@ -73,6 +77,9 @@ struct Http2Session::Impl {
   nghttp2_session* session = nullptr;
   std::string outbound;
   bool sendFailed = false;
+  bool callbackFailed = false;
+  std::string callbackError;
+  std::map<int32_t, Http2ResponseEvent> responses;
 
   Impl()
   {
@@ -81,13 +88,13 @@ struct Http2Session::Impl {
                        "nghttp2_session_callbacks_new");
     nghttp2_session_callbacks_set_send_callback(callbacks, sendCallback);
     nghttp2_session_callbacks_set_on_frame_recv_callback(
-        callbacks, noopOnFrameRecvCallback);
+        callbacks, onFrameRecvCallback);
     nghttp2_session_callbacks_set_on_header_callback(
-        callbacks, noopOnHeaderCallback);
+        callbacks, onHeaderCallback);
     nghttp2_session_callbacks_set_on_data_chunk_recv_callback(
-        callbacks, noopOnDataChunkRecvCallback);
+        callbacks, onDataChunkRecvCallback);
     nghttp2_session_callbacks_set_on_stream_close_callback(
-        callbacks, noopOnStreamCloseCallback);
+        callbacks, onStreamCloseCallback);
     auto rv = nghttp2_session_client_new(&session, callbacks, this);
     nghttp2_session_callbacks_del(callbacks);
     checkNghttp2Result(rv, "nghttp2_session_client_new");
@@ -98,6 +105,37 @@ struct Http2Session::Impl {
   }
 
   ~Impl() { nghttp2_session_del(session); }
+
+  void setCallbackFailure(const char* error)
+  {
+    callbackFailed = true;
+    if (callbackError.empty()) {
+      callbackError = error;
+    }
+  }
+
+  static bool isResponseHeaders(const nghttp2_frame* frame)
+  {
+    return frame->hd.type == NGHTTP2_HEADERS &&
+           frame->headers.cat == NGHTTP2_HCAT_RESPONSE;
+  }
+
+  Http2ResponseEvent& getResponse(int32_t streamId)
+  {
+    auto& response = responses[streamId];
+    response.streamId = streamId;
+    return response;
+  }
+
+  void sendPendingData(const char* context)
+  {
+    sendFailed = false;
+    auto rv = nghttp2_session_send(session);
+    if (sendFailed) {
+      throw DL_ABORT_EX("nghttp2 send callback failed");
+    }
+    checkNghttp2Result(rv, context);
+  }
 
   static ssize_t sendCallback(nghttp2_session* session, const uint8_t* data,
                               size_t length, int flags, void* userData)
@@ -115,55 +153,96 @@ struct Http2Session::Impl {
     return static_cast<ssize_t>(length);
   }
 
-  static int noopOnFrameRecvCallback(nghttp2_session* session,
-                                     const nghttp2_frame* frame,
-                                     void* userData)
+  static int onFrameRecvCallback(nghttp2_session* session,
+                                 const nghttp2_frame* frame, void* userData)
   {
     (void)session;
-    (void)frame;
-    (void)userData;
+    auto impl = static_cast<Impl*>(userData);
+    try {
+      if (isResponseHeaders(frame)) {
+        auto& response = impl->getResponse(frame->hd.stream_id);
+        if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
+          response.headersComplete = true;
+        }
+        if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
+          response.streamClosed = true;
+          response.errorCode = NGHTTP2_NO_ERROR;
+        }
+      }
+    }
+    catch (...) {
+      impl->setCallbackFailure("nghttp2 frame callback failed");
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
     return 0;
   }
 
-  static int noopOnHeaderCallback(nghttp2_session* session,
-                                  const nghttp2_frame* frame,
-                                  const uint8_t* name, size_t namelen,
-                                  const uint8_t* value, size_t valuelen,
-                                  uint8_t flags, void* userData)
-  {
-    (void)session;
-    (void)frame;
-    (void)name;
-    (void)namelen;
-    (void)value;
-    (void)valuelen;
-    (void)flags;
-    (void)userData;
-    return 0;
-  }
-
-  static int noopOnDataChunkRecvCallback(nghttp2_session* session,
-                                         uint8_t flags, int32_t streamId,
-                                         const uint8_t* data, size_t len,
-                                         void* userData)
+  static int onHeaderCallback(nghttp2_session* session,
+                              const nghttp2_frame* frame, const uint8_t* name,
+                              size_t namelen, const uint8_t* value,
+                              size_t valuelen, uint8_t flags, void* userData)
   {
     (void)session;
     (void)flags;
-    (void)streamId;
-    (void)data;
-    (void)len;
-    (void)userData;
+    auto impl = static_cast<Impl*>(userData);
+    try {
+      if (!isResponseHeaders(frame)) {
+        return 0;
+      }
+
+      std::string nameString(reinterpret_cast<const char*>(name), namelen);
+      std::string valueString(reinterpret_cast<const char*>(value), valuelen);
+      auto& response = impl->getResponse(frame->hd.stream_id);
+      if (nameString == ":status") {
+        int32_t status = 0;
+        if (util::parseIntNoThrow(status, valueString) && status >= 100 &&
+            status <= 999) {
+          response.status = status;
+        }
+        return 0;
+      }
+      response.headers.emplace_back(std::move(nameString),
+                                    std::move(valueString));
+    }
+    catch (...) {
+      impl->setCallbackFailure("nghttp2 header callback failed");
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
     return 0;
   }
 
-  static int noopOnStreamCloseCallback(nghttp2_session* session,
-                                       int32_t streamId, uint32_t errorCode,
-                                       void* userData)
+  static int onDataChunkRecvCallback(nghttp2_session* session, uint8_t flags,
+                                     int32_t streamId, const uint8_t* data,
+                                     size_t len, void* userData)
   {
     (void)session;
-    (void)streamId;
-    (void)errorCode;
-    (void)userData;
+    (void)flags;
+    auto impl = static_cast<Impl*>(userData);
+    try {
+      impl->getResponse(streamId)
+          .body.append(reinterpret_cast<const char*>(data), len);
+    }
+    catch (...) {
+      impl->setCallbackFailure("nghttp2 data callback failed");
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
+    return 0;
+  }
+
+  static int onStreamCloseCallback(nghttp2_session* session, int32_t streamId,
+                                   uint32_t errorCode, void* userData)
+  {
+    (void)session;
+    auto impl = static_cast<Impl*>(userData);
+    try {
+      auto& response = impl->getResponse(streamId);
+      response.streamClosed = true;
+      response.errorCode = errorCode;
+    }
+    catch (...) {
+      impl->setCallbackFailure("nghttp2 stream close callback failed");
+      return NGHTTP2_ERR_CALLBACK_FAILURE;
+    }
     return 0;
   }
 };
@@ -183,12 +262,7 @@ int32_t Http2Session::submitRequestHeaders(const Http2HeaderBlock& headers)
       nghttp2_submit_request(impl_->session, nullptr, nva.data(), nva.size(),
                              nullptr, nullptr);
   checkNghttp2Result(streamId, "nghttp2_submit_request");
-  impl_->sendFailed = false;
-  checkNghttp2Result(nghttp2_session_send(impl_->session),
-                     "nghttp2_session_send");
-  if (impl_->sendFailed) {
-    throw DL_ABORT_EX("nghttp2 send callback failed");
-  }
+  impl_->sendPendingData("nghttp2_session_send");
   return streamId;
 }
 
@@ -197,6 +271,37 @@ std::string Http2Session::drainOutboundData()
   std::string data;
   data.swap(impl_->outbound);
   return data;
+}
+
+void Http2Session::feedInboundData(const std::string& data)
+{
+  impl_->callbackFailed = false;
+  impl_->callbackError.clear();
+  auto rv = nghttp2_session_mem_recv(
+      impl_->session, reinterpret_cast<const uint8_t*>(data.data()),
+      data.size());
+  if (impl_->callbackFailed) {
+    throw DL_ABORT_EX(impl_->callbackError.empty()
+                          ? "nghttp2 receive callback failed"
+                          : impl_->callbackError.c_str());
+  }
+  checkNghttp2Result(rv, "nghttp2_session_mem_recv");
+  impl_->sendPendingData("nghttp2_session_send");
+}
+
+bool Http2Session::hasResponseEvent(int32_t streamId) const
+{
+  return impl_->responses.find(streamId) != impl_->responses.end();
+}
+
+const Http2ResponseEvent* Http2Session::findResponseEvent(
+    int32_t streamId) const
+{
+  auto itr = impl_->responses.find(streamId);
+  if (itr == impl_->responses.end()) {
+    return nullptr;
+  }
+  return &itr->second;
 }
 
 } // namespace aria2

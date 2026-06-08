@@ -46,6 +46,16 @@
 
 namespace aria2 {
 
+struct Http2ResponseEvent {
+  int32_t streamId = 0;
+  int status = 0;
+  Http2HeaderBlock headers;
+  std::string body;
+  bool headersComplete = false;
+  bool streamClosed = false;
+  uint32_t errorCode = 0;
+};
+
 class Http2Session {
 private:
   struct Impl;
@@ -60,6 +70,9 @@ public:
 
   int32_t submitRequestHeaders(const Http2HeaderBlock& headers);
   std::string drainOutboundData();
+  void feedInboundData(const std::string& data);
+  bool hasResponseEvent(int32_t streamId) const;
+  const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;
 };
 
 } // namespace aria2
