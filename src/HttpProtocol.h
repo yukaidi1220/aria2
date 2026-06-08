@@ -52,6 +52,9 @@ enum HttpProtocol {
 
 HttpProtocol httpProtocolFromSelectedAlpn(const std::string& selectedAlpn);
 
+HttpProtocol requireSupportedHttpProtocolFromSelectedAlpn(
+    const std::string& selectedAlpn, bool allowHttp2);
+
 HttpProtocol decideHttpProtocolFromSelectedAlpn(const std::string& selectedAlpn,
                                                 bool enableHttp2);
 
