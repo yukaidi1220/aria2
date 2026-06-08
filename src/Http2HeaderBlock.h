@@ -42,6 +42,8 @@
 
 namespace aria2 {
 
+class HttpRequest;
+
 struct Http2Header {
   std::string name;
   std::string value;
@@ -53,6 +55,9 @@ typedef std::vector<Http2Header> Http2HeaderBlock;
 
 Http2HeaderBlock createHttp2HeaderBlockFromHttp1Request(
     const std::string& request, const std::string& scheme);
+
+Http2HeaderBlock createHttp2HeaderBlockFromHttpRequest(
+    HttpRequest& request);
 
 bool http2AllowsRequestHeader(const std::string& name,
                               const std::string& value);

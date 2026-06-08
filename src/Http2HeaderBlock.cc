@@ -39,6 +39,7 @@
 #include <utility>
 
 #include "DlAbortEx.h"
+#include "HttpRequest.h"
 #include "util.h"
 
 namespace aria2 {
@@ -261,6 +262,12 @@ Http2HeaderBlock createHttp2HeaderBlockFromHttp1Request(
   }
 
   return result;
+}
+
+Http2HeaderBlock createHttp2HeaderBlockFromHttpRequest(HttpRequest& request)
+{
+  return createHttp2HeaderBlockFromHttp1Request(request.createRequest(),
+                                               request.getProtocol());
 }
 
 } // namespace aria2

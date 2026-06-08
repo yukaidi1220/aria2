@@ -1,11 +1,21 @@
 #include "Http2HeaderBlock.h"
 
+#include <memory>
 #include <string>
 #include <vector>
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "AuthConfigFactory.h"
 #include "DlAbortEx.h"
+#include "FileEntry.h"
+#include "HttpRequest.h"
+#include "Option.h"
+#include "Piece.h"
+#include "PiecedSegment.h"
+#include "prefs.h"
+#include "Request.h"
+#include "Segment.h"
 
 namespace aria2 {
 
@@ -15,6 +25,8 @@ class Http2HeaderBlockTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateHttp2HeaderBlockFromAbsoluteFormRequest);
   CPPUNIT_TEST(testFilterConnectionSpecificHeaders);
   CPPUNIT_TEST(testTeTrailersIsAllowed);
+  CPPUNIT_TEST(testCreateHttp2HeaderBlockFromHttpRequest);
+  CPPUNIT_TEST(testCreateHttp2HeaderBlockFromHttpRequestHonorsLogicalHost);
   CPPUNIT_TEST(testRejectMalformedRequest);
   CPPUNIT_TEST_SUITE_END();
 
@@ -23,6 +35,8 @@ public:
   void testCreateHttp2HeaderBlockFromAbsoluteFormRequest();
   void testFilterConnectionSpecificHeaders();
   void testTeTrailersIsAllowed();
+  void testCreateHttp2HeaderBlockFromHttpRequest();
+  void testCreateHttp2HeaderBlockFromHttpRequestHonorsLogicalHost();
   void testRejectMalformedRequest();
 };
 
@@ -44,6 +58,18 @@ bool hasHeader(const Http2HeaderBlock& block, const std::string& name,
     }
   }
   return false;
+}
+
+void configureBaseHttpRequest(HttpRequest& httpRequest,
+                              const std::shared_ptr<Request>& request,
+                              Option* option,
+                              AuthConfigFactory* authConfigFactory)
+{
+  httpRequest.disableContentEncoding();
+  httpRequest.setRequest(request);
+  httpRequest.setAuthConfigFactory(authConfigFactory);
+  httpRequest.setOption(option);
+  httpRequest.setNoWantDigest(true);
 }
 } // namespace
 
@@ -136,6 +162,51 @@ void Http2HeaderBlockTest::testTeTrailersIsAllowed()
   CPPUNIT_ASSERT(hasHeader(block, "te", "trailers"));
   CPPUNIT_ASSERT(!hasHeader(block, "te", "gzip"));
   CPPUNIT_ASSERT(!hasHeader(block, "te", "trailers, gzip"));
+}
+
+void Http2HeaderBlockTest::testCreateHttp2HeaderBlockFromHttpRequest()
+{
+  auto request = std::make_shared<Request>();
+  CPPUNIT_ASSERT(request->setUri("https://origin.example:8443/file.bin"));
+  request->setPipeliningHint(true);
+  auto fileEntry = std::make_shared<FileEntry>("file.bin", 4096, 0);
+  auto piece = std::make_shared<Piece>(1, 1024);
+  auto segment = std::make_shared<PiecedSegment>(1024, piece);
+  Option option;
+  AuthConfigFactory authConfigFactory;
+  HttpRequest httpRequest;
+  configureBaseHttpRequest(httpRequest, request, &option, &authConfigFactory);
+  httpRequest.setFileEntry(fileEntry);
+  httpRequest.setSegment(segment);
+
+  auto block = createHttp2HeaderBlockFromHttpRequest(httpRequest);
+
+  CPPUNIT_ASSERT_EQUAL(std::string(":method"), nth(block, 0).name);
+  CPPUNIT_ASSERT_EQUAL(std::string("GET"), nth(block, 0).value);
+  CPPUNIT_ASSERT_EQUAL(std::string("https"), nth(block, 1).value);
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example:8443"),
+                       nth(block, 2).value);
+  CPPUNIT_ASSERT_EQUAL(std::string("/file.bin"), nth(block, 3).value);
+  CPPUNIT_ASSERT(hasHeader(block, "range", "bytes=1024-2047"));
+  CPPUNIT_ASSERT(!hasHeader(block, "connection", "close"));
+}
+
+void Http2HeaderBlockTest::testCreateHttp2HeaderBlockFromHttpRequestHonorsLogicalHost()
+{
+  auto request = std::make_shared<Request>();
+  CPPUNIT_ASSERT(request->setUri("https://198.18.0.18/file"));
+  Option option;
+  option.put(PREF_HOSTS_MAPPING, "198.18.0.18:origin.example");
+  option.put(PREF_TLS_SNI_HOST, "front.example");
+  AuthConfigFactory authConfigFactory;
+  HttpRequest httpRequest;
+  configureBaseHttpRequest(httpRequest, request, &option, &authConfigFactory);
+
+  auto block = createHttp2HeaderBlockFromHttpRequest(httpRequest);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), nth(block, 2).value);
+  CPPUNIT_ASSERT(!hasHeader(block, "host", "origin.example"));
+  CPPUNIT_ASSERT(!hasHeader(block, "host", "front.example"));
 }
 
 void Http2HeaderBlockTest::testRejectMalformedRequest()
