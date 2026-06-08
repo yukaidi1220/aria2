@@ -20,6 +20,7 @@ class TLSSNIHostMappingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testMappedIPv4Target);
   CPPUNIT_TEST(testMappedIPv6Target);
   CPPUNIT_TEST(testCaseInsensitiveTarget);
+  CPPUNIT_TEST(testWhitespaceAroundMappingTokens);
   CPPUNIT_TEST(testFirstMatchingEntryWins);
   CPPUNIT_TEST(testDefaultHostFallback);
   CPPUNIT_TEST(testRequestHostBeatsDefaultHost);
@@ -36,6 +37,7 @@ public:
   void testMappedIPv4Target();
   void testMappedIPv6Target();
   void testCaseInsensitiveTarget();
+  void testWhitespaceAroundMappingTokens();
   void testFirstMatchingEntryWins();
   void testDefaultHostFallback();
   void testRequestHostBeatsDefaultHost();
@@ -128,6 +130,22 @@ void TLSSNIHostMappingTest::testCaseInsensitiveTarget()
   auto config = getTLSSNIHostConfig("origin.example", &option);
   CPPUNIT_ASSERT_EQUAL(std::string("Front.Example"), config.sniHost);
   CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testWhitespaceAroundMappingTokens()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST,
+             " Origin.Example : Front.Example , "
+             "[2001:db8::1] : IPv6.Front.Example ");
+
+  auto hostConfig = getTLSSNIHostConfig("origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("Front.Example"), hostConfig.sniHost);
+  CPPUNIT_ASSERT(hostConfig.overridden);
+
+  auto ipv6Config = getTLSSNIHostConfig("2001:db8::1", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("IPv6.Front.Example"), ipv6Config.sniHost);
+  CPPUNIT_ASSERT(ipv6Config.overridden);
 }
 
 void TLSSNIHostMappingTest::testFirstMatchingEntryWins()

@@ -43,6 +43,11 @@ void AsyncDnsServerConfigTest::testParseDotServerConfig()
   CPPUNIT_ASSERT_EQUAL((uint16_t)8853, config.port);
   CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"), config.tlsHost);
 
+  config = parseAsyncDnsDotServerConfig(" 1.1.1.1 : 8853 ");
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8853, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string(), config.tlsHost);
+
   config = parseAsyncDnsDotServerConfig("1.1.1.1");
   CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), config.connectHost);
   CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.port);
@@ -156,7 +161,8 @@ void AsyncDnsServerConfigTest::testParseDohServerConfig()
 void AsyncDnsServerConfigTest::testParseDohServerConfigList()
 {
   auto configs = parseAsyncDnsDohServerConfigList(
-      "https://1.1.1.1/dns-query,https://[2606:4700:4700::1111]:8443/dns-query");
+      " https://1.1.1.1/dns-query , "
+      "https://[2606:4700:4700::1111]:8443/dns-query ");
   CPPUNIT_ASSERT_EQUAL((size_t)2, configs.size());
   CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), configs[0].connectHost);
   CPPUNIT_ASSERT_EQUAL((uint16_t)443, configs[0].port);

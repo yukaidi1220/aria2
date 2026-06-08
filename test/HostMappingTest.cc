@@ -20,6 +20,7 @@ class HostMappingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testIPv6ToHostname);
   CPPUNIT_TEST(testBracketedRequestIPv6ToHostname);
   CPPUNIT_TEST(testCaseInsensitiveHostname);
+  CPPUNIT_TEST(testWhitespaceAroundMappingTokens);
   CPPUNIT_TEST(testMultipleAddresses);
   CPPUNIT_TEST(testMalformedMapping);
   CPPUNIT_TEST_SUITE_END();
@@ -32,6 +33,7 @@ public:
   void testIPv6ToHostname();
   void testBracketedRequestIPv6ToHostname();
   void testCaseInsensitiveHostname();
+  void testWhitespaceAroundMappingTokens();
   void testMultipleAddresses();
   void testMalformedMapping();
 };
@@ -111,6 +113,20 @@ void HostMappingTest::testCaseInsensitiveHostname()
   CPPUNIT_ASSERT_EQUAL(std::string("198.18.0.18"), addrs[0]);
   CPPUNIT_ASSERT_EQUAL(std::string("front.example"),
                        getLogicalHostForRequest("198.18.0.19", &option));
+}
+
+void HostMappingTest::testWhitespaceAroundMappingTokens()
+{
+  Option option;
+  option.put(PREF_HOSTS_MAPPING,
+             " Origin.Example : 198.18.0.18 , "
+             "[2001:db8::1] : Front.Example ");
+
+  auto addrs = getMappedAddresses("origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("198.18.0.18"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("front.example"),
+                       getLogicalHostForRequest("2001:db8::1", &option));
 }
 
 void HostMappingTest::testMultipleAddresses()
