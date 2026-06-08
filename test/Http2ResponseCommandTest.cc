@@ -1,0 +1,255 @@
+#include "common.h"
+
+#ifdef HAVE_LIBNGHTTP2
+
+#  include "Http2ResponseCommand.h"
+
+#  include <memory>
+#  include <string>
+#  include <utility>
+
+#  include <cppunit/extensions/HelperMacros.h>
+#  include <nghttp2/nghttp2.h>
+
+#  include "AuthConfigFactory.h"
+#  include "DlAbortEx.h"
+#  include "DownloadContext.h"
+#  include "DownloadEngine.h"
+#  include "FileEntry.h"
+#  include "Http2SingleStreamExchange.h"
+#  include "Http2TestUtil.h"
+#  include "HttpRequest.h"
+#  include "Option.h"
+#  include "Request.h"
+#  include "RequestGroup.h"
+#  include "RequestGroupMan.h"
+#  include "SelectEventPoll.h"
+#  include "TestUtil.h"
+#  include "prefs.h"
+#  include "util.h"
+
+namespace aria2 {
+
+class Http2ResponseCommandTest : public CppUnit::TestFixture {
+  CPPUNIT_TEST_SUITE(Http2ResponseCommandTest);
+  CPPUNIT_TEST(testWaitsForHeaders);
+  CPPUNIT_TEST(testZeroLengthResponseCompletes);
+  CPPUNIT_TEST(testBodyDownloadNotImplemented);
+  CPPUNIT_TEST(testSkipBodyNotImplemented);
+  CPPUNIT_TEST(testTransportFailureThrows);
+  CPPUNIT_TEST(testStreamClosedBeforeHeadersThrows);
+  CPPUNIT_TEST_SUITE_END();
+
+public:
+  void testWaitsForHeaders();
+  void testZeroLengthResponseCompletes();
+  void testBodyDownloadNotImplemented();
+  void testSkipBodyNotImplemented();
+  void testTransportFailureThrows();
+  void testStreamClosedBeforeHeadersThrows();
+};
+
+CPPUNIT_TEST_SUITE_REGISTRATION(Http2ResponseCommandTest);
+
+namespace {
+
+class TestHttp2ResponseCommand : public Http2ResponseCommand {
+private:
+  bool requeued_ = false;
+
+public:
+  TestHttp2ResponseCommand(
+      cuid_t cuid, const std::shared_ptr<Request>& req,
+      const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
+      std::shared_ptr<Http2SingleStreamExchange> exchange,
+      std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
+      const std::shared_ptr<SocketCore>& s)
+      : Http2ResponseCommand(cuid, req, fileEntry, requestGroup,
+                             std::move(exchange), std::move(httpRequest), e, s)
+  {
+  }
+
+  using Http2ResponseCommand::executeInternal;
+
+  bool requeued() const { return requeued_; }
+
+protected:
+  void requeueSelf() CXX11_OVERRIDE { requeued_ = true; }
+};
+
+struct CommandFixture {
+  std::shared_ptr<Option> option;
+  std::shared_ptr<RequestGroup> requestGroup;
+  DownloadEngine engine;
+  RequestGroupMan* requestGroupMan;
+  std::shared_ptr<Request> request;
+  std::shared_ptr<FileEntry> fileEntry;
+  AuthConfigFactory authConfigFactory;
+  http2test::MemoryHttp2Transport transport;
+  std::shared_ptr<Http2SingleStreamExchange> exchange;
+  http2test::FakeHttp2ServerSession server;
+  int32_t streamId;
+
+  CommandFixture(int64_t totalLength = 0, bool dryRun = true,
+                 bool initPieceStorage = false)
+      : option(makeOption(dryRun)), requestGroup(createRequestGroup(
+                                      1_m, totalLength, "file.bin",
+                                      "https://origin.example/file.bin",
+                                      option)),
+        engine(make_unique<SelectEventPoll>()),
+        requestGroupMan(nullptr),
+        request(makeRequest()),
+        fileEntry(requestGroup->getDownloadContext()->getFirstFileEntry()),
+        exchange(std::make_shared<Http2SingleStreamExchange>(transport)),
+        streamId(0)
+  {
+    engine.setOption(option.get());
+    auto rgman = make_unique<RequestGroupMan>(
+        std::vector<std::shared_ptr<RequestGroup>>{}, 1, option.get());
+    requestGroupMan = rgman.get();
+    engine.setRequestGroupMan(std::move(rgman));
+    requestGroup->setRequestGroupMan(requestGroupMan);
+    fileEntry->poolRequest(request);
+    if (initPieceStorage) {
+      requestGroup->initPieceStorage();
+    }
+
+    auto httpRequest = makeHttpRequest();
+    streamId = exchange->submitRequest(*httpRequest);
+    CPPUNIT_ASSERT(exchange->flushOutboundData());
+    server.feedInboundData(transport.drainOutboundData());
+  }
+
+  static std::shared_ptr<Option> makeOption(bool dryRun)
+  {
+    auto option = std::make_shared<Option>();
+    option->put(PREF_DIR, ".");
+    option->put(PREF_DRY_RUN, dryRun ? A2_V_TRUE : A2_V_FALSE);
+    option->put(PREF_FILE_ALLOCATION, V_NONE);
+    option->put(PREF_PIECE_LENGTH, "1048576");
+    option->put(PREF_SPLIT, "1");
+    option->put(PREF_TIMEOUT, "60");
+    option->put(PREF_MAX_DOWNLOAD_LIMIT, "0");
+    option->put(PREF_MAX_OVERALL_DOWNLOAD_LIMIT, "0");
+    option->put(PREF_MAX_HTTP_PIPELINING, "1");
+    option->put(PREF_HTTP_ACCEPT_GZIP, A2_V_FALSE);
+    option->put(PREF_NO_NETRC, A2_V_TRUE);
+    option->put(PREF_CONTENT_DISPOSITION_DEFAULT_UTF8, A2_V_FALSE);
+    option->put(PREF_REMOTE_TIME, A2_V_FALSE);
+    option->put(PREF_SELECT_LEAST_USED_HOST, A2_V_FALSE);
+    option->put(PREF_STARTUP_IDLE_TIME, "0");
+    option->put(PREF_LOWEST_SPEED_LIMIT, "0");
+    option->put(PREF_FOLLOW_TORRENT, A2_V_FALSE);
+    option->put(PREF_FOLLOW_METALINK, A2_V_FALSE);
+    return option;
+  }
+
+  static std::shared_ptr<Request> makeRequest()
+  {
+    auto request = std::make_shared<Request>();
+    CPPUNIT_ASSERT(request->setUri("https://origin.example/file.bin"));
+    request->setMethod(Request::METHOD_GET);
+    request->supportsPersistentConnection(true);
+    return request;
+  }
+
+  std::unique_ptr<HttpRequest> makeHttpRequest()
+  {
+    auto httpRequest = make_unique<HttpRequest>();
+    httpRequest->disableContentEncoding();
+    httpRequest->setRequest(request);
+    httpRequest->setFileEntry(fileEntry);
+    httpRequest->setAuthConfigFactory(&authConfigFactory);
+    httpRequest->setOption(option.get());
+    httpRequest->setCookieStorage(engine.getCookieStorage().get());
+    httpRequest->setNoWantDigest(true);
+    httpRequest->createRequest();
+    return httpRequest;
+  }
+
+  std::unique_ptr<TestHttp2ResponseCommand> makeCommand()
+  {
+    return make_unique<TestHttp2ResponseCommand>(
+        1, request, fileEntry, requestGroup.get(), exchange, makeHttpRequest(),
+        &engine, nullptr);
+  }
+
+  void submitResponseHeaders(Http2HeaderBlock headers)
+  {
+    server.submitResponseHeaders(streamId, headers);
+    transport.appendInboundData(server.drainOutboundData());
+  }
+};
+
+Http2HeaderBlock createHeaders(int statusCode, int64_t contentLength = -1)
+{
+  Http2HeaderBlock headers;
+  headers.emplace_back(":status", util::uitos(statusCode));
+  if (contentLength >= 0) {
+    headers.emplace_back("content-length", util::uitos(contentLength));
+  }
+  return headers;
+}
+
+} // namespace
+
+void Http2ResponseCommandTest::testWaitsForHeaders()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+}
+
+void Http2ResponseCommandTest::testZeroLengthResponseCompletes()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  fixture.submitResponseHeaders(createHeaders(200, 0));
+
+  CPPUNIT_ASSERT(command->executeInternal());
+}
+
+void Http2ResponseCommandTest::testBodyDownloadNotImplemented()
+{
+  CommandFixture fixture(4, false, true);
+  auto command = fixture.makeCommand();
+  fixture.submitResponseHeaders(createHeaders(200, 4));
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+void Http2ResponseCommandTest::testSkipBodyNotImplemented()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  auto headers = createHeaders(302, 0);
+  headers.emplace_back("location", "https://origin.example/next");
+  fixture.submitResponseHeaders(std::move(headers));
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+void Http2ResponseCommandTest::testTransportFailureThrows()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  fixture.transport.setFailRead(true);
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+void Http2ResponseCommandTest::testStreamClosedBeforeHeadersThrows()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  fixture.server.submitRstStream(fixture.streamId, NGHTTP2_CANCEL);
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+} // namespace aria2
+
+#endif // HAVE_LIBNGHTTP2

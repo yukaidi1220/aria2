@@ -125,6 +125,7 @@ endif # HAVE_SQLITE3
 if HAVE_LIBNGHTTP2
 aria2c_SOURCES += \
 	Http2BodyQueueTest.cc Http2ConnectionTest.cc\
+	Http2ResponseCommandTest.cc\
 	Http2ResponseAdapterTest.cc Http2SessionTest.cc\
 	Http2SingleStreamExchangeTest.cc\
 	Http2SocketCoreTransportTest.cc Http2TestUtil.h\

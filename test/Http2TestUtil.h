@@ -269,6 +269,14 @@ public:
     CPPUNIT_ASSERT(!callbackFailed_);
   }
 
+  void submitRstStream(int32_t streamId, uint32_t errorCode)
+  {
+    assertNghttp2Success(nghttp2_submit_rst_stream(
+        session_, NGHTTP2_FLAG_NONE, streamId, errorCode));
+    assertNghttp2Success(nghttp2_session_send(session_));
+    CPPUNIT_ASSERT(!callbackFailed_);
+  }
+
   std::string drainOutboundData()
   {
     std::string data;
