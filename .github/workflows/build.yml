@@ -129,6 +129,10 @@ jobs:
             autoreconf -i &&
             ./mingw-config &&
             make -j\$(nproc) &&
+            if ${{ matrix.host }}-objdump -p src/aria2c.exe | grep -q ConvertInterfaceIndexToLuid; then
+              echo 'aria2c.exe imports ConvertInterfaceIndexToLuid, which is unavailable on Windows XP.'
+              exit 1
+            fi &&
             ${{ matrix.host }}-strip src/aria2c.exe &&
             cp src/aria2c.exe /out/
           "

@@ -67,6 +67,7 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --without-gnutls \
     --with-openssl \
     --with-sqlite3 \
+    --without-libuv \
     --without-libxml2 \
     --with-libexpat \
     --with-libz \
@@ -77,7 +78,7 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --without-libnettle \
     --with-cppunit-prefix=$PREFIX \
     ARIA2_STATIC=yes \
-    CPPFLAGS="-I$PREFIX/include -DCARES_STATICLIB" \
+    CPPFLAGS="-I$PREFIX/include -DCARES_STATICLIB -DWINVER=0x0501 -D_WIN32_WINNT=0x0501" \
     LDFLAGS="-L$PREFIX/lib" \
     ZLIB_CFLAGS="-I$PREFIX/include" \
     ZLIB_LIBS="-L$PREFIX/lib -lz" \
