@@ -9,25 +9,8 @@ on:
 
 jobs:
   linux:
-    name: linux (${{ matrix.os }}, ${{ matrix.compiler }}, ${{ matrix.crypto }}, ${{ matrix.bittorrent }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-        - ubuntu-22.04
-        - ubuntu-24.04
-        - ubuntu-22.04-arm
-        - ubuntu-24.04-arm
-        compiler:
-        - gcc
-        - clang
-        crypto:
-        - openssl
-        - gnutls
-        bittorrent:
-        - with-bt
-        - without-bt
+    name: linux x86_64
+    runs-on: ubuntu-22.04
 
     steps:
     - uses: actions/checkout@v6
@@ -40,14 +23,12 @@ jobs:
           automake \
           autopoint \
           autotools-dev \
-          clang \
           g++ \
           gcc \
           libcppunit-dev \
           libc-ares-dev \
-          libgnutls28-dev \
-          libgmp-dev \
           libexpat1-dev \
+          libgmp-dev \
           libnghttp2-dev \
           libsqlite3-dev \
           libssh2-1-dev \
@@ -58,36 +39,11 @@ jobs:
           pkg-config \
           zlib1g-dev
 
-    - name: Select compiler
-      run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          echo "CC=clang" >> "$GITHUB_ENV"
-          echo "CXX=clang++" >> "$GITHUB_ENV"
-        else
-          echo "CC=gcc" >> "$GITHUB_ENV"
-          echo "CXX=g++" >> "$GITHUB_ENV"
-        fi
-
-    - name: Configure feature flags
-      run: |
-        feature_flags=
-
-        if [ "${{ matrix.bittorrent }}" = "without-bt" ]; then
-          feature_flags="$feature_flags --disable-bittorrent"
-        fi
-
-        echo "FEATURE_FLAGS=$feature_flags" >> "$GITHUB_ENV"
-
     - name: Generate configure script
       run: autoreconf -i
 
-    - name: Configure with OpenSSL
-      if: matrix.crypto == 'openssl'
-      run: ./configure --without-gnutls --with-openssl $FEATURE_FLAGS
-
-    - name: Configure with GnuTLS
-      if: matrix.crypto == 'gnutls'
-      run: ./configure --with-gnutls --without-openssl $FEATURE_FLAGS
+    - name: Configure
+      run: ./configure --without-gnutls --with-openssl
 
     - name: Build and test
       run: make -j"$(nproc)" check
@@ -100,22 +56,12 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: aria2-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.crypto }}-${{ matrix.bittorrent }}
+        name: aria2-linux-x86_64
         path: out/aria2c
 
   macos:
-    name: macos (${{ matrix.os }}, ${{ matrix.compiler }}, appletls)
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os:
-        - macos-14
-        - macos-15
-        - macos-15-intel
-        compiler:
-        - clang
-        - gcc
+    name: macos x86_64
+    runs-on: macos-15-intel
 
     steps:
     - uses: actions/checkout@v6
@@ -139,26 +85,6 @@ jobs:
           pkg-config \
           sqlite3
 
-    - name: Install GNU GCC
-      if: matrix.compiler == 'gcc'
-      run: brew install gcc
-
-    - name: Select compiler
-      run: |
-        if [ "${{ matrix.compiler }}" = "clang" ]; then
-          echo "CC=clang" >> "$GITHUB_ENV"
-          echo "CXX=clang++" >> "$GITHUB_ENV"
-        else
-          gcc_bin="$(find "$(brew --prefix gcc)/bin" -name 'gcc-[0-9]*' | awk -F- '{ print $NF " " $0 }' | sort -n | tail -n 1 | cut -d' ' -f2-)"
-          if [ -z "$gcc_bin" ]; then
-            echo "Homebrew gcc executable not found" >&2
-            exit 1
-          fi
-          gcc_ver="${gcc_bin##*-}"
-          echo "CC=$gcc_bin" >> "$GITHUB_ENV"
-          echo "CXX=$(brew --prefix gcc)/bin/g++-$gcc_ver" >> "$GITHUB_ENV"
-        fi
-
     - name: Configure Homebrew pkg-config paths
       run: |
         pkg_config_path=
@@ -173,7 +99,7 @@ jobs:
     - name: Generate configure script
       run: autoreconf -i
 
-    - name: Configure with AppleTLS
+    - name: Configure
       run: |
         ./configure \
           --without-openssl \
@@ -192,5 +118,5 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: aria2-${{ matrix.os }}-${{ matrix.compiler }}-appletls
+        name: aria2-macos-x86_64
         path: out/aria2c
