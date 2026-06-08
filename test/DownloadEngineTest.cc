@@ -32,6 +32,9 @@ class DownloadEngineTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPopPooledSocketByAddressListWithPredicate);
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testFindActiveHttp2ConnectionHonorsRemoteStreamLimit);
+  CPPUNIT_TEST(testHttp2ConnectionContextKeepsRequestGroupAlive);
+  CPPUNIT_TEST(testPopIdleHttp2Connection);
+  CPPUNIT_TEST(testPoolIdleHttp2ConnectionSkipsActiveExchange);
 #endif // HAVE_LIBNGHTTP2
   CPPUNIT_TEST_SUITE_END();
 
@@ -41,6 +44,9 @@ public:
   void testPopPooledSocketByAddressListWithPredicate();
 #ifdef HAVE_LIBNGHTTP2
   void testFindActiveHttp2ConnectionHonorsRemoteStreamLimit();
+  void testHttp2ConnectionContextKeepsRequestGroupAlive();
+  void testPopIdleHttp2Connection();
+  void testPoolIdleHttp2ConnectionSkipsActiveExchange();
 #endif // HAVE_LIBNGHTTP2
 };
 
@@ -150,17 +156,31 @@ void DownloadEngineTest::testPopPooledSocketByAddressListWithPredicate()
 }
 
 #ifdef HAVE_LIBNGHTTP2
+std::shared_ptr<Request> createHttp2Request(const std::string& addr,
+                                            uint16_t port)
+{
+  auto request = std::make_shared<Request>();
+  CPPUNIT_ASSERT(request->setUri("https://example.org/file"));
+  request->setConnectedAddrInfo("example.org", addr, port);
+  request->confirmConnectedAddrInfo();
+  request->supportsPersistentConnection(true);
+  return request;
+}
+
+std::shared_ptr<Http2MultiplexExchange> createHttp2Exchange()
+{
+  return std::make_shared<Http2MultiplexExchange>(
+      make_unique<http2test::MemoryHttp2Transport>());
+}
+
 void DownloadEngineTest::testFindActiveHttp2ConnectionHonorsRemoteStreamLimit()
 {
   DownloadEngine e(make_unique<SelectEventPoll>());
   auto sockets = createSocketPair();
   auto peer = sockets.first->getPeerInfo();
   auto option = std::make_shared<Option>();
-  RequestGroup requestGroup(GroupId::create(), option);
-  auto request = std::make_shared<Request>();
-  CPPUNIT_ASSERT(request->setUri("https://example.org/file"));
-  request->setConnectedAddrInfo("example.org", peer.addr, peer.port);
-  request->confirmConnectedAddrInfo();
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = createHttp2Request(peer.addr, peer.port);
 
   auto transport = make_unique<http2test::MemoryHttp2Transport>();
   auto rawTransport = transport.get();
@@ -173,14 +193,81 @@ void DownloadEngineTest::testFindActiveHttp2ConnectionHonorsRemoteStreamLimit()
   exchange->submitRequest(http2test::createRequestHeaders());
 
   auto context = std::make_shared<Http2ConnectionContext>(
-      &requestGroup, exchange, sockets.first);
+      requestGroup, exchange, sockets.first);
   e.registerActiveHttp2Connection(request.get(), context);
 
   auto active = e.findActiveHttp2Connection(
-      &requestGroup, request.get(), "example.org", peer.addr, peer.port,
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
       std::function<bool(const std::shared_ptr<SocketCore>&)>());
 
   CPPUNIT_ASSERT(!active.isActive());
+}
+
+void DownloadEngineTest::testHttp2ConnectionContextKeepsRequestGroupAlive()
+{
+  auto sockets = createSocketPair();
+  auto option = std::make_shared<Option>();
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  std::weak_ptr<RequestGroup> weakRequestGroup = requestGroup;
+  auto exchange = createHttp2Exchange();
+  auto context = std::make_shared<Http2ConnectionContext>(
+      requestGroup, exchange, sockets.first);
+
+  requestGroup.reset();
+  CPPUNIT_ASSERT(!weakRequestGroup.expired());
+
+  context.reset();
+  CPPUNIT_ASSERT(weakRequestGroup.expired());
+}
+
+void DownloadEngineTest::testPopIdleHttp2Connection()
+{
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  auto sockets = createSocketPair();
+  auto peer = sockets.first->getPeerInfo();
+  auto option = std::make_shared<Option>();
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = createHttp2Request(peer.addr, peer.port);
+  auto exchange = createHttp2Exchange();
+  auto context = std::make_shared<Http2ConnectionContext>(
+      requestGroup, exchange, sockets.first);
+
+  e.poolIdleHttp2Connection(request.get(), context);
+
+  auto idle = e.popIdleHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+
+  CPPUNIT_ASSERT(idle.isActive());
+  CPPUNIT_ASSERT(idle.context == context);
+  CPPUNIT_ASSERT(idle.exchange == exchange);
+  CPPUNIT_ASSERT(idle.socket == sockets.first);
+
+  idle = e.popIdleHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+  CPPUNIT_ASSERT(!idle.isActive());
+}
+
+void DownloadEngineTest::testPoolIdleHttp2ConnectionSkipsActiveExchange()
+{
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  auto sockets = createSocketPair();
+  auto peer = sockets.first->getPeerInfo();
+  auto option = std::make_shared<Option>();
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = createHttp2Request(peer.addr, peer.port);
+  auto exchange = createHttp2Exchange();
+  exchange->submitRequest(http2test::createRequestHeaders());
+  auto context = std::make_shared<Http2ConnectionContext>(
+      requestGroup, exchange, sockets.first);
+
+  e.poolIdleHttp2Connection(request.get(), context);
+
+  auto idle = e.popIdleHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+  CPPUNIT_ASSERT(!idle.isActive());
 }
 #endif // HAVE_LIBNGHTTP2
 

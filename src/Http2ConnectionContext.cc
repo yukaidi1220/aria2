@@ -41,17 +41,21 @@
 namespace aria2 {
 
 Http2ConnectionContext::Http2ConnectionContext(
-    RequestGroup* requestGroup,
+    const std::shared_ptr<RequestGroup>& requestGroup,
     const std::shared_ptr<Http2MultiplexExchange>& exchange,
     const std::shared_ptr<SocketCore>& socket)
     : requestGroup_(requestGroup), exchange_(exchange), socket_(socket)
 {
-  requestGroup_->increaseStreamConnection();
+  if (requestGroup_) {
+    requestGroup_->increaseStreamConnection();
+  }
 }
 
 Http2ConnectionContext::~Http2ConnectionContext()
 {
-  requestGroup_->decreaseStreamConnection();
+  if (requestGroup_) {
+    requestGroup_->decreaseStreamConnection();
+  }
 }
 
 } // namespace aria2

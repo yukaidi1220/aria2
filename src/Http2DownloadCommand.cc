@@ -96,6 +96,15 @@ Http2DownloadCommand::Http2DownloadCommand(
 
 Http2DownloadCommand::~Http2DownloadCommand() = default;
 
+void Http2DownloadCommand::poolIdleConnection()
+{
+  if (getRequest()->supportsPersistentConnection() && connectionContext_ &&
+      !exchange_->hasActiveStreams()) {
+    getDownloadEngine()->poolIdleHttp2Connection(getRequest().get(),
+                                                 connectionContext_);
+  }
+}
+
 bool Http2DownloadCommand::executeInternal()
 {
   if (downloadSpeedLimitExceeded()) {
@@ -147,6 +156,7 @@ bool Http2DownloadCommand::executeInternal()
       }
       if (state.streamClosed) {
         exchange_->popResponseEvent(streamId_);
+        poolIdleConnection();
       }
       return true;
     }
@@ -178,6 +188,7 @@ bool Http2DownloadCommand::executeInternal()
       throw DL_ABORT_EX("HTTP/2 response body did not complete on stream close");
     }
     exchange_->popResponseEvent(streamId_);
+    poolIdleConnection();
     return true;
   }
 

@@ -39,6 +39,7 @@
 #include "Request.h"
 #include "DownloadEngine.h"
 #include "RequestGroup.h"
+#include "RequestGroupMan.h"
 #include "HttpResponseCommand.h"
 #ifdef HAVE_LIBNGHTTP2
 #  include "Http2ConnectionContext.h"
@@ -71,6 +72,7 @@
 #include "SocketRecvBuffer.h"
 #include "InitiateConnectionCommandFactory.h"
 #include "RecoverableException.h"
+#include "DlAbortEx.h"
 
 namespace aria2 {
 
@@ -202,8 +204,14 @@ bool HttpRequestCommand::executeInternal()
 
       auto exchange = std::make_shared<Http2MultiplexExchange>(
           make_unique<Http2SocketCoreTransport>(getSocket()));
+      auto requestGroup =
+          getDownloadEngine()->getRequestGroupMan()->findGroup(
+              getRequestGroup()->getGID());
+      if (!requestGroup) {
+        throw DL_ABORT_EX("HTTP/2 request group was not registered");
+      }
       auto connectionContext = std::make_shared<Http2ConnectionContext>(
-          getRequestGroup(), exchange, getSocket());
+          requestGroup, exchange, getSocket());
       auto streamId = exchange->submitRequest(*httpRequest);
       getDownloadEngine()->registerActiveHttp2Connection(getRequest().get(),
                                                           connectionContext);

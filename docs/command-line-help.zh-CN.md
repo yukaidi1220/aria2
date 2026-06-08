@@ -140,10 +140,10 @@ XP/Win7 注意：
 - `src/SocketCore.cc::SocketCore::tlsHandshake()` 先检查 `TLSSession::supportsAlpnProtocols()`；支持时调用 `setAlpnProtocols()`，不支持时跳过 ALPN 设置并继续普通 TLS 握手。
 - `src/HttpProtocol.cc::decideHttpProtocolFromSelectedAlpn()` 根据服务端选中的 ALPN 判定 HTTP/1.1 或 HTTP/2。
 - `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2MultiplexExchange`、`Http2SocketCoreTransport` 和 `Http2ConnectionContext`，提交首个 stream 后调用 `DownloadEngine::registerActiveHttp2Connection()` 登记 active H2 context。
-- `src/DownloadEngine.cc` 维护 active H2 context registry：key 由 URL 协议/host/port 加已连接的 hostname/address/port 组成，value 是弱引用 `ActiveHttp2PoolEntry`，失效、socket 关闭或没有 active stream 时会被淘汰。
-- `src/HttpInitiateConnectionCommand.cc` 在新请求建连前调用 `DownloadEngine::findActiveHttp2Connection()`，命中 active context 后直接在既有 `Http2MultiplexExchange` 上 `submitRequest()` 创建新 stream。
-- `src/Http2ResponseCommand.cc` 和 `src/Http2DownloadCommand.cc` 都按 `streamId` 取响应/正文，并在 `executeInternal()` 中调用 `exchange_->pump()` 驱动共享连接。
-- `src/Http2ConnectionContext.cc` 在构造/析构时调用 `RequestGroup::increaseStreamConnection()` / `decreaseStreamConnection()` 持有连接计数；H2 stream command 传入 `incNumConnection=false`，避免每个 stream 都重复占用普通连接计数。
+- `src/DownloadEngine.cc` 维护 active H2 context registry 与 same-origin idle H2 pool：key 由 URL 协议/host/port 加已连接的 hostname/address/port 组成；active pool 用弱引用，idle pool 用强引用持有 `Http2ConnectionContext`。
+- `src/HttpInitiateConnectionCommand.cc` 在新请求建连前先调用 `DownloadEngine::findActiveHttp2Connection()`，再调用 `DownloadEngine::popIdleHttp2Connection()`；命中后直接在既有 `Http2MultiplexExchange` 上 `submitRequest()` 创建新 stream。
+- `src/Http2ResponseCommand.cc` 和 `src/Http2DownloadCommand.cc` 都按 `streamId` 取响应/正文，并在 `executeInternal()` 中调用 `exchange_->pump()` 驱动共享连接；最后一个 active stream 结束后会把连接放入 idle pool。
+- `src/Http2ConnectionContext.cc` 持有 `shared_ptr<RequestGroup>`，并在构造/析构时调用 `RequestGroup::increaseStreamConnection()` / `decreaseStreamConnection()` 持有连接计数；H2 stream command 传入 `incNumConnection=false`，避免每个 stream 都重复占用普通连接计数。
 
 限制：
 
@@ -151,9 +151,11 @@ XP/Win7 注意：
 - 依赖 libnghttp2 构建。
 - `--enable-http-pipelining=true` 时不会向 ALPN 放入 `h2`，因此 HTTP/2 与 HTTP/1.1 pipelining 仍互斥。
 - 首条 H2 连接仍要求当前下载最多 1 个 segment；`HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
-- active registry 是 active-only：只有还有 active stream 的 H2 连接可被复用；连接空闲后不会进入这个 registry 继续复用。
+- active registry 只保存仍有 active stream 的 H2 连接；最后一个 stream 完成后，同 origin 连接可进入 idle pool，默认保留 15 秒。
 - 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。
 - 复用还要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate；这不是 HTTP/2 origin coalescing。
+- idle pool 命中前会检查 socket 仍打开、未超时、不可读；socket 可读时按保守策略视为可能 EOF/GOAWAY，直接驱逐而不复用。
+- `EvictSocketPoolCommand.cc` 会随普通 socket pool 定时扫描一起调用 `DownloadEngine::evictIdleHttp2Connections()`，避免 idle H2 context 长时间强持有 `RequestGroup`。
 - active stream 上限使用本地保守上限 `MAX_ACTIVE_HTTP2_STREAMS = 8` 与 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 的较小值；服务端未发 SETTINGS 限制时退回本地 8 条上限。
 - 首条 H2 stream 在注册 context 后会 `exchange->flushOutboundData()`；复用路径提交新 stream 后不提前 flush，交给 `Http2ResponseCommand::executeInternal()` / `exchange_->pump()` 统一驱动。
 - TLS 后端必须支持 ALPN 才能真正协商 H2；`SocketCore::tlsHandshake()` 会在后端不支持 ALPN 时跳过 ALPN 设置并继续握手，最终退回 HTTP/1.1。当前源码里只有 OpenSSL 后端声明支持 ALPN。
@@ -511,8 +513,8 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 
 ## 6. 待主线程补齐/确认
 
-- HTTP/2 现有复用是 active-only，同一 `RequestGroup` 内复用仍在活跃的 H2 连接。后续阶段还要补空闲 H2 连接复用、HTTP/2 origin coalescing，以及继续完善错误恢复、Range/redirect 行为。
+- HTTP/2 目前已有同 origin active/idle 复用。后续阶段还要补 HTTP/2 origin coalescing，以及继续完善错误恢复、Range/redirect 行为。
 - `doc/manual-src/en/aria2c.rst` 中 `--enable-http2` 仍是“未实现保留名”的旧说法，需要主线程同步英文 manual，否则中文/英文文档会冲突。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
-- WinTLS/AppleTLS/GnuTLS 的 ALPN 和 SNI override 能力需要按最终 TLS 后端实现再做矩阵表；当前只能确定 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override，WinTLS 未声明 SNI override，基类 ALPN 默认失败。
+- WinTLS/AppleTLS/GnuTLS 的 ALPN 和 SNI override 能力需要按最终 TLS 后端实现再做矩阵表；当前只能确定 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override，WinTLS 未声明 SNI override，基类 ALPN 默认不支持并会触发 HTTP/1.1 fallback。

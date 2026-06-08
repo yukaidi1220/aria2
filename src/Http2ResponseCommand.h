@@ -64,6 +64,7 @@ private:
   bool incNumConnection_;
 
   bool drainSkippedResponseBody();
+  void poolIdleConnection();
 
 protected:
   bool executeInternal() CXX11_OVERRIDE;

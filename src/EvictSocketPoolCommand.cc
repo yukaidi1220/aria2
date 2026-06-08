@@ -57,6 +57,9 @@ void EvictSocketPoolCommand::preProcess()
 void EvictSocketPoolCommand::process()
 {
   getDownloadEngine()->evictSocketPool();
+#ifdef HAVE_LIBNGHTTP2
+  getDownloadEngine()->evictIdleHttp2Connections();
+#endif // HAVE_LIBNGHTTP2
 }
 
 } // namespace aria2

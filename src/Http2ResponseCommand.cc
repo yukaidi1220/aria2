@@ -143,7 +143,23 @@ bool Http2ResponseCommand::skipResponseBody(
   return drainSkippedResponseBody();
 }
 
-void Http2ResponseCommand::poolConnection() {}
+void Http2ResponseCommand::poolIdleConnection()
+{
+  if (getRequest()->supportsPersistentConnection() && connectionContext_ &&
+      !exchange_->hasActiveStreams()) {
+    getDownloadEngine()->poolIdleHttp2Connection(getRequest().get(),
+                                                 connectionContext_);
+  }
+}
+
+void Http2ResponseCommand::poolConnection()
+{
+  auto state = exchange_->getState(streamId_);
+  if (state.streamClosed) {
+    exchange_->popResponseEvent(streamId_);
+  }
+  poolIdleConnection();
+}
 
 void Http2ResponseCommand::requeueSelf() { addCommandSelf(); }
 
@@ -174,6 +190,7 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
   if (state.streamClosed) {
     exchange_->popResponseEvent(streamId_);
+    poolIdleConnection();
     return processSkippedHttpResponse(
         this, skipHttpResponse_, [this]() { return prepareForRetry(0); });
   }

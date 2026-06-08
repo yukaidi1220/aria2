@@ -62,6 +62,8 @@ private:
   bool expectedBodyLengthKnown_;
   std::string pendingBody_;
 
+  void poolIdleConnection();
+
 protected:
   bool executeInternal() CXX11_OVERRIDE;
   bool noCheck() const CXX11_OVERRIDE;

@@ -49,13 +49,13 @@ class SocketCore;
 
 class Http2ConnectionContext {
 private:
-  RequestGroup* requestGroup_;
+  std::shared_ptr<RequestGroup> requestGroup_;
   std::shared_ptr<Http2MultiplexExchange> exchange_;
   std::shared_ptr<SocketCore> socket_;
 
 public:
   Http2ConnectionContext(
-      RequestGroup* requestGroup,
+      const std::shared_ptr<RequestGroup>& requestGroup,
       const std::shared_ptr<Http2MultiplexExchange>& exchange,
       const std::shared_ptr<SocketCore>& socket);
   ~Http2ConnectionContext();
@@ -71,7 +71,7 @@ public:
 
   const std::shared_ptr<SocketCore>& getSocket() const { return socket_; }
 
-  RequestGroup* getRequestGroup() const { return requestGroup_; }
+  RequestGroup* getRequestGroup() const { return requestGroup_.get(); }
 };
 
 } // namespace aria2

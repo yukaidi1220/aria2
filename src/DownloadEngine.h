@@ -141,6 +141,23 @@ private:
   };
 
   std::multimap<std::string, ActiveHttp2PoolEntry> activeHttp2Pool_;
+
+  class IdleHttp2PoolEntry {
+  private:
+    std::shared_ptr<Http2ConnectionContext> context_;
+    std::chrono::seconds timeout_;
+    Timer registeredTime_;
+
+  public:
+    IdleHttp2PoolEntry(
+        const std::shared_ptr<Http2ConnectionContext>& context,
+        std::chrono::seconds timeout);
+
+    bool isTimeout() const;
+    const std::shared_ptr<Http2ConnectionContext>& getContext() const;
+  };
+
+  std::multimap<std::string, IdleHttp2PoolEntry> idleHttp2Pool_;
 #endif // HAVE_LIBNGHTTP2
 
   Timer lastSocketPoolScan_;
@@ -343,7 +360,19 @@ public:
       uint16_t connectedPort,
       const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate);
 
+  void poolIdleHttp2Connection(
+      const Request* request,
+      const std::shared_ptr<Http2ConnectionContext>& context,
+      std::chrono::seconds timeout = 15_s);
+
+  ActiveHttp2Connection popIdleHttp2Connection(
+      RequestGroup* requestGroup, const Request* request,
+      const std::string& connectedHostname, const std::string& connectedAddr,
+      uint16_t connectedPort,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate);
+
   void evictActiveHttp2Connections();
+  void evictIdleHttp2Connections();
 #endif // HAVE_LIBNGHTTP2
 
   const std::unique_ptr<CookieStorage>& getCookieStorage() const;

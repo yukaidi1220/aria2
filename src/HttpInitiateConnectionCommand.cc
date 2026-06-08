@@ -192,6 +192,38 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
           getDownloadEngine(), activeHttp2.socket, false,
           activeHttp2.context);
     }
+
+    auto idleHttp2 = getDownloadEngine()->popIdleHttp2Connection(
+        getRequestGroup(), getRequest().get(), hostname, addr, port,
+        predicate);
+    if (idleHttp2.isActive()) {
+      getRequest()->setConnectedAddrInfo(hostname, addr, port);
+      getRequest()->confirmConnectedAddrInfo();
+
+      std::unique_ptr<HttpRequest> httpRequest;
+      if (getSegments().empty()) {
+        httpRequest = createHttpRequest(
+            getRequest(), getFileEntry(), std::shared_ptr<Segment>(),
+            getOption(), getRequestGroup(), getDownloadEngine(),
+            std::shared_ptr<Request>());
+        setConditionalGetHeader(httpRequest.get(), getRequest(), getFileEntry(),
+                                getOption());
+      }
+      else {
+        httpRequest = createHttpRequestForSegment(
+            getRequest(), getFileEntry(), getRequestGroup(),
+            getDownloadEngine(), getOption(), std::shared_ptr<Request>(),
+            getPieceStorage(), getSegments().front());
+      }
+
+      auto streamId = idleHttp2.exchange->submitRequest(*httpRequest);
+      getDownloadEngine()->registerActiveHttp2Connection(getRequest().get(),
+                                                         idleHttp2.context);
+      return make_unique<Http2ResponseCommand>(
+          getCuid(), getRequest(), getFileEntry(), getRequestGroup(),
+          idleHttp2.exchange, streamId, std::move(httpRequest),
+          getDownloadEngine(), idleHttp2.socket, false, idleHttp2.context);
+    }
   }
 #endif // HAVE_LIBNGHTTP2
 

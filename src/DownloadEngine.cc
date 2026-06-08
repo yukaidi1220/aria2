@@ -116,7 +116,13 @@ DownloadEngine::DownloadEngine(std::unique_ptr<EventPoll> eventPoll)
   sessionId_.assign(&sessionId[0], &sessionId[sizeof(sessionId)]);
 }
 
-DownloadEngine::~DownloadEngine() {}
+DownloadEngine::~DownloadEngine()
+{
+#ifdef HAVE_LIBNGHTTP2
+  activeHttp2Pool_.clear();
+  idleHttp2Pool_.clear();
+#endif // HAVE_LIBNGHTTP2
+}
 
 #ifdef HAVE_LIBNGHTTP2
 DownloadEngine::ActiveHttp2PoolEntry::ActiveHttp2PoolEntry(
@@ -129,6 +135,24 @@ std::shared_ptr<Http2ConnectionContext>
 DownloadEngine::ActiveHttp2PoolEntry::getContext() const
 {
   return context_.lock();
+}
+
+DownloadEngine::IdleHttp2PoolEntry::IdleHttp2PoolEntry(
+    const std::shared_ptr<Http2ConnectionContext>& context,
+    std::chrono::seconds timeout)
+    : context_(context), timeout_(std::move(timeout))
+{
+}
+
+bool DownloadEngine::IdleHttp2PoolEntry::isTimeout() const
+{
+  return registeredTime_.difference(global::wallclock()) >= timeout_;
+}
+
+const std::shared_ptr<Http2ConnectionContext>&
+DownloadEngine::IdleHttp2PoolEntry::getContext() const
+{
+  return context_;
 }
 #endif // HAVE_LIBNGHTTP2
 
@@ -399,6 +423,23 @@ void DownloadEngine::registerActiveHttp2Connection(
       fmt("Registered active HTTP/2 connection for %s", key.c_str()));
 }
 
+namespace {
+bool isReusableHttp2Context(
+    const std::shared_ptr<Http2ConnectionContext>& context,
+    std::shared_ptr<Http2MultiplexExchange>& exchange,
+    std::shared_ptr<SocketCore>& socket)
+{
+  if (!context) {
+    exchange.reset();
+    socket.reset();
+    return false;
+  }
+  exchange = context->getExchange();
+  socket = context->getSocket();
+  return exchange && socket && socket->isOpen();
+}
+} // namespace
+
 DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
     RequestGroup* requestGroup, const Request* request,
     const std::string& connectedHostname, const std::string& connectedAddr,
@@ -416,10 +457,9 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
   auto range = activeHttp2Pool_.equal_range(key);
   for (auto i = range.first; i != range.second;) {
     auto context = (*i).second.getContext();
-    auto exchange =
-        context ? context->getExchange() : std::shared_ptr<Http2MultiplexExchange>();
-    auto socket = context ? context->getSocket() : std::shared_ptr<SocketCore>();
-    if (!exchange || !socket || !socket->isOpen() ||
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+    if (!isReusableHttp2Context(context, exchange, socket) ||
         !exchange->hasActiveStreams()) {
       i = activeHttp2Pool_.erase(i);
       continue;
@@ -444,16 +484,105 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
   return res;
 }
 
+void DownloadEngine::poolIdleHttp2Connection(
+    const Request* request,
+    const std::shared_ptr<Http2ConnectionContext>& context,
+    std::chrono::seconds timeout)
+{
+  std::shared_ptr<Http2MultiplexExchange> exchange;
+  std::shared_ptr<SocketCore> socket;
+  if (!request || request->getProtocol() != "https" ||
+      !request->supportsPersistentConnection() ||
+      request->getConnectedHostname().empty() ||
+      request->getConnectedAddr().empty() ||
+      !isReusableHttp2Context(context, exchange, socket) ||
+      !context->getRequestGroup() ||
+      context->getRequestGroup()->downloadFinished() ||
+      exchange->hasActiveStreams() || socket->isReadable(0)) {
+    return;
+  }
+
+  evictIdleHttp2Connections();
+  auto key = createActiveHttp2PoolKey(
+      request, request->getConnectedHostname(), request->getConnectedAddr(),
+      request->getConnectedPort());
+  idleHttp2Pool_.insert(
+      std::make_pair(key, IdleHttp2PoolEntry(context, std::move(timeout))));
+  A2_LOG_NETWORK(fmt("Pooled idle HTTP/2 connection for %s", key.c_str()));
+}
+
+DownloadEngine::ActiveHttp2Connection DownloadEngine::popIdleHttp2Connection(
+    RequestGroup* requestGroup, const Request* request,
+    const std::string& connectedHostname, const std::string& connectedAddr,
+    uint16_t connectedPort,
+    const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate)
+{
+  ActiveHttp2Connection res;
+  if (!requestGroup || !request || request->getProtocol() != "https" ||
+      connectedHostname.empty() || connectedAddr.empty()) {
+    return res;
+  }
+
+  auto key = createActiveHttp2PoolKey(request, connectedHostname, connectedAddr,
+                                      connectedPort);
+  auto range = idleHttp2Pool_.equal_range(key);
+  for (auto i = range.first; i != range.second;) {
+    auto context = (*i).second.getContext();
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+    if ((*i).second.isTimeout() ||
+        !isReusableHttp2Context(context, exchange, socket) ||
+        exchange->hasActiveStreams() || socket->isReadable(0)) {
+      i = idleHttp2Pool_.erase(i);
+      continue;
+    }
+    if (context->getRequestGroup() != requestGroup ||
+        (predicate && !predicate(socket))) {
+      ++i;
+      continue;
+    }
+    auto maxActiveStreams = std::min(
+        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    if (maxActiveStreams == 0) {
+      i = idleHttp2Pool_.erase(i);
+      continue;
+    }
+    res.context = std::move(context);
+    res.exchange = std::move(exchange);
+    res.socket = std::move(socket);
+    idleHttp2Pool_.erase(i);
+    A2_LOG_NETWORK(fmt("Reusing idle HTTP/2 connection for %s", key.c_str()));
+    return res;
+  }
+  return res;
+}
+
 void DownloadEngine::evictActiveHttp2Connections()
 {
   for (auto i = activeHttp2Pool_.begin(); i != activeHttp2Pool_.end();) {
     auto context = (*i).second.getContext();
-    auto exchange =
-        context ? context->getExchange() : std::shared_ptr<Http2MultiplexExchange>();
-    auto socket = context ? context->getSocket() : std::shared_ptr<SocketCore>();
-    if (!exchange || !socket || !socket->isOpen() ||
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+    if (!isReusableHttp2Context(context, exchange, socket) ||
         !exchange->hasActiveStreams()) {
       i = activeHttp2Pool_.erase(i);
+    }
+    else {
+      ++i;
+    }
+  }
+}
+
+void DownloadEngine::evictIdleHttp2Connections()
+{
+  for (auto i = idleHttp2Pool_.begin(); i != idleHttp2Pool_.end();) {
+    auto context = (*i).second.getContext();
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+    if ((*i).second.isTimeout() ||
+        !isReusableHttp2Context(context, exchange, socket) ||
+        exchange->hasActiveStreams() || socket->isReadable(0)) {
+      i = idleHttp2Pool_.erase(i);
     }
     else {
       ++i;
