@@ -91,92 +91,61 @@ jobs:
           autoconf \
           automake \
           c-ares \
-          cppunit \
-          expat \
           gettext \
-          gmp \
-          libssh2 \
           libtool \
-          libxml2 \
-          nettle \
           nghttp2 \
-          openssl \
-          pkg-config \
-          sqlite3
-
-    - name: Configure Homebrew pkg-config paths
-      run: |
-        pkg_config_path=
-        for formula in c-ares cppunit expat libssh2 libxml2 nghttp2 openssl sqlite3; do
-          prefix="$(brew --prefix "$formula")"
-          if [ -d "$prefix/lib/pkgconfig" ]; then
-            pkg_config_path="$prefix/lib/pkgconfig:$pkg_config_path"
-          fi
-        done
-        echo "PKG_CONFIG_PATH=$pkg_config_path$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
+          pkg-config
 
     - name: Generate configure script
       run: autoreconf -i
 
     - name: Configure
       run: |
+        cares_prefix="$(brew --prefix c-ares)"
+        nghttp2_prefix="$(brew --prefix nghttp2)"
+        test -f "$cares_prefix/lib/libcares.a"
+        test -f "$nghttp2_prefix/lib/libnghttp2.a"
+        export LIBCARES_CFLAGS="-I$cares_prefix/include"
+        export LIBCARES_LIBS="$cares_prefix/lib/libcares.a -lresolv"
+        export LIBNGHTTP2_CFLAGS="-I$nghttp2_prefix/include"
+        export LIBNGHTTP2_LIBS="$nghttp2_prefix/lib/libnghttp2.a"
         ./configure \
           --without-openssl \
           --without-gnutls \
           --with-appletls \
+          --with-libcares \
+          --without-libssh2 \
+          --with-libnghttp2 \
+          --without-sqlite3 \
+          --without-libxml2 \
+          --without-libexpat \
+          --without-libnettle \
+          --without-libgmp \
+          --without-libgcrypt \
           --disable-nls
 
     - name: Build
       run: make -j"$(sysctl -n hw.ncpu)"
 
-    - name: Bundle Homebrew dylibs
+    - name: Collect artifact
       run: |
-        set -euo pipefail
-        mkdir -p out/lib
+        mkdir -p out
         cp src/aria2c out/aria2c
-        targets="out/aria2c"
+        codesign --force --sign - out/aria2c
 
-        while [ -n "$targets" ]; do
-          target="${targets%%$'\n'*}"
-          if [ "$targets" = "$target" ]; then
-            targets=
-          else
-            targets="${targets#*$'\n'}"
-          fi
-
-          deps="$(otool -L "$target" | awk 'NR > 1 { print $1 }' | grep -E '^(/opt/homebrew|/usr/local)/(opt|Cellar)/' || true)"
-          while IFS= read -r dep; do
-            [ -n "$dep" ] || continue
-            base="$(basename "$dep")"
-            bundled="out/lib/$base"
-
-            if [ ! -e "$bundled" ]; then
-              cp "$dep" "$bundled"
-              chmod u+w "$bundled"
-              install_name_tool -id "@rpath/$base" "$bundled"
-              targets="${targets}${targets:+$'\n'}$bundled"
-            fi
-
-            if [ "$target" = "out/aria2c" ]; then
-              install_name_tool -change "$dep" "@executable_path/lib/$base" "$target"
-            else
-              install_name_tool -change "$dep" "@loader_path/$base" "$target"
-            fi
-          done <<< "$deps"
-        done
-
-        if ls out/lib/*.dylib >/dev/null 2>&1; then
-          codesign --force --sign - out/aria2c out/lib/*.dylib
-        else
-          codesign --force --sign - out/aria2c
-        fi
-
-    - name: Smoke test packaged binary
-      run: out/aria2c -v
+    - name: Smoke test
+      run: |
+        out/aria2c --version | tee aria2c-version.txt
+        grep -q 'AppleTLS' aria2c-version.txt
+        grep -q 'c-ares/' aria2c-version.txt
+        grep -q 'nghttp2/' aria2c-version.txt
+        out/aria2c --help=async-dns-mode | tee async-dns-mode-help.txt
+        grep -Eq 'dot|doh' async-dns-mode-help.txt
 
     - name: Check macOS artifact portability
       run: |
-        if otool -L out/aria2c out/lib/*.dylib 2>/dev/null | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)'; then
+        otool -L out/aria2c
+        if otool -L out/aria2c | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)'; then
           echo "macOS artifact still depends on Homebrew absolute library paths."
           exit 1
         fi
@@ -185,4 +154,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: aria2-macos-${{ matrix.arch }}
-        path: out
+        path: out/aria2c
