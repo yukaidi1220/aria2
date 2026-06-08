@@ -20,7 +20,7 @@ RUN apt-get update && \
 
 # Download all dependency sources
 RUN curl -L --retry 5 -O https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz && \
-    curl -L --retry 5 -O https://github.com/libexpat/libexpat/releases/download/R_2_8_1/expat-2.8.1.tar.bz2 && \
+    curl -L --retry 5 -o expat-2.8.1.tar.bz2 https://downloads.sourceforge.net/project/expat/expat/2.8.1/expat-2.8.1.tar.bz2 && \
     curl -L --retry 5 -O https://www.sqlite.org/2026/sqlite-autoconf-3530200.tar.gz && \
     curl -L --retry 5 -O https://github.com/madler/zlib/releases/download/v1.3.2/zlib-1.3.2.tar.gz && \
     curl -L --retry 5 -O https://github.com/c-ares/c-ares/releases/download/v1.34.6/c-ares-1.34.6.tar.gz && \
