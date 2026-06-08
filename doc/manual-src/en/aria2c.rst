@@ -446,7 +446,8 @@ HTTP Specific Options
   ``CONNECT`` target, cookie scope, or the certificate verification hostname.
   This option requires a TLS backend which supports separate SNI and
   certificate verification hostnames when the selected SNI hostname is different
-  from the certificate verification hostname.
+  from the certificate verification hostname. TLS backends without this
+  support, including WinTLS, fail before the TLS handshake in that case.
 
   ``TARGET`` may be a DNS hostname, an IPv4 address, or an IPv6 literal address
   enclosed in square brackets. The ``SNI`` value must be a DNS hostname that is
@@ -1293,6 +1294,8 @@ Advanced Options
   :option:`--async-dns-server` entries. ``doh`` uses DNS over HTTPS over
   HTTP/1.1 with numeric HTTPS :option:`--async-dns-server` URLs. ``dot`` and
   ``doh`` are available only when aria2 is built with SSL/TLS support.
+  The ``doh`` backend currently uses HTTP/1.1 and does not enable HTTP/2 or
+  ALPN negotiation.
   Default: ``cares``
 
 .. option:: --async-dns-server=<SERVER>[,...]
