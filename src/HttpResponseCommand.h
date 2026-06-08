@@ -67,7 +67,8 @@ protected:
       cuid_t cuid, const std::shared_ptr<Request>& req,
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
       DownloadEngine* e, const std::shared_ptr<SocketCore>& s,
-      const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer);
+      const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer,
+      bool incNumConnection = true);
 
   bool handleDefaultEncoding(std::unique_ptr<HttpResponse> httpResponse);
   bool handleOtherEncoding(std::unique_ptr<HttpResponse> httpResponse);

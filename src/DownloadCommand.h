@@ -110,7 +110,8 @@ public:
                   const std::shared_ptr<FileEntry>& fileEntry,
                   RequestGroup* requestGroup, DownloadEngine* e,
                   const std::shared_ptr<SocketCore>& s,
-                  const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer);
+                  const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer,
+                  bool incNumConnection = true);
   virtual ~DownloadCommand();
 
   const std::unique_ptr<StreamFilter>& getStreamFilter() const

@@ -74,7 +74,7 @@ public:
       std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpResponse> httpResponse,
       std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s);
+      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true);
   ~Http2DownloadCommand();
 };
 

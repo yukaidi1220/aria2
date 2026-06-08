@@ -59,6 +59,7 @@ private:
   int64_t expectedSkipBodyLength_;
   int64_t skippedBodyLength_;
   bool expectedSkipBodyLengthKnown_;
+  bool incNumConnection_;
 
   bool drainSkippedResponseBody();
 
@@ -79,7 +80,7 @@ public:
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
       std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s);
+      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true);
   ~Http2ResponseCommand();
 };
 

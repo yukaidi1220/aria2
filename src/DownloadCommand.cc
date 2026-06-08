@@ -78,9 +78,10 @@ DownloadCommand::DownloadCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
     DownloadEngine* e, const std::shared_ptr<SocketCore>& s,
-    const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer)
+    const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer,
+    bool incNumConnection)
     : AbstractCommand(cuid, req, fileEntry, requestGroup, e, s,
-                      socketRecvBuffer),
+                      socketRecvBuffer, incNumConnection),
       startupIdleTime_(10),
       lowestDownloadSpeedLimit_(0),
       pieceHashValidationEnabled_(false)

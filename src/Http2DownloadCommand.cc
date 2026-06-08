@@ -68,8 +68,9 @@ Http2DownloadCommand::Http2DownloadCommand(
     std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
-    const std::shared_ptr<SocketCore>& s)
-    : DownloadCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr),
+    const std::shared_ptr<SocketCore>& s, bool incNumConnection)
+    : DownloadCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr,
+                      incNumConnection),
       exchange_(std::move(exchange)),
       streamId_(streamId),
       httpResponse_(std::move(httpResponse)),

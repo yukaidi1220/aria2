@@ -37,6 +37,7 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2ResponseCommandTest);
   CPPUNIT_TEST(testWaitsForHeaders);
   CPPUNIT_TEST(testWaitsForSelectedStreamHeaders);
+  CPPUNIT_TEST(testCanSkipConnectionAccounting);
   CPPUNIT_TEST(testZeroLengthResponseCompletes);
   CPPUNIT_TEST(testBodyDownloadCommandCreationDoesNotThrow);
   CPPUNIT_TEST(testDownloadCommandCompletesKnownLengthBody);
@@ -59,6 +60,7 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
 public:
   void testWaitsForHeaders();
   void testWaitsForSelectedStreamHeaders();
+  void testCanSkipConnectionAccounting();
   void testZeroLengthResponseCompletes();
   void testBodyDownloadCommandCreationDoesNotThrow();
   void testDownloadCommandCompletesKnownLengthBody();
@@ -92,10 +94,10 @@ public:
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
       std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s)
+      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true)
       : Http2ResponseCommand(cuid, req, fileEntry, requestGroup,
                              std::move(exchange), streamId,
-                             std::move(httpRequest), e, s)
+                             std::move(httpRequest), e, s, incNumConnection)
   {
   }
 
@@ -117,11 +119,12 @@ public:
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
       std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpResponse> httpResponse, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s)
+      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true)
       : Http2DownloadCommand(cuid, req, fileEntry, requestGroup,
                              std::move(exchange), streamId,
                              std::move(httpResponse),
-                             std::unique_ptr<StreamFilter>{}, e, s)
+                             std::unique_ptr<StreamFilter>{}, e, s,
+                             incNumConnection)
   {
   }
 
@@ -232,12 +235,29 @@ struct CommandFixture {
         makeHttpRequest(), &engine, nullptr);
   }
 
+  std::unique_ptr<TestHttp2ResponseCommand>
+  makeCommandWithoutConnectionAccounting()
+  {
+    return make_unique<TestHttp2ResponseCommand>(
+        1, request, fileEntry, requestGroup.get(), exchange, streamId,
+        makeHttpRequest(), &engine, nullptr, false);
+  }
+
   std::unique_ptr<TestHttp2DownloadCommand> makeDownloadCommand(
       std::unique_ptr<HttpResponse> httpResponse)
   {
     return make_unique<TestHttp2DownloadCommand>(
         1, request, fileEntry, requestGroup.get(), exchange,
         streamId, std::move(httpResponse), &engine, nullptr);
+  }
+
+  std::unique_ptr<TestHttp2DownloadCommand>
+  makeDownloadCommandWithoutConnectionAccounting(
+      std::unique_ptr<HttpResponse> httpResponse)
+  {
+    return make_unique<TestHttp2DownloadCommand>(
+        1, request, fileEntry, requestGroup.get(), exchange,
+        streamId, std::move(httpResponse), &engine, nullptr, false);
   }
 
   void submitResponseHeaders(Http2HeaderBlock headers)
@@ -306,6 +326,27 @@ void Http2ResponseCommandTest::testWaitsForSelectedStreamHeaders()
 
   CPPUNIT_ASSERT(!command->executeInternal());
   CPPUNIT_ASSERT(command->requeued());
+}
+
+void Http2ResponseCommandTest::testCanSkipConnectionAccounting()
+{
+  CommandFixture fixture;
+  CPPUNIT_ASSERT_EQUAL(0, fixture.requestGroup->getNumConnection());
+
+  {
+    auto command = fixture.makeCommandWithoutConnectionAccounting();
+    CPPUNIT_ASSERT_EQUAL(0, fixture.requestGroup->getNumConnection());
+  }
+  CPPUNIT_ASSERT_EQUAL(0, fixture.requestGroup->getNumConnection());
+
+  auto httpResponse =
+      fixture.receiveResponse(createHeaders(200, 4), "body");
+  {
+    auto command = fixture.makeDownloadCommandWithoutConnectionAccounting(
+        std::move(httpResponse));
+    CPPUNIT_ASSERT_EQUAL(0, fixture.requestGroup->getNumConnection());
+  }
+  CPPUNIT_ASSERT_EQUAL(0, fixture.requestGroup->getNumConnection());
 }
 
 void Http2ResponseCommandTest::testZeroLengthResponseCompletes()
