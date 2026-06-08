@@ -56,11 +56,13 @@
 #include "prefs.h"
 #include "fmt.h"
 #include "ServerStat.h"
+#include "RequestGroup.h"
 #include "RequestGroupMan.h"
 #include "A2STR.h"
 #include "util.h"
 #include "LogFactory.h"
 #include "DownloadContext.h"
+#include "GroupId.h"
 #include "wallclock.h"
 #include "NameResolver.h"
 #include "uri.h"
@@ -127,6 +129,7 @@ private:
 
   std::string hostname_;
   uint16_t port_;
+  a2_gid_t gid_;
   std::vector<ResolverEntry> resolvers_;
   DownloadEngine* e_;
   Timer checkPoint_;
@@ -151,14 +154,33 @@ private:
     }
   }
 
+  void maybeCreateNextCommand()
+  {
+    auto group = e_->getRequestGroupMan()->findGroup(gid_);
+    if (!group || group->getState() != RequestGroup::STATE_ACTIVE ||
+        group->isHaltRequested() || group->isPauseRequested() ||
+        group->downloadFinished()) {
+      return;
+    }
+
+    std::vector<std::unique_ptr<Command>> commands;
+    group->createNextCommand(commands, e_);
+    if (!commands.empty()) {
+      A2_LOG_NETWORK(fmt("DNS: background cache fill woke download GID#%s",
+                         GroupId::toHex(gid_).c_str()));
+      e_->addCommand(std::move(commands));
+    }
+  }
+
 public:
   AsyncDnsCacheCommand(
-      cuid_t cuid, std::string hostname, uint16_t port,
+      cuid_t cuid, std::string hostname, uint16_t port, a2_gid_t gid,
       std::vector<std::shared_ptr<AsyncResolver>> pendingResolvers,
       DownloadEngine* e, std::chrono::seconds timeout)
       : Command(cuid),
         hostname_(std::move(hostname)),
         port_(port),
+        gid_(gid),
         e_(e),
         timeout_(std::move(timeout))
   {
@@ -194,6 +216,7 @@ public:
     }
 
     bool querying = false;
+    bool addressCached = false;
     for (auto& entry : resolvers_) {
       if (!entry.resolver) {
         continue;
@@ -203,6 +226,7 @@ public:
       case AsyncResolver::STATUS_SUCCESS:
         for (const auto& addr : entry.resolver->getResolvedAddresses()) {
           e_->cacheIPAddress(hostname_, addr, port_);
+          addressCached = true;
           A2_LOG_NETWORK(
               fmt("DNS: background cache fill %s -> %s", hostname_.c_str(),
                   addr.c_str()));
@@ -223,6 +247,10 @@ public:
       }
     }
 
+    if (addressCached) {
+      maybeCreateNextCommand();
+    }
+
     if (!querying) {
       return true;
     }
@@ -235,6 +263,7 @@ public:
 
 void addAsyncDnsCacheCommand(
     DownloadEngine* e, const std::string& hostname, uint16_t port,
+    a2_gid_t gid,
     std::vector<std::shared_ptr<AsyncResolver>> pendingResolvers)
 {
   if (pendingResolvers.empty()) {
@@ -242,7 +271,7 @@ void addAsyncDnsCacheCommand(
   }
 
   auto command = make_unique<AsyncDnsCacheCommand>(
-      e->newCUID(), hostname, port, std::move(pendingResolvers), e,
+      e->newCUID(), hostname, port, gid, std::move(pendingResolvers), e,
       std::chrono::seconds(e->getOption()->getAsInt(PREF_DNS_TIMEOUT)));
   command->start();
   e->addCommand(std::move(command));
@@ -251,7 +280,7 @@ void addAsyncDnsCacheCommand(
 void continueAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
                                uint16_t port,
                                AsyncNameResolverMan* asyncNameResolverMan,
-                               Command* command)
+                               RequestGroup* requestGroup, Command* command)
 {
   if (!asyncNameResolverMan->started()) {
     return;
@@ -260,13 +289,14 @@ void continueAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
   auto pendingResolvers = asyncNameResolverMan->detachPendingResolvers(e,
                                                                        command);
   asyncNameResolverMan->reset(e, command);
-  addAsyncDnsCacheCommand(e, hostname, port, std::move(pendingResolvers));
+  addAsyncDnsCacheCommand(e, hostname, port, requestGroup->getGID(),
+                          std::move(pendingResolvers));
 }
 
 void preserveAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
                                uint16_t port,
                                AsyncNameResolverMan* asyncNameResolverMan,
-                               Command* command)
+                               RequestGroup* requestGroup, Command* command)
 {
   if (!asyncNameResolverMan->started()) {
     return;
@@ -278,7 +308,8 @@ void preserveAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
     e->cacheIPAddress(hostname, addr, port);
   }
 
-  continueAsyncDnsCacheFill(e, hostname, port, asyncNameResolverMan, command);
+  continueAsyncDnsCacheFill(e, hostname, port, asyncNameResolverMan,
+                            requestGroup, command);
 }
 #endif // ENABLE_ASYNC_DNS
 } // namespace
@@ -1180,7 +1211,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
 #ifdef ENABLE_ASYNC_DNS
     if (getOption()->getAsBool(PREF_ASYNC_DNS)) {
       preserveAsyncDnsCacheFill(e_, hostname, port, asyncNameResolverMan_.get(),
-                                this);
+                                requestGroup_, this);
       addrs.clear();
       e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
     }
@@ -1246,7 +1277,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
 #ifdef ENABLE_ASYNC_DNS
   if (asyncDnsUsed) {
     continueAsyncDnsCacheFill(e_, hostname, port, asyncNameResolverMan_.get(),
-                              this);
+                              requestGroup_, this);
   }
 #endif // ENABLE_ASYNC_DNS
   std::vector<std::string> cachedAddrs;
