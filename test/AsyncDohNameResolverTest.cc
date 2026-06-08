@@ -23,7 +23,9 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testResolveAResponseWithFragmentedHeaderRead);
   CPPUNIT_TEST(testResolveAAAAResponse);
   CPPUNIT_TEST(testTLSHostIsUsedForHostHeaderAndHandshake);
+  CPPUNIT_TEST(testTLSHostDefaultPortHostHeaderOmitsPort);
   CPPUNIT_TEST(testHostHeaderUsesBracketedIPv6);
+  CPPUNIT_TEST(testHostHeaderUsesBracketedIPv6DefaultPort);
   CPPUNIT_TEST(testTlsWantReadUpdatesSocketEvents);
   CPPUNIT_TEST(testTlsWantWriteUpdatesSocketEvents);
   CPPUNIT_TEST(testWriteWantWriteThenSucceeds);
@@ -46,7 +48,9 @@ public:
   void testResolveAResponseWithFragmentedHeaderRead();
   void testResolveAAAAResponse();
   void testTLSHostIsUsedForHostHeaderAndHandshake();
+  void testTLSHostDefaultPortHostHeaderOmitsPort();
   void testHostHeaderUsesBracketedIPv6();
+  void testHostHeaderUsesBracketedIPv6DefaultPort();
   void testTlsWantReadUpdatesSocketEvents();
   void testTlsWantWriteUpdatesSocketEvents();
   void testWriteWantWriteThenSucceeds();
@@ -487,6 +491,27 @@ void AsyncDohNameResolverTest::testTLSHostIsUsedForHostHeaderAndHandshake()
                        getHeaderValue(transport->written, "Host: "));
 }
 
+void AsyncDohNameResolverTest::testTLSHostDefaultPortHostHeaderOmitsPort()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"1.1.1.1", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteRequestDone(resolver, factory);
+
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), transport->connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, transport->connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       transport->tlsParams.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       transport->tlsParams.verifyHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       getHeaderValue(transport->written, "Host: "));
+}
+
 void AsyncDohNameResolverTest::testHostHeaderUsesBracketedIPv6()
 {
   FakeDohTransportFactory factory;
@@ -500,6 +525,29 @@ void AsyncDohNameResolverTest::testHostHeaderUsesBracketedIPv6()
 
   auto transport = factory.transports.back();
   CPPUNIT_ASSERT_EQUAL(std::string("[2606:4700:4700::1111]:8443"),
+                       getHeaderValue(transport->written, "Host: "));
+}
+
+void AsyncDohNameResolverTest::testHostHeaderUsesBracketedIPv6DefaultPort()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET,
+      {{"2606:4700:4700::1111", 443, "", "/dns-query"}},
+      makeTransportFactory(factory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteRequestDone(resolver, factory);
+
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       transport->connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, transport->connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       transport->tlsParams.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       transport->tlsParams.verifyHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("[2606:4700:4700::1111]"),
                        getHeaderValue(transport->written, "Host: "));
 }
 
