@@ -21,6 +21,7 @@ class Http2SessionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testFeedInboundDataFlushesSettingsAck);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseHeaders);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseBodyAndClose);
+  CPPUNIT_TEST(testFeedInboundDataAcceptsPartialFrames);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -29,6 +30,7 @@ public:
   void testFeedInboundDataFlushesSettingsAck();
   void testFeedInboundDataCollectsResponseHeaders();
   void testFeedInboundDataCollectsResponseBodyAndClose();
+  void testFeedInboundDataAcceptsPartialFrames();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(Http2SessionTest);
@@ -221,6 +223,18 @@ Http2HeaderBlock createResponseHeaders()
   headers.emplace_back("x-test", "ok");
   return headers;
 }
+
+void feedInChunks(Http2Session& session, const std::string& data)
+{
+  size_t offset = 0;
+  size_t chunkSize = 1;
+  while (offset < data.size()) {
+    auto len = std::min(chunkSize, data.size() - offset);
+    session.feedInboundData(data.substr(offset, len));
+    offset += len;
+    chunkSize = std::min(chunkSize + 2, (size_t)11);
+  }
+}
 } // namespace
 
 void Http2SessionTest::testSubmitRequestHeadersProducesClientBytes()
@@ -294,6 +308,25 @@ void Http2SessionTest::testFeedInboundDataCollectsResponseBodyAndClose()
   auto response = client.findResponseEvent(streamId);
   CPPUNIT_ASSERT(response);
   CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body);
+  CPPUNIT_ASSERT(response->streamClosed);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
+}
+
+void Http2SessionTest::testFeedInboundDataAcceptsPartialFrames()
+{
+  Http2Session client;
+  FakeHttp2ServerSession server;
+  auto streamId = client.submitRequestHeaders(createHeaders());
+
+  server.feedInboundData(client.drainOutboundData());
+  server.submitResponse(streamId, createResponseHeaders(), "partial-body");
+  feedInChunks(client, server.drainOutboundData());
+
+  auto response = client.findResponseEvent(streamId);
+  CPPUNIT_ASSERT(response);
+  CPPUNIT_ASSERT_EQUAL(200, response->status);
+  CPPUNIT_ASSERT(response->headersComplete);
+  CPPUNIT_ASSERT_EQUAL(std::string("partial-body"), response->body);
   CPPUNIT_ASSERT(response->streamClosed);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
 }
