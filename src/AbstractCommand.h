@@ -244,6 +244,10 @@ std::string getProxyUri(const std::string& protocol, const Option* option);
 std::string selectIPAddress(const std::vector<std::string>& addrs,
                             cuid_t cuid);
 
+// Moves ipaddr to the front while preserving the order of other addresses.
+void prioritizeIPAddress(std::vector<std::string>& addrs,
+                         const std::string& ipaddr);
+
 } // namespace aria2
 
 #endif // D_ABSTRACT_COMMAND_H

@@ -796,6 +796,18 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
   return addr == std::end(addrs) ? addrs.front() : *addr;
 }
 
+void prioritizeIPAddress(std::vector<std::string>& addrs,
+                         const std::string& ipaddr)
+{
+  auto i = std::find(std::begin(addrs), std::end(addrs), ipaddr);
+  if (i == std::end(addrs) || i == std::begin(addrs)) {
+    return;
+  }
+  auto selected = std::move(*i);
+  addrs.erase(i);
+  addrs.insert(std::begin(addrs), std::move(selected));
+}
+
 namespace {
 // Returns true if proxy is defined for the given protocol. Otherwise
 // returns false.
@@ -910,12 +922,15 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     A2_LOG_NETWORK(
         fmt("DNS: hosts mapping %s -> %s", hostname.c_str(),
             strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
-    return selectIPAddress(addrs, getCuid());
+    auto ipaddr = selectIPAddress(addrs, getCuid());
+    prioritizeIPAddress(addrs, ipaddr);
+    return ipaddr;
   }
 
   e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
   if (!addrs.empty()) {
     auto ipaddr = selectIPAddress(addrs, getCuid());
+    prioritizeIPAddress(addrs, ipaddr);
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
                     strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
     A2_LOG_NETWORK(
@@ -979,6 +994,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
                        error_code::NAME_RESOLVE_ERROR);
   }
   ipaddr = selectIPAddress(addrs, getCuid());
+  prioritizeIPAddress(addrs, ipaddr);
   return ipaddr;
 }
 

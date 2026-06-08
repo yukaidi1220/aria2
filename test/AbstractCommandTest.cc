@@ -17,6 +17,8 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressReturnsEmptyForEmptyList);
   CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
+  CPPUNIT_TEST(testPrioritizeIPAddress);
+  CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -28,6 +30,8 @@ public:
   void testSelectIPAddressReturnsEmptyForEmptyList();
   void testSelectIPAddressKeepsSingleFamilyOrder();
   void testSelectIPAddressAlternatesDualStackByCuid();
+  void testPrioritizeIPAddress();
+  void testPrioritizeIPAddressIgnoresUnknownAddress();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AbstractCommandTest);
@@ -103,6 +107,32 @@ void AbstractCommandTest::testSelectIPAddressAlternatesDualStackByCuid()
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
                        selectIPAddress(addrs, 1));
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
+}
+
+void AbstractCommandTest::testPrioritizeIPAddress()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("2001:db8::1");
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("192.0.2.2");
+
+  prioritizeIPAddress(addrs, "192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"), addrs[2]);
+}
+
+void AbstractCommandTest::testPrioritizeIPAddressIgnoresUnknownAddress()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("2001:db8::1");
+  addrs.push_back("192.0.2.1");
+
+  prioritizeIPAddress(addrs, "192.0.2.2");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[1]);
 }
 
 } // namespace aria2
