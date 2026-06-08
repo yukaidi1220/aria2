@@ -52,6 +52,8 @@ enum HttpProtocol {
 
 HttpProtocol httpProtocolFromSelectedAlpn(const std::string& selectedAlpn);
 
+void validateHttpSelectedAlpnProtocol(const std::string& selectedAlpn);
+
 } // namespace aria2
 
 #endif // D_HTTP_PROTOCOL_H

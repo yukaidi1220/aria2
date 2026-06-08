@@ -34,6 +34,9 @@
 /* copyright --> */
 #include "HttpProtocol.h"
 
+#include "DlAbortEx.h"
+#include "fmt.h"
+
 namespace aria2 {
 
 const char HTTP_ALPN_H2[] = "h2";
@@ -48,6 +51,20 @@ HttpProtocol httpProtocolFromSelectedAlpn(const std::string& selectedAlpn)
     return HTTP_PROTOCOL_H2;
   }
   return HTTP_PROTOCOL_UNKNOWN;
+}
+
+void validateHttpSelectedAlpnProtocol(const std::string& selectedAlpn)
+{
+  switch (httpProtocolFromSelectedAlpn(selectedAlpn)) {
+  case HTTP_PROTOCOL_HTTP1:
+    return;
+  case HTTP_PROTOCOL_H2:
+    throw DL_ABORT_EX("HTTP/2 is not implemented yet");
+  case HTTP_PROTOCOL_UNKNOWN:
+    break;
+  }
+  throw DL_ABORT_EX(
+      fmt("Unsupported HTTP ALPN protocol '%s'", selectedAlpn.c_str()));
 }
 
 } // namespace aria2

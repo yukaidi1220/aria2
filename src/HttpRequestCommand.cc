@@ -47,6 +47,7 @@
 #include "Option.h"
 #include "SocketCore.h"
 #include "HostMapping.h"
+#include "HttpProtocol.h"
 #include "HttpTLSHandshakeParams.h"
 #include "prefs.h"
 #include "a2functional.h"
@@ -201,6 +202,7 @@ bool HttpRequestCommand::executeInternal()
         }
         throw;
       }
+      validateHttpSelectedAlpnProtocol(getSocket()->getSelectedAlpnProtocol());
       A2_LOG_NETWORK(
           fmt("CUID#%" PRId64 " - HTTPS connection to %s established",
               getCuid(), getRequest()->getHost().c_str()));
