@@ -42,6 +42,7 @@
 #include <vector>
 #include <ostream>
 #include <set>
+#include <map>
 #include <memory>
 
 #include "File.h"
@@ -81,6 +82,7 @@ private:
   std::deque<URIResult> uriResults_;
   RequestPool requestPool_;
   InFlightRequestSet inFlightRequests_;
+  std::map<std::pair<std::string, uint16_t>, int> nextAddressFamily_;
 
   std::string path_;
   std::string contentType_;
@@ -208,6 +210,12 @@ public:
   {
     return inFlightRequests_;
   }
+
+  int getNextAddressFamily(const std::string& hostname, uint16_t port,
+                           int fallbackFamily) const;
+
+  void setNextAddressFamily(const std::string& hostname, uint16_t port,
+                            int family);
 
   bool operator<(const FileEntry& fileEntry) const;
 

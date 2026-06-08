@@ -114,6 +114,41 @@ int getNumericAddressFamily(const std::string& addr)
   return 0;
 }
 
+bool isSelectableAddressFamily(int family)
+{
+  return family == AF_INET || family == AF_INET6;
+}
+
+bool hasNumericAddressFamily(const std::vector<std::string>& addrs, int family)
+{
+  return std::find_if(std::begin(addrs), std::end(addrs),
+                      [family](const std::string& addr) {
+                        return getNumericAddressFamily(addr) == family;
+                      }) != std::end(addrs);
+}
+
+int getFirstSelectableAddressFamily(const std::vector<std::string>& addrs)
+{
+  for (const auto& addr : addrs) {
+    auto family = getNumericAddressFamily(addr);
+    if (isSelectableAddressFamily(family)) {
+      return family;
+    }
+  }
+  return 0;
+}
+
+int getOppositeAddressFamily(int family)
+{
+  if (family == AF_INET) {
+    return AF_INET6;
+  }
+  if (family == AF_INET6) {
+    return AF_INET;
+  }
+  return 0;
+}
+
 #ifdef ENABLE_ASYNC_DNS
 class AsyncDnsCacheCommand : public Command {
 private:
@@ -985,21 +1020,12 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
     return A2STR::NIL;
   }
 
-  auto hasIPv4 = std::find_if(std::begin(addrs), std::end(addrs),
-                              [](const std::string& addr) {
-                                return getNumericAddressFamily(addr) ==
-                                       AF_INET;
-                              }) != std::end(addrs);
-  auto hasIPv6 = std::find_if(std::begin(addrs), std::end(addrs),
-                              [](const std::string& addr) {
-                                return getNumericAddressFamily(addr) ==
-                                       AF_INET6;
-                              }) != std::end(addrs);
-  if (!hasIPv4 || !hasIPv6) {
+  if (!hasNumericAddressFamily(addrs, AF_INET) ||
+      !hasNumericAddressFamily(addrs, AF_INET6)) {
     return addrs.front();
   }
 
-  auto family = preferredFamily == AF_INET || preferredFamily == AF_INET6
+  auto family = isSelectableAddressFamily(preferredFamily)
                     ? preferredFamily
                     : (cuid % 2 == 0 ? AF_INET : AF_INET6);
   auto addr = std::find_if(std::begin(addrs), std::end(addrs),
@@ -1036,17 +1062,8 @@ int getLeastUsedActiveAddressFamily(
     return 0;
   }
 
-  auto hasIPv4 = std::find_if(std::begin(addrs), std::end(addrs),
-                              [](const std::string& addr) {
-                                return getNumericAddressFamily(addr) ==
-                                       AF_INET;
-                              }) != std::end(addrs);
-  auto hasIPv6 = std::find_if(std::begin(addrs), std::end(addrs),
-                              [](const std::string& addr) {
-                                return getNumericAddressFamily(addr) ==
-                                       AF_INET6;
-                              }) != std::end(addrs);
-  if (!hasIPv4 || !hasIPv6) {
+  if (!hasNumericAddressFamily(addrs, AF_INET) ||
+      !hasNumericAddressFamily(addrs, AF_INET6)) {
     return 0;
   }
 
@@ -1058,10 +1075,6 @@ int getLeastUsedActiveAddressFamily(
       continue;
     }
     const auto& connectedAddr = request->getConnectedAddr();
-    if (std::find(std::begin(addrs), std::end(addrs), connectedAddr) ==
-        std::end(addrs)) {
-      continue;
-    }
     auto family = getNumericAddressFamily(connectedAddr);
     if (family == AF_INET) {
       ++ipv4;
@@ -1081,9 +1094,26 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             const std::shared_ptr<FileEntry>& fileEntry,
                             const std::string& hostname, uint16_t port)
 {
-  return selectIPAddress(addrs, cuid,
-                         getLeastUsedActiveAddressFamily(
-                             fileEntry, hostname, port, addrs));
+  auto family =
+      getLeastUsedActiveAddressFamily(fileEntry, hostname, port, addrs);
+  if (!isSelectableAddressFamily(family) && fileEntry &&
+      hasNumericAddressFamily(addrs, AF_INET) &&
+      hasNumericAddressFamily(addrs, AF_INET6)) {
+    auto fallbackFamily = getFirstSelectableAddressFamily(addrs);
+    family = fileEntry->getNextAddressFamily(hostname, port, fallbackFamily);
+  }
+
+  auto ipaddr = selectIPAddress(addrs, cuid, family);
+  if (fileEntry && hasNumericAddressFamily(addrs, AF_INET) &&
+      hasNumericAddressFamily(addrs, AF_INET6)) {
+    auto selectedFamily = getNumericAddressFamily(ipaddr);
+    auto nextFamily = getOppositeAddressFamily(selectedFamily);
+    if (isSelectableAddressFamily(nextFamily) &&
+        hasNumericAddressFamily(addrs, nextFamily)) {
+      fileEntry->setNextAddressFamily(hostname, port, nextFamily);
+    }
+  }
+  return ipaddr;
 }
 
 namespace {

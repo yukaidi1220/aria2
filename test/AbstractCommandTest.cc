@@ -19,8 +19,11 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressReturnsEmptyForEmptyList);
   CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
+  CPPUNIT_TEST(testSelectIPAddressRotatesDualStackByFileEntry);
   CPPUNIT_TEST(testSelectIPAddressPrefersRequestedDualStackFamily);
   CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedActiveFamily);
+  CPPUNIT_TEST(testSelectIPAddressCountsActiveFamilyOutsideCandidates);
+  CPPUNIT_TEST(testSelectIPAddressIgnoresOtherActiveHostAndPort);
   CPPUNIT_TEST(testPrioritizeIPAddress);
   CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
   CPPUNIT_TEST_SUITE_END();
@@ -34,8 +37,11 @@ public:
   void testSelectIPAddressReturnsEmptyForEmptyList();
   void testSelectIPAddressKeepsSingleFamilyOrder();
   void testSelectIPAddressAlternatesDualStackByCuid();
+  void testSelectIPAddressRotatesDualStackByFileEntry();
   void testSelectIPAddressPrefersRequestedDualStackFamily();
   void testSelectIPAddressPrefersUnderusedActiveFamily();
+  void testSelectIPAddressCountsActiveFamilyOutsideCandidates();
+  void testSelectIPAddressIgnoresOtherActiveHostAndPort();
   void testPrioritizeIPAddress();
   void testPrioritizeIPAddressIgnoresUnknownAddress();
 };
@@ -115,6 +121,30 @@ void AbstractCommandTest::testSelectIPAddressAlternatesDualStackByCuid()
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
 }
 
+void AbstractCommandTest::testSelectIPAddressRotatesDualStackByFileEntry()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+  auto fileEntry = std::make_shared<FileEntry>();
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 1, fileEntry, "example.org",
+                                       443));
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                       443));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 3, fileEntry, "example.org",
+                                       443));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 4, fileEntry, "example.org",
+                                       8443));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 5, fileEntry, "mirror.example",
+                                       443));
+}
+
 void AbstractCommandTest::testSelectIPAddressPrefersRequestedDualStackFamily()
 {
   std::vector<std::string> addrs;
@@ -161,20 +191,55 @@ void AbstractCommandTest::testSelectIPAddressPrefersUnderusedActiveFamily()
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 2, fileEntry, "example.org",
                                         443));
+}
 
-  req2->setConnectedAddrInfo("example.org", "192.0.2.2", 443);
-  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+void AbstractCommandTest::testSelectIPAddressCountsActiveFamilyOutsideCandidates()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setUris(std::vector<std::string>{"https://example.org/file"});
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+
+  auto req = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req);
+  req->setConnectedAddrInfo("example.org", "192.0.2.2", 443);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
                        selectIPAddress(addrs, 2, fileEntry, "example.org",
                                        443));
+}
 
-  req2->setConnectedAddrInfo("other.example.org", "192.0.2.1", 443);
+void AbstractCommandTest::testSelectIPAddressIgnoresOtherActiveHostAndPort()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+
+  auto otherHost = std::make_shared<FileEntry>();
+  otherHost->setUris(std::vector<std::string>{"https://example.org/file"});
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+
+  auto req = otherHost->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req);
+  req->setConnectedAddrInfo("other.example.org", "192.0.2.1", 443);
+
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
-                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                       selectIPAddress(addrs, 2, otherHost, "example.org",
                                        443));
 
-  req2->setConnectedAddrInfo("example.org", "192.0.2.1", 8443);
+  auto otherPort = std::make_shared<FileEntry>();
+  otherPort->setUris(std::vector<std::string>{"https://example.org/file"});
+  req = otherPort->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req);
+  req->setConnectedAddrInfo("example.org", "192.0.2.1", 8443);
+
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
-                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                       selectIPAddress(addrs, 2, otherPort, "example.org",
                                        443));
 }
 

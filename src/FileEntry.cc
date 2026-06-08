@@ -48,6 +48,7 @@
 #include "fmt.h"
 #include "ServerStatMan.h"
 #include "ServerStat.h"
+#include "a2netcompat.h"
 
 namespace aria2 {
 
@@ -468,6 +469,7 @@ void FileEntry::releaseRuntimeResource()
 {
   requestPool_.clear();
   inFlightRequests_.clear();
+  nextAddressFamily_.clear();
 }
 
 namespace {
@@ -578,6 +580,35 @@ size_t FileEntry::countInFlightRequest() const
 }
 
 size_t FileEntry::countPooledRequest() const { return requestPool_.size(); }
+
+namespace {
+bool isSelectableAddressFamily(int family)
+{
+  return family == AF_INET || family == AF_INET6;
+}
+} // namespace
+
+int FileEntry::getNextAddressFamily(const std::string& hostname, uint16_t port,
+                                    int fallbackFamily) const
+{
+  auto i = nextAddressFamily_.find(std::make_pair(hostname, port));
+  if (i == std::end(nextAddressFamily_) ||
+      !isSelectableAddressFamily(i->second)) {
+    return fallbackFamily;
+  }
+  return i->second;
+}
+
+void FileEntry::setNextAddressFamily(const std::string& hostname, uint16_t port,
+                                     int family)
+{
+  auto key = std::make_pair(hostname, port);
+  if (!isSelectableAddressFamily(family)) {
+    nextAddressFamily_.erase(key);
+    return;
+  }
+  nextAddressFamily_[key] = family;
+}
 
 void FileEntry::setOriginalName(std::string originalName)
 {
