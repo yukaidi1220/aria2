@@ -126,6 +126,7 @@ SRCS =  \
 	HttpHeaderProcessor.cc HttpHeaderProcessor.h\
 	HttpInitiateConnectionCommand.cc HttpInitiateConnectionCommand.h\
 	HttpListenCommand.cc HttpListenCommand.h\
+	HttpProtocol.cc HttpProtocol.h\
 	HttpProxyRequestCommand.cc HttpProxyRequestCommand.h\
 	HttpProxyRequestConnectChain.h\
 	HttpProxyResponseCommand.cc HttpProxyResponseCommand.h\
