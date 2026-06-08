@@ -15,6 +15,7 @@ namespace aria2 {
 class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(HttpTLSHandshakeParamsTest);
   CPPUNIT_TEST(testDefaultHost);
+  CPPUNIT_TEST(testDefaultAlpnProtocolsEmpty);
   CPPUNIT_TEST(testHostsMappingControlsVerifyHost);
   CPPUNIT_TEST(testExplicitSNIOverridesMappedVerifyHost);
   CPPUNIT_TEST(testMappedSNIRequestHostBeatsDefaultHost);
@@ -22,6 +23,7 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
 
 public:
   void testDefaultHost();
+  void testDefaultAlpnProtocolsEmpty();
   void testHostsMappingControlsVerifyHost();
   void testExplicitSNIOverridesMappedVerifyHost();
   void testMappedSNIRequestHostBeatsDefaultHost();
@@ -43,6 +45,15 @@ void HttpTLSHandshakeParamsTest::testDefaultHost()
   CPPUNIT_ASSERT(!params.sniHostOverridden);
 }
 
+void HttpTLSHandshakeParamsTest::testDefaultAlpnProtocolsEmpty()
+{
+  Option option;
+
+  auto protocols = createHttpAlpnProtocols(&option);
+
+  CPPUNIT_ASSERT(protocols.empty());
+}
+
 void HttpTLSHandshakeParamsTest::testHostsMappingControlsVerifyHost()
 {
   Request request;
@@ -54,6 +65,7 @@ void HttpTLSHandshakeParamsTest::testHostsMappingControlsVerifyHost()
 
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.sniHost);
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+  CPPUNIT_ASSERT(params.alpnProtocols.empty());
   CPPUNIT_ASSERT(!params.sniHostOverridden);
 }
 
@@ -86,6 +98,7 @@ void HttpTLSHandshakeParamsTest::testMappedSNIRequestHostBeatsDefaultHost()
 
   CPPUNIT_ASSERT_EQUAL(std::string("ip-front.example"), params.sniHost);
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+  CPPUNIT_ASSERT(params.alpnProtocols.empty());
   CPPUNIT_ASSERT(params.sniHostOverridden);
 }
 

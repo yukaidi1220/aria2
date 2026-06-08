@@ -36,12 +36,20 @@
 
 #ifdef ENABLE_SSL
 
+#include <vector>
+
 #include "HostMapping.h"
 #include "Option.h"
 #include "Request.h"
 #include "TLSSNIHostMapping.h"
 
 namespace aria2 {
+
+std::vector<std::string> createHttpAlpnProtocols(const Option* option)
+{
+  (void)option;
+  return {};
+}
 
 TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
                                                 const Option* option)
@@ -50,6 +58,7 @@ TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
   auto sniHostConfig =
       getTLSSNIHostConfig(request->getHost(), verifyHost, option);
   return TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
+                            createHttpAlpnProtocols(option),
                             sniHostConfig.overridden);
 }
 

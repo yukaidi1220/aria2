@@ -41,10 +41,15 @@
 
 #include "SocketCore.h"
 
+#include <string>
+#include <vector>
+
 namespace aria2 {
 
 class Option;
 class Request;
+
+std::vector<std::string> createHttpAlpnProtocols(const Option* option);
 
 TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
                                                 const Option* option);
