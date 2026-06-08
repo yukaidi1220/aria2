@@ -213,6 +213,8 @@ public:
   void addCommandSelf();
 
 protected:
+  void refreshSegments();
+
   virtual bool prepareForRetry(time_t wait);
 
   virtual void onAbort();

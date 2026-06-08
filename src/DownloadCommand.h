@@ -46,6 +46,18 @@ class StreamFilter;
 class MessageDigest;
 
 class DownloadCommand : public AbstractCommand {
+protected:
+  enum class ProcessDataResult {
+    DONE,
+    NEED_MORE_DATA,
+    REQUEUED,
+  };
+
+  enum class SegmentCompletionMode {
+    ALLOW,
+    DEFER_AT_REQUEST_END,
+  };
+
 private:
   std::shared_ptr<PeerStat> peerStat_;
 
@@ -74,7 +86,16 @@ protected:
 
   virtual bool noCheck() const CXX11_OVERRIDE;
 
+  bool downloadSpeedLimitExceeded() const;
+
+  ProcessDataResult
+  processData(const unsigned char* data, size_t len, bool eof,
+              size_t& consumed,
+              SegmentCompletionMode segmentCompletionMode =
+                  SegmentCompletionMode::ALLOW);
+
   virtual bool prepareForNextSegment();
+  virtual void requeueSelf();
 
   // This is file local offset
   virtual int64_t getRequestEndOffset() const = 0;

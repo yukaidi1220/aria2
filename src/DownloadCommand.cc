@@ -35,6 +35,7 @@
 #include "DownloadCommand.h"
 
 #include <cassert>
+#include <cstdlib>
 
 #include "Request.h"
 #include "RequestGroup.h"
@@ -102,7 +103,9 @@ DownloadCommand::DownloadCommand(
       getPieceStorage()->getWrDiskCache(), pieceHashValidationEnabled_);
   streamFilter_->init();
   sinkFilterOnly_ = true;
-  checkSocketRecvBuffer();
+  if (getSocketRecvBuffer()) {
+    checkSocketRecvBuffer();
+  }
 }
 
 DownloadCommand::~DownloadCommand()
@@ -132,20 +135,14 @@ void flushWrDiskCacheEntry(WrDiskCache* wrDiskCache,
 
 bool DownloadCommand::executeInternal()
 {
-  if (getDownloadEngine()
-          ->getRequestGroupMan()
-          ->doesOverallDownloadSpeedExceed() ||
-      getRequestGroup()->doesDownloadSpeedExceed()) {
-    addCommandSelf();
+  if (downloadSpeedLimitExceeded()) {
+    requeueSelf();
     disableReadCheckSocket();
     disableWriteCheckSocket();
     return false;
   }
   setReadCheckSocket(getSocket());
 
-  const std::shared_ptr<DiskAdaptor>& diskAdaptor =
-      getPieceStorage()->getDiskAdaptor();
-  std::shared_ptr<Segment> segment = getSegments().front();
   bool eof = false;
   if (getSocketRecvBuffer()->bufferEmpty()) {
     // Only read from socket when buffer is empty.  Imagine that When
@@ -160,43 +157,69 @@ bool DownloadCommand::executeInternal()
     eof = getSocketRecvBuffer()->recv() == 0 && !getSocket()->wantRead() &&
           !getSocket()->wantWrite();
   }
+
+  size_t consumed = 0;
+  auto result =
+      processData(getSocketRecvBuffer()->getBuffer(),
+                  getSocketRecvBuffer()->getBufferLength(), eof, consumed);
   if (!eof) {
-    size_t bufSize;
+    getSocketRecvBuffer()->drain(consumed);
+  }
+  switch (result) {
+  case ProcessDataResult::DONE:
+    return true;
+  case ProcessDataResult::REQUEUED:
+    return false;
+  case ProcessDataResult::NEED_MORE_DATA:
+    setWriteCheckSocketIf(getSocket(), shouldEnableWriteCheck());
+    checkSocketRecvBuffer();
+    requeueSelf();
+    return false;
+  }
+  abort();
+}
+
+DownloadCommand::ProcessDataResult DownloadCommand::processData(
+    const unsigned char* data, size_t len, bool eof, size_t& consumed,
+    SegmentCompletionMode segmentCompletionMode)
+{
+  consumed = 0;
+  const std::shared_ptr<DiskAdaptor>& diskAdaptor =
+      getPieceStorage()->getDiskAdaptor();
+  std::shared_ptr<Segment> segment = getSegments().front();
+  if (!eof) {
     if (sinkFilterOnly_) {
       if (segment->getLength() > 0) {
         if (segment->getPosition() + segment->getLength() <=
             getFileEntry()->getLastOffset()) {
-          bufSize = std::min(static_cast<size_t>(segment->getLength() -
-                                                 segment->getWrittenLength()),
-                             getSocketRecvBuffer()->getBufferLength());
+          consumed = std::min(static_cast<size_t>(segment->getLength() -
+                                                  segment->getWrittenLength()),
+                              len);
         }
         else {
-          bufSize =
+          consumed =
               std::min(static_cast<size_t>(getFileEntry()->getLastOffset() -
                                            segment->getPositionToWrite()),
-                       getSocketRecvBuffer()->getBufferLength());
+                       len);
         }
       }
       else {
-        bufSize = getSocketRecvBuffer()->getBufferLength();
+        consumed = len;
       }
-      streamFilter_->transform(diskAdaptor, segment,
-                               getSocketRecvBuffer()->getBuffer(), bufSize);
+      streamFilter_->transform(diskAdaptor, segment, data, consumed);
     }
     else {
       // It is possible that segment is completed but we have some bytes
       // of stream to read. For example, chunked encoding has "0"+CRLF
       // after data. After we read data(at this moment segment is
       // completed), we need another 3bytes(or more if it has trailers).
-      streamFilter_->transform(diskAdaptor, segment,
-                               getSocketRecvBuffer()->getBuffer(),
-                               getSocketRecvBuffer()->getBufferLength());
-      bufSize = streamFilter_->getBytesProcessed();
+      streamFilter_->transform(diskAdaptor, segment, data, len);
+      consumed = streamFilter_->getBytesProcessed();
     }
-    getSocketRecvBuffer()->drain(bufSize);
-    peerStat_->updateDownload(bufSize);
-    getDownloadContext()->updateDownload(bufSize);
+    peerStat_->updateDownload(consumed);
+    getDownloadContext()->updateDownload(consumed);
   }
+
   bool segmentPartComplete = false;
   // Note that GrowSegment::complete() always returns false.
   if (sinkFilterOnly_) {
@@ -232,6 +255,16 @@ bool DownloadCommand::executeInternal()
 
   if (!segmentPartComplete && eof) {
     throw DL_RETRY_EX(EX_GOT_EOF);
+  }
+
+  if (segmentPartComplete &&
+      segmentCompletionMode == SegmentCompletionMode::DEFER_AT_REQUEST_END) {
+    auto loff = getFileEntry()->gtoloff(segment->getPositionToWrite());
+    auto requestEndOffset = getRequestEndOffset();
+    if (requestEndOffset <= 0 || loff >= requestEndOffset) {
+      checkLowestDownloadSpeed();
+      return ProcessDataResult::NEED_MORE_DATA;
+    }
   }
 
   if (segmentPartComplete) {
@@ -283,20 +316,26 @@ bool DownloadCommand::executeInternal()
     }
     checkLowestDownloadSpeed();
     // this unit is going to download another segment.
-    return prepareForNextSegment();
+    return prepareForNextSegment() ? ProcessDataResult::DONE
+                                   : ProcessDataResult::REQUEUED;
   }
   else {
     checkLowestDownloadSpeed();
-    setWriteCheckSocketIf(getSocket(), shouldEnableWriteCheck());
-    checkSocketRecvBuffer();
-    addCommandSelf();
-    return false;
+    return ProcessDataResult::NEED_MORE_DATA;
   }
 }
 
 bool DownloadCommand::shouldEnableWriteCheck()
 {
   return getSocket()->wantWrite();
+}
+
+bool DownloadCommand::downloadSpeedLimitExceeded() const
+{
+  return getDownloadEngine()
+             ->getRequestGroupMan()
+             ->doesOverallDownloadSpeedExceed() ||
+         getRequestGroup()->doesDownloadSpeedExceed();
 }
 
 void DownloadCommand::checkLowestDownloadSpeed() const
@@ -369,8 +408,10 @@ bool DownloadCommand::prepareForNextSegment()
         return prepareForRetry(0);
       }
       else {
-        checkSocketRecvBuffer();
-        addCommandSelf();
+        if (getSocketRecvBuffer()) {
+          checkSocketRecvBuffer();
+        }
+        requeueSelf();
         return false;
       }
     }
@@ -422,5 +463,7 @@ void DownloadCommand::installStreamFilter(
 // We need to override noCheck() to return true in order to measure
 // download speed to check lowest speed.
 bool DownloadCommand::noCheck() const { return lowestDownloadSpeedLimit_ > 0; }
+
+void DownloadCommand::requeueSelf() { addCommandSelf(); }
 
 } // namespace aria2

@@ -269,6 +269,16 @@ public:
     CPPUNIT_ASSERT(!callbackFailed_);
   }
 
+  void submitResponseDataNoEndStream(int32_t streamId, const std::string& body)
+  {
+    appendDataFrame(streamId, body, NGHTTP2_FLAG_NONE);
+  }
+
+  void submitEndStream(int32_t streamId)
+  {
+    appendDataFrame(streamId, "", NGHTTP2_FLAG_END_STREAM);
+  }
+
   void submitRstStream(int32_t streamId, uint32_t errorCode)
   {
     assertNghttp2Success(nghttp2_submit_rst_stream(
@@ -327,6 +337,23 @@ private:
       *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
     }
     return static_cast<ssize_t>(chunkLength);
+  }
+
+  void appendDataFrame(int32_t streamId, const std::string& body, uint8_t flags)
+  {
+    auto length = body.size();
+    CPPUNIT_ASSERT(length <= 0xffffffu);
+    auto sid = static_cast<uint32_t>(streamId) & 0x7fffffffu;
+    outbound_.push_back(static_cast<char>((length >> 16) & 0xffu));
+    outbound_.push_back(static_cast<char>((length >> 8) & 0xffu));
+    outbound_.push_back(static_cast<char>(length & 0xffu));
+    outbound_.push_back(static_cast<char>(NGHTTP2_DATA));
+    outbound_.push_back(static_cast<char>(flags));
+    outbound_.push_back(static_cast<char>((sid >> 24) & 0xffu));
+    outbound_.push_back(static_cast<char>((sid >> 16) & 0xffu));
+    outbound_.push_back(static_cast<char>((sid >> 8) & 0xffu));
+    outbound_.push_back(static_cast<char>(sid & 0xffu));
+    outbound_.append(body);
   }
 };
 

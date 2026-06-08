@@ -40,8 +40,9 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include <memory>
+#  include <string>
 
-#  include "AbstractCommand.h"
+#  include "DownloadCommand.h"
 
 namespace aria2 {
 
@@ -49,21 +50,21 @@ class Http2SingleStreamExchange;
 class HttpResponse;
 class StreamFilter;
 
-// Internal skeleton which drains the HTTP/2 response body from the stream.
-// File write integration is intentionally left for the next phase.
-class Http2DownloadCommand : public AbstractCommand {
+class Http2DownloadCommand : public DownloadCommand {
 private:
   std::shared_ptr<Http2SingleStreamExchange> exchange_;
   std::unique_ptr<HttpResponse> httpResponse_;
-  std::unique_ptr<StreamFilter> streamFilter_;
   int64_t expectedBodyLength_;
   int64_t bodyLength_;
   bool expectedBodyLengthKnown_;
+  std::string pendingBody_;
 
 protected:
   bool executeInternal() CXX11_OVERRIDE;
   bool noCheck() const CXX11_OVERRIDE;
-  virtual void requeueSelf();
+  int64_t getRequestEndOffset() const CXX11_OVERRIDE;
+  bool prepareForNextSegment() CXX11_OVERRIDE;
+  void requeueSelf() CXX11_OVERRIDE;
 
 public:
   Http2DownloadCommand(

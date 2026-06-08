@@ -40,13 +40,21 @@
 
 #  include "DlAbortEx.h"
 #  include "DownloadEngine.h"
+#  include "FileEntry.h"
 #  include "Http2SingleStreamExchange.h"
 #  include "HttpHeader.h"
 #  include "HttpResponse.h"
+#  include "Option.h"
+#  include "Range.h"
+#  include "RequestGroup.h"
+#  include "Segment.h"
+#  include "SegmentMan.h"
 #  include "SocketCore.h"
 #  include "StreamFilter.h"
+#  include "URISelector.h"
 #  include "a2functional.h"
 #  include "fmt.h"
+#  include "prefs.h"
 
 namespace aria2 {
 
@@ -61,10 +69,9 @@ Http2DownloadCommand::Http2DownloadCommand(
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
     const std::shared_ptr<SocketCore>& s)
-    : AbstractCommand(cuid, req, fileEntry, requestGroup, e, s),
+    : DownloadCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr),
       exchange_(std::move(exchange)),
       httpResponse_(std::move(httpResponse)),
-      streamFilter_(std::move(streamFilter)),
       expectedBodyLength_(0),
       bodyLength_(0),
       expectedBodyLengthKnown_(false)
@@ -74,12 +81,25 @@ Http2DownloadCommand::Http2DownloadCommand(
     expectedBodyLength_ = httpResponse_->getContentLength();
     expectedBodyLengthKnown_ = true;
   }
+  setStartupIdleTime(
+      std::chrono::seconds(getOption()->getAsInt(PREF_STARTUP_IDLE_TIME)));
+  setLowestDownloadSpeedLimit(getOption()->getAsInt(PREF_LOWEST_SPEED_LIMIT));
+  installStreamFilter(std::move(streamFilter));
+  getRequestGroup()->getURISelector()->tuneDownloadCommand(
+      getFileEntry()->getRemainingUris(), this);
 }
 
 Http2DownloadCommand::~Http2DownloadCommand() = default;
 
 bool Http2DownloadCommand::executeInternal()
 {
+  if (downloadSpeedLimitExceeded()) {
+    requeueSelf();
+    disableReadCheckSocket();
+    disableWriteCheckSocket();
+    return false;
+  }
+
   exchange_->pump();
 
   auto state = exchange_->getState();
@@ -90,13 +110,46 @@ bool Http2DownloadCommand::executeInternal()
   }
 
   for (;;) {
-    auto body = exchange_->popResponseBody(BODY_CHUNK_SIZE);
-    if (body.empty()) {
-      break;
+    state = exchange_->getState();
+    if (pendingBody_.empty()) {
+      pendingBody_ = exchange_->popResponseBody(BODY_CHUNK_SIZE);
+      if (pendingBody_.empty()) {
+        break;
+      }
+      bodyLength_ += static_cast<int64_t>(pendingBody_.size());
+      if (expectedBodyLengthKnown_ && bodyLength_ > expectedBodyLength_) {
+        throw DL_ABORT_EX("HTTP/2 response body exceeds Content-Length");
+      }
+      if (!expectedBodyLengthKnown_ &&
+          httpResponse_->getHttpHeader()->getRange().endByte == 0 &&
+          getFileEntry()->getLength() > 0 &&
+          bodyLength_ > getFileEntry()->getLength()) {
+        throw DL_ABORT_EX("HTTP/2 response body exceeds file length");
+      }
     }
-    bodyLength_ += static_cast<int64_t>(body.size());
-    if (expectedBodyLengthKnown_ && bodyLength_ > expectedBodyLength_) {
-      throw DL_ABORT_EX("HTTP/2 response body exceeds Content-Length");
+
+    size_t consumed = 0;
+    auto segmentCompletionMode =
+        state.streamClosed ? SegmentCompletionMode::ALLOW
+                           : SegmentCompletionMode::DEFER_AT_REQUEST_END;
+    auto result = processData(
+        reinterpret_cast<const unsigned char*>(pendingBody_.data()),
+        pendingBody_.size(), false, consumed, segmentCompletionMode);
+    pendingBody_.erase(0, consumed);
+    if (result == ProcessDataResult::DONE) {
+      if (!pendingBody_.empty()) {
+        throw DL_ABORT_EX("HTTP/2 response body was not fully consumed");
+      }
+      if (state.streamClosed) {
+        exchange_->popResponseEvent();
+      }
+      return true;
+    }
+    if (result == ProcessDataResult::REQUEUED) {
+      continue;
+    }
+    if (consumed == 0) {
+      break;
     }
   }
 
@@ -110,6 +163,14 @@ bool Http2DownloadCommand::executeInternal()
   if (state.streamClosed) {
     if (expectedBodyLengthKnown_ && bodyLength_ != expectedBodyLength_) {
       throw DL_ABORT_EX("HTTP/2 stream closed before response body completed");
+    }
+    if (!pendingBody_.empty()) {
+      throw DL_ABORT_EX("HTTP/2 response body was not fully consumed");
+    }
+    size_t consumed = 0;
+    auto result = processData(nullptr, 0, true, consumed);
+    if (result != ProcessDataResult::DONE) {
+      throw DL_ABORT_EX("HTTP/2 response body did not complete on stream close");
     }
     exchange_->popResponseEvent();
     return true;
@@ -132,7 +193,57 @@ bool Http2DownloadCommand::executeInternal()
 bool Http2DownloadCommand::noCheck() const
 {
   auto state = exchange_->getState();
-  return state.bodyLength > 0 || state.streamClosed || state.errorCode != 0;
+  return DownloadCommand::noCheck() || !pendingBody_.empty() ||
+         state.bodyLength > 0 || state.streamClosed || state.errorCode != 0;
+}
+
+int64_t Http2DownloadCommand::getRequestEndOffset() const
+{
+  auto range = httpResponse_->getHttpHeader()->getRange();
+  if (range.endByte > 0) {
+    return range.endByte + 1;
+  }
+  if (expectedBodyLengthKnown_) {
+    return expectedBodyLength_;
+  }
+  if (getFileEntry()->getLength() > 0) {
+    return getFileEntry()->getLength();
+  }
+  return range.endByte;
+}
+
+bool Http2DownloadCommand::prepareForNextSegment()
+{
+  if (getRequestGroup()->downloadFinished()) {
+    return DownloadCommand::prepareForNextSegment();
+  }
+
+  if (getSegments().size() != 1) {
+    return prepareForRetry(0);
+  }
+
+  auto tempSegment = getSegments().front();
+  if (!tempSegment->complete()) {
+    return prepareForRetry(0);
+  }
+  if (getRequestEndOffset() ==
+      getFileEntry()->gtoloff(tempSegment->getPosition() +
+                              tempSegment->getLength())) {
+    return prepareForRetry(0);
+  }
+
+  auto nextSegment = getSegmentMan()->getSegmentWithIndex(
+      getCuid(), tempSegment->getIndex() + 1);
+  if (!nextSegment) {
+    nextSegment = getSegmentMan()->getCleanSegmentIfOwnerIsIdle(
+        getCuid(), tempSegment->getIndex() + 1);
+  }
+  if (!nextSegment || nextSegment->getWrittenLength() > 0) {
+    return prepareForRetry(0);
+  }
+
+  refreshSegments();
+  return false;
 }
 
 void Http2DownloadCommand::requeueSelf() { addCommandSelf(); }

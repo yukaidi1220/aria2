@@ -226,8 +226,7 @@ bool AbstractCommand::execute()
     auto sm = getSegmentMan();
 
     if (getPieceStorage()) {
-      segments_.clear();
-      sm->getInFlightSegment(segments_, getCuid());
+      refreshSegments();
 
       if (req_ && segments_.empty()) {
         // This command previously has assigned segments, but it is
@@ -1006,6 +1005,12 @@ void AbstractCommand::prepareForNextAction(
                                             e_);
   e_->addCommand(std::move(commands));
   e_->setNoWait(true);
+}
+
+void AbstractCommand::refreshSegments()
+{
+  segments_.clear();
+  getSegmentMan()->getInFlightSegment(segments_, getCuid());
 }
 
 bool AbstractCommand::checkIfConnectionEstablished(
