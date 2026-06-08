@@ -103,6 +103,14 @@ std::string Http2Transaction::popResponseBody(size_t maxLen)
   return connection_.popResponseBody(streamId_, maxLen);
 }
 
+std::unique_ptr<HttpResponse> Http2Transaction::createHttpResponse() const
+{
+  if (streamId_ == 0) {
+    return nullptr;
+  }
+  return connection_.createHttpResponse(streamId_);
+}
+
 std::unique_ptr<Http2ResponseEvent> Http2Transaction::popResponseEvent()
 {
   if (streamId_ == 0) {

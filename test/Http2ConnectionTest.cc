@@ -21,6 +21,7 @@ class Http2ConnectionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSubmitRequestDrainsOutboundData);
   CPPUNIT_TEST(testFeedInboundDataFindsResponseEvent);
   CPPUNIT_TEST(testPopResponseBodyKeepsEvent);
+  CPPUNIT_TEST(testCreateHttpResponseKeepsEvent);
   CPPUNIT_TEST(testPopResponseEventRemovesEvent);
   CPPUNIT_TEST(testPopHttpResponseConsumesEvent);
   CPPUNIT_TEST(testPopHttpResponseWaitsForStreamClose);
@@ -31,6 +32,7 @@ public:
   void testSubmitRequestDrainsOutboundData();
   void testFeedInboundDataFindsResponseEvent();
   void testPopResponseBodyKeepsEvent();
+  void testCreateHttpResponseKeepsEvent();
   void testPopResponseEventRemovesEvent();
   void testPopHttpResponseConsumesEvent();
   void testPopHttpResponseWaitsForStreamClose();
@@ -95,6 +97,25 @@ void Http2ConnectionTest::testPopResponseBodyKeepsEvent()
   auto response = connection.popResponseEvent(streamId);
   CPPUNIT_ASSERT(response);
   CPPUNIT_ASSERT_EQUAL(std::string("lo"), response->body.drainAll());
+}
+
+void Http2ConnectionTest::testCreateHttpResponseKeepsEvent()
+{
+  Http2Connection connection;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = connection.submitRequest(http2test::createRequestHeaders());
+  auto headers = http2test::createResponseHeaders();
+  headers.emplace_back("content-length", "123");
+
+  server.feedInboundData(connection.drainOutboundData());
+  server.submitResponseHeaders(streamId, headers);
+  connection.feedInboundData(server.drainOutboundData());
+
+  auto response = connection.createHttpResponse(streamId);
+  CPPUNIT_ASSERT(response);
+  CPPUNIT_ASSERT_EQUAL(200, response->getStatusCode());
+  CPPUNIT_ASSERT_EQUAL((int64_t)123LL, response->getContentLength());
+  CPPUNIT_ASSERT(connection.hasResponseEvent(streamId));
 }
 
 void Http2ConnectionTest::testPopResponseEventRemovesEvent()

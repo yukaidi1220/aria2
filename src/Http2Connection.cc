@@ -76,6 +76,16 @@ std::string Http2Connection::popResponseBody(int32_t streamId, size_t maxLen)
   return session_.popResponseBody(streamId, maxLen);
 }
 
+std::unique_ptr<HttpResponse>
+Http2Connection::createHttpResponse(int32_t streamId) const
+{
+  auto event = session_.findResponseEvent(streamId);
+  if (!event || !event->headersComplete) {
+    return nullptr;
+  }
+  return createHttpResponseFromHttp2Event(*event);
+}
+
 std::unique_ptr<Http2ResponseEvent>
 Http2Connection::popResponseEvent(int32_t streamId)
 {

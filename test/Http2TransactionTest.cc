@@ -23,6 +23,7 @@ class Http2TransactionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetStateReflectsBodyDrainAndPop);
   CPPUNIT_TEST(testDrainOutboundDataAfterSubmit);
   CPPUNIT_TEST(testFeedInboundDataPopHttpResponse);
+  CPPUNIT_TEST(testCreateHttpResponseKeepsActiveStream);
   CPPUNIT_TEST(testPopResponseBodyKeepsActiveStream);
   CPPUNIT_TEST(testPopResponseEventDrainsBody);
   CPPUNIT_TEST(testPopResponseEventKeepsActiveUntilStreamClose);
@@ -37,6 +38,7 @@ public:
   void testGetStateReflectsBodyDrainAndPop();
   void testDrainOutboundDataAfterSubmit();
   void testFeedInboundDataPopHttpResponse();
+  void testCreateHttpResponseKeepsActiveStream();
   void testPopResponseBodyKeepsActiveStream();
   void testPopResponseEventDrainsBody();
   void testPopResponseEventKeepsActiveUntilStreamClose();
@@ -154,6 +156,28 @@ void Http2TransactionTest::testFeedInboundDataPopHttpResponse()
   CPPUNIT_ASSERT(!transaction.popHttpResponse());
 }
 
+void Http2TransactionTest::testCreateHttpResponseKeepsActiveStream()
+{
+  Http2Transaction transaction;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+  auto headers = http2test::createResponseHeaders();
+  headers.emplace_back("content-length", "321");
+
+  CPPUNIT_ASSERT(!transaction.createHttpResponse());
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponseHeaders(streamId, headers);
+  transaction.feedInboundData(server.drainOutboundData());
+
+  auto response = transaction.createHttpResponse();
+  CPPUNIT_ASSERT(response);
+  CPPUNIT_ASSERT_EQUAL(200, response->getStatusCode());
+  CPPUNIT_ASSERT_EQUAL((int64_t)321LL, response->getContentLength());
+  CPPUNIT_ASSERT(transaction.hasActiveStream());
+  CPPUNIT_ASSERT(transaction.findResponseEvent());
+  CPPUNIT_ASSERT(!transaction.popHttpResponse());
+}
+
 void Http2TransactionTest::testPopResponseBodyKeepsActiveStream()
 {
   Http2Transaction transaction;
@@ -253,6 +277,7 @@ void Http2TransactionTest::testMalformedResponseKeepsActiveStream()
 
   CPPUNIT_ASSERT(transaction.hasActiveStream());
   CPPUNIT_ASSERT_THROW(transaction.popHttpResponse(), DlAbortEx);
+  CPPUNIT_ASSERT_THROW(transaction.createHttpResponse(), DlAbortEx);
   CPPUNIT_ASSERT(transaction.hasActiveStream());
   CPPUNIT_ASSERT(transaction.findResponseEvent());
 }
