@@ -22,6 +22,7 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testResolveAResponseWithBodyInHeaderRead);
   CPPUNIT_TEST(testResolveAResponseWithFragmentedHeaderRead);
   CPPUNIT_TEST(testResolveAAAAResponse);
+  CPPUNIT_TEST(testRequestPathPreservesQuery);
   CPPUNIT_TEST(testTLSHostIsUsedForHostHeaderAndHandshake);
   CPPUNIT_TEST(testTLSHostDefaultPortHostHeaderOmitsPort);
   CPPUNIT_TEST(testHostHeaderUsesBracketedIPv6);
@@ -47,6 +48,7 @@ public:
   void testResolveAResponseWithBodyInHeaderRead();
   void testResolveAResponseWithFragmentedHeaderRead();
   void testResolveAAAAResponse();
+  void testRequestPathPreservesQuery();
   void testTLSHostIsUsedForHostHeaderAndHandshake();
   void testTLSHostDefaultPortHostHeaderOmitsPort();
   void testHostHeaderUsesBracketedIPv6();
@@ -470,6 +472,23 @@ void AsyncDohNameResolverTest::testResolveAAAAResponse()
   CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getResolvedAddresses().size());
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"),
                        resolver.getResolvedAddresses()[0]);
+}
+
+void AsyncDohNameResolverTest::testRequestPathPreservesQuery()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET,
+      {{"1.1.1.1", 443, "", "/dns-query?ct=application/dns-message"}},
+      makeTransportFactory(factory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteRequestDone(resolver, factory);
+
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT(util::startsWith(
+      transport->written,
+      "POST /dns-query?ct=application/dns-message HTTP/1.1\r\n"));
 }
 
 void AsyncDohNameResolverTest::testTLSHostIsUsedForHostHeaderAndHandshake()
