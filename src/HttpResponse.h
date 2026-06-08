@@ -61,6 +61,7 @@ private:
 
 public:
   HttpResponse();
+  ~HttpResponse();
 
   void validateResponse() const;
 

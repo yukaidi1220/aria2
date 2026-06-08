@@ -68,6 +68,8 @@ namespace aria2 {
 
 HttpResponse::HttpResponse() : cuid_{0} {}
 
+HttpResponse::~HttpResponse() = default;
+
 void HttpResponse::validateResponse() const
 {
   int statusCode = getStatusCode();
