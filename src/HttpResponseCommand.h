@@ -44,6 +44,7 @@ class HttpConnection;
 class HttpDownloadCommand;
 class HttpResponse;
 class SocketCore;
+class SocketRecvBuffer;
 class StreamFilter;
 class Checksum;
 
@@ -61,18 +62,25 @@ class HttpResponseCommand : public AbstractCommand {
 private:
   std::shared_ptr<HttpConnection> httpConnection_;
 
+protected:
+  HttpResponseCommand(
+      cuid_t cuid, const std::shared_ptr<Request>& req,
+      const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
+      DownloadEngine* e, const std::shared_ptr<SocketCore>& s,
+      const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer);
+
   bool handleDefaultEncoding(std::unique_ptr<HttpResponse> httpResponse);
   bool handleOtherEncoding(std::unique_ptr<HttpResponse> httpResponse);
-  bool skipResponseBody(std::unique_ptr<HttpResponse> httpResponse);
+  virtual bool skipResponseBody(std::unique_ptr<HttpResponse> httpResponse);
   bool processHttpResponse(std::unique_ptr<HttpResponse> httpResponse);
 
-  std::unique_ptr<HttpDownloadCommand>
+  virtual std::unique_ptr<Command>
   createHttpDownloadCommand(std::unique_ptr<HttpResponse> httpResponse,
                             std::unique_ptr<StreamFilter> streamFilter);
 
   void updateLastModifiedTime(const Time& lastModified);
 
-  void poolConnection();
+  virtual void poolConnection();
 
   void onDryRunFileFound();
   // Returns true if dctx and checksum has same hash type and hash

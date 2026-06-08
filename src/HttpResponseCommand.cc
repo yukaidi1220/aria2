@@ -130,12 +130,22 @@ getContentEncodingStreamFilter(HttpResponse* httpResponse,
 HttpResponseCommand::HttpResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
+    DownloadEngine* e, const std::shared_ptr<SocketCore>& s,
+    const std::shared_ptr<SocketRecvBuffer>& socketRecvBuffer)
+    : AbstractCommand(cuid, req, fileEntry, requestGroup, e, s,
+                      socketRecvBuffer)
+{
+}
+
+HttpResponseCommand::HttpResponseCommand(
+    cuid_t cuid, const std::shared_ptr<Request>& req,
+    const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
     const std::shared_ptr<HttpConnection>& httpConnection, DownloadEngine* e,
     const std::shared_ptr<SocketCore>& s)
-    : AbstractCommand(cuid, req, fileEntry, requestGroup, e, s,
-                      httpConnection->getSocketRecvBuffer()),
-      httpConnection_(httpConnection)
+    : HttpResponseCommand(cuid, req, fileEntry, requestGroup, e, s,
+                          httpConnection->getSocketRecvBuffer())
 {
+  httpConnection_ = httpConnection;
   checkSocketRecvBuffer();
 }
 
@@ -539,7 +549,7 @@ bool decideFileAllocation(StreamFilter* filter)
 
 } // namespace
 
-std::unique_ptr<HttpDownloadCommand>
+std::unique_ptr<Command>
 HttpResponseCommand::createHttpDownloadCommand(
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> filter)
