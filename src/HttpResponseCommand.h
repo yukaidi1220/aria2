@@ -64,6 +64,7 @@ private:
   bool handleDefaultEncoding(std::unique_ptr<HttpResponse> httpResponse);
   bool handleOtherEncoding(std::unique_ptr<HttpResponse> httpResponse);
   bool skipResponseBody(std::unique_ptr<HttpResponse> httpResponse);
+  bool processHttpResponse(std::unique_ptr<HttpResponse> httpResponse);
 
   std::unique_ptr<HttpDownloadCommand>
   createHttpDownloadCommand(std::unique_ptr<HttpResponse> httpResponse,

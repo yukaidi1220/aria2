@@ -153,6 +153,12 @@ bool HttpResponseCommand::executeInternal()
     return false;
   }
 
+  return processHttpResponse(std::move(httpResponse));
+}
+
+bool HttpResponseCommand::processHttpResponse(
+    std::unique_ptr<HttpResponse> httpResponse)
+{
   // check HTTP status code
   httpResponse->validateResponse();
   httpResponse->retrieveCookie();
