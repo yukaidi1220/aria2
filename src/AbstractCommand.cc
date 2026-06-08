@@ -101,6 +101,17 @@ bool isNumericAddressFamily(const std::string& addr, int family)
   return inetPton(family, addr.c_str(), &buf.ipv6) == 0;
 }
 
+int getNumericAddressFamily(const std::string& addr)
+{
+  if (isNumericAddressFamily(addr, AF_INET)) {
+    return AF_INET;
+  }
+  if (isNumericAddressFamily(addr, AF_INET6)) {
+    return AF_INET6;
+  }
+  return 0;
+}
+
 #ifdef ENABLE_ASYNC_DNS
 class AsyncDnsCacheCommand : public Command {
 private:
@@ -943,16 +954,16 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
     return A2STR::NIL;
   }
 
-  auto hasIPv4 =
-      std::find_if(std::begin(addrs), std::end(addrs),
-                   [](const std::string& addr) {
-                     return isNumericAddressFamily(addr, AF_INET);
-                   }) != std::end(addrs);
-  auto hasIPv6 =
-      std::find_if(std::begin(addrs), std::end(addrs),
-                   [](const std::string& addr) {
-                     return isNumericAddressFamily(addr, AF_INET6);
-                   }) != std::end(addrs);
+  auto hasIPv4 = std::find_if(std::begin(addrs), std::end(addrs),
+                              [](const std::string& addr) {
+                                return getNumericAddressFamily(addr) ==
+                                       AF_INET;
+                              }) != std::end(addrs);
+  auto hasIPv6 = std::find_if(std::begin(addrs), std::end(addrs),
+                              [](const std::string& addr) {
+                                return getNumericAddressFamily(addr) ==
+                                       AF_INET6;
+                              }) != std::end(addrs);
   if (!hasIPv4 || !hasIPv6) {
     return addrs.front();
   }
@@ -961,9 +972,9 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
                     ? preferredFamily
                     : (cuid % 2 == 0 ? AF_INET : AF_INET6);
   auto addr = std::find_if(std::begin(addrs), std::end(addrs),
-                           [family](const std::string& addr) {
-                             return isNumericAddressFamily(addr, family);
-                           });
+                            [family](const std::string& addr) {
+                              return getNumericAddressFamily(addr) == family;
+                            });
   return addr == std::end(addrs) ? addrs.front() : *addr;
 }
 
@@ -986,7 +997,7 @@ void prioritizeIPAddress(std::vector<std::string>& addrs,
 }
 
 namespace {
-int getLeastUsedConfirmedAddressFamily(
+int getLeastUsedActiveAddressFamily(
     const std::shared_ptr<FileEntry>& fileEntry, const std::string& hostname,
     uint16_t port, const std::vector<std::string>& addrs)
 {
@@ -994,16 +1005,16 @@ int getLeastUsedConfirmedAddressFamily(
     return 0;
   }
 
-  auto hasIPv4 =
-      std::find_if(std::begin(addrs), std::end(addrs),
-                   [](const std::string& addr) {
-                     return isNumericAddressFamily(addr, AF_INET);
-                   }) != std::end(addrs);
-  auto hasIPv6 =
-      std::find_if(std::begin(addrs), std::end(addrs),
-                   [](const std::string& addr) {
-                     return isNumericAddressFamily(addr, AF_INET6);
-                   }) != std::end(addrs);
+  auto hasIPv4 = std::find_if(std::begin(addrs), std::end(addrs),
+                              [](const std::string& addr) {
+                                return getNumericAddressFamily(addr) ==
+                                       AF_INET;
+                              }) != std::end(addrs);
+  auto hasIPv6 = std::find_if(std::begin(addrs), std::end(addrs),
+                              [](const std::string& addr) {
+                                return getNumericAddressFamily(addr) ==
+                                       AF_INET6;
+                              }) != std::end(addrs);
   if (!hasIPv4 || !hasIPv6) {
     return 0;
   }
@@ -1011,16 +1022,20 @@ int getLeastUsedConfirmedAddressFamily(
   size_t ipv4 = 0;
   size_t ipv6 = 0;
   for (const auto& request : fileEntry->getInFlightRequests()) {
-    if (!request->connectedAddrInfoConfirmed() ||
-        request->getConnectedHostname() != hostname ||
+    if (request->getConnectedHostname() != hostname ||
         request->getConnectedPort() != port) {
       continue;
     }
     const auto& connectedAddr = request->getConnectedAddr();
-    if (isNumericAddressFamily(connectedAddr, AF_INET)) {
+    if (std::find(std::begin(addrs), std::end(addrs), connectedAddr) ==
+        std::end(addrs)) {
+      continue;
+    }
+    auto family = getNumericAddressFamily(connectedAddr);
+    if (family == AF_INET) {
       ++ipv4;
     }
-    else if (isNumericAddressFamily(connectedAddr, AF_INET6)) {
+    else if (family == AF_INET6) {
       ++ipv6;
     }
   }
@@ -1036,7 +1051,7 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             const std::string& hostname, uint16_t port)
 {
   return selectIPAddress(addrs, cuid,
-                         getLeastUsedConfirmedAddressFamily(
+                         getLeastUsedActiveAddressFamily(
                              fileEntry, hostname, port, addrs));
 }
 

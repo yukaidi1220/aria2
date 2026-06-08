@@ -20,7 +20,7 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
   CPPUNIT_TEST(testSelectIPAddressPrefersRequestedDualStackFamily);
-  CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedConfirmedFamily);
+  CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedActiveFamily);
   CPPUNIT_TEST(testPrioritizeIPAddress);
   CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
   CPPUNIT_TEST_SUITE_END();
@@ -35,7 +35,7 @@ public:
   void testSelectIPAddressKeepsSingleFamilyOrder();
   void testSelectIPAddressAlternatesDualStackByCuid();
   void testSelectIPAddressPrefersRequestedDualStackFamily();
-  void testSelectIPAddressPrefersUnderusedConfirmedFamily();
+  void testSelectIPAddressPrefersUnderusedActiveFamily();
   void testPrioritizeIPAddress();
   void testPrioritizeIPAddressIgnoresUnknownAddress();
 };
@@ -129,7 +129,7 @@ void AbstractCommandTest::testSelectIPAddressPrefersRequestedDualStackFamily()
                        selectIPAddress(addrs, 2, 0));
 }
 
-void AbstractCommandTest::testSelectIPAddressPrefersUnderusedConfirmedFamily()
+void AbstractCommandTest::testSelectIPAddressPrefersUnderusedActiveFamily()
 {
   std::vector<std::string> addrs;
   addrs.push_back("192.0.2.1");
@@ -147,9 +147,9 @@ void AbstractCommandTest::testSelectIPAddressPrefersUnderusedConfirmedFamily()
   auto req2 = fileEntry->getRequest(&selector, true, usedHosts);
   CPPUNIT_ASSERT(req2);
   req->setConnectedAddrInfo("example.org", "192.0.2.1", 443);
-  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
                        selectIPAddress(addrs, 2, fileEntry, "example.org",
-                                       443));
+                                        443));
 
   req->confirmConnectedAddrInfo();
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
@@ -158,6 +158,21 @@ void AbstractCommandTest::testSelectIPAddressPrefersUnderusedConfirmedFamily()
 
   fileEntry->poolRequest(req);
   CPPUNIT_ASSERT(!req->connectedAddrInfoConfirmed());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                        443));
+
+  req2->setConnectedAddrInfo("example.org", "192.0.2.2", 443);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                       443));
+
+  req2->setConnectedAddrInfo("other.example.org", "192.0.2.1", 443);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
+                                       443));
+
+  req2->setConnectedAddrInfo("example.org", "192.0.2.1", 8443);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 2, fileEntry, "example.org",
                                        443));
