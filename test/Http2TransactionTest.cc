@@ -20,6 +20,7 @@ class Http2TransactionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2TransactionTest);
   CPPUNIT_TEST(testSubmitRequestStoresSingleStreamId);
   CPPUNIT_TEST(testGetStateTracksResponseProgress);
+  CPPUNIT_TEST(testGetStateReflectsBodyDrainAndPop);
   CPPUNIT_TEST(testDrainOutboundDataAfterSubmit);
   CPPUNIT_TEST(testFeedInboundDataPopHttpResponse);
   CPPUNIT_TEST(testPopResponseBodyKeepsActiveStream);
@@ -33,6 +34,7 @@ class Http2TransactionTest : public CppUnit::TestFixture {
 public:
   void testSubmitRequestStoresSingleStreamId();
   void testGetStateTracksResponseProgress();
+  void testGetStateReflectsBodyDrainAndPop();
   void testDrainOutboundDataAfterSubmit();
   void testFeedInboundDataPopHttpResponse();
   void testPopResponseBodyKeepsActiveStream();
@@ -86,6 +88,32 @@ void Http2TransactionTest::testGetStateTracksResponseProgress()
   CPPUNIT_ASSERT(state.streamClosed);
   CPPUNIT_ASSERT_EQUAL((size_t)4, state.bodyLength);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, state.errorCode);
+}
+
+void Http2TransactionTest::testGetStateReflectsBodyDrainAndPop()
+{
+  Http2Transaction transaction;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponse(streamId, http2test::createResponseHeaders(), "body");
+  transaction.feedInboundData(server.drainOutboundData());
+
+  auto state = transaction.getState();
+  CPPUNIT_ASSERT(state.active);
+  CPPUNIT_ASSERT_EQUAL((size_t)4, state.bodyLength);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("bo"), transaction.popResponseBody(2));
+  state = transaction.getState();
+  CPPUNIT_ASSERT(state.active);
+  CPPUNIT_ASSERT_EQUAL((size_t)2, state.bodyLength);
+
+  CPPUNIT_ASSERT(transaction.popResponseEvent());
+  state = transaction.getState();
+  CPPUNIT_ASSERT(!state.active);
+  CPPUNIT_ASSERT(!state.responseAvailable);
+  CPPUNIT_ASSERT_EQUAL((size_t)0, state.bodyLength);
 }
 
 void Http2TransactionTest::testDrainOutboundDataAfterSubmit()
