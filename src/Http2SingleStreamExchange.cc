@@ -41,6 +41,8 @@
 #  include "HttpRequest.h"
 #  include "Http2Transport.h"
 
+#  include <utility>
+
 namespace aria2 {
 
 Http2SingleStreamExchange::Http2SingleStreamExchange(
@@ -61,8 +63,10 @@ Http2SingleStreamExchange::~Http2SingleStreamExchange() = default;
 
 int32_t Http2SingleStreamExchange::submitRequest(HttpRequest& request)
 {
-  return transaction_.submitRequest(
+  auto streamId = transaction_.submitRequest(
       createHttp2HeaderBlockFromHttpRequest(request));
+  pump_.notifyPendingOutboundData();
+  return streamId;
 }
 
 bool Http2SingleStreamExchange::flushOutboundData()

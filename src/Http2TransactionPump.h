@@ -43,20 +43,23 @@
 
 namespace aria2 {
 
+class Http2Connection;
 class Http2Transaction;
 class Http2Transport;
 
 class Http2TransactionPump {
 private:
-  Http2Transaction& transaction_;
+  Http2Connection& connection_;
   Http2Transport& transport_;
   std::string writeBuffer_;
   size_t writeOffset_;
+  bool outboundDataPending_;
 
   void appendOutboundData();
   void clearSentOutboundData();
 
 public:
+  Http2TransactionPump(Http2Connection& connection, Http2Transport& transport);
   Http2TransactionPump(Http2Transaction& transaction,
                        Http2Transport& transport);
   ~Http2TransactionPump();
@@ -64,6 +67,7 @@ public:
   Http2TransactionPump(const Http2TransactionPump&) = delete;
   Http2TransactionPump& operator=(const Http2TransactionPump&) = delete;
 
+  void notifyPendingOutboundData();
   bool flushOutboundData();
   bool readInboundData();
   bool pump();

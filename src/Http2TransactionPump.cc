@@ -39,6 +39,7 @@
 #  include <algorithm>
 
 #  include "DlAbortEx.h"
+#  include "Http2Connection.h"
 #  include "Http2Transaction.h"
 #  include "Http2Transport.h"
 #  include "a2functional.h"
@@ -51,7 +52,14 @@ const size_t MAX_HTTP2_TRANSPORT_READ_SIZE = 16_k;
 
 Http2TransactionPump::Http2TransactionPump(Http2Transaction& transaction,
                                            Http2Transport& transport)
-    : transaction_(transaction), transport_(transport), writeOffset_(0)
+    : Http2TransactionPump(transaction.getConnection(), transport)
+{
+}
+
+Http2TransactionPump::Http2TransactionPump(Http2Connection& connection,
+                                           Http2Transport& transport)
+    : connection_(connection), transport_(transport), writeOffset_(0),
+      outboundDataPending_(false)
 {
 }
 
@@ -61,7 +69,8 @@ void Http2TransactionPump::appendOutboundData()
 {
   clearSentOutboundData();
 
-  auto data = transaction_.drainOutboundData();
+  auto data = connection_.drainOutboundData();
+  outboundDataPending_ = false;
   if (!data.empty()) {
     writeBuffer_.append(data);
   }
@@ -121,10 +130,16 @@ bool Http2TransactionPump::readInboundData()
     throw DL_ABORT_EX("HTTP/2 transport read more data than requested");
   }
 
-  transaction_.feedInboundData(
+  connection_.feedInboundData(
       std::string(reinterpret_cast<const char*>(buf),
                   static_cast<size_t>(nread)));
+  outboundDataPending_ = true;
   return true;
+}
+
+void Http2TransactionPump::notifyPendingOutboundData()
+{
+  outboundDataPending_ = true;
 }
 
 bool Http2TransactionPump::pump()
@@ -148,7 +163,8 @@ bool Http2TransactionPump::wantRead() const
 
 bool Http2TransactionPump::wantWrite() const
 {
-  return hasPendingOutboundData() || transport_.wantWrite();
+  return outboundDataPending_ || hasPendingOutboundData() ||
+         transport_.wantWrite();
 }
 
 } // namespace aria2

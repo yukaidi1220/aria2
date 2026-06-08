@@ -64,6 +64,8 @@ void Http2Transaction::feedInboundData(const std::string& data)
   connection_.feedInboundData(data);
 }
 
+Http2Connection& Http2Transaction::getConnection() { return connection_; }
+
 bool Http2Transaction::hasActiveStream() const { return streamId_ != 0; }
 
 int32_t Http2Transaction::getStreamId() const { return streamId_; }

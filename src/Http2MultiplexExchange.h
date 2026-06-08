@@ -32,8 +32,8 @@
  * all source files in the program, then also delete it here.
  */
 /* copyright --> */
-#ifndef D_HTTP2_TRANSACTION_H
-#define D_HTTP2_TRANSACTION_H
+#ifndef D_HTTP2_MULTIPLEX_EXCHANGE_H
+#define D_HTTP2_MULTIPLEX_EXCHANGE_H
 
 #include "common.h"
 
@@ -42,52 +42,57 @@
 #  include <cstdint>
 #  include <cstddef>
 #  include <memory>
+#  include <set>
 #  include <string>
 
 #  include "Http2Connection.h"
+#  include "Http2Transaction.h"
+#  include "Http2TransactionPump.h"
 
 namespace aria2 {
 
+class HttpRequest;
 class HttpResponse;
+class Http2Transport;
 
-struct Http2TransactionState {
-  bool active = false;
-  bool responseAvailable = false;
-  bool headersComplete = false;
-  bool streamClosed = false;
-  size_t bodyLength = 0;
-  uint32_t errorCode = 0;
-};
-
-class Http2Transaction {
+class Http2MultiplexExchange {
 private:
+  std::unique_ptr<Http2Transport> ownedTransport_;
+  Http2Transport& transport_;
   Http2Connection connection_;
-  int32_t streamId_ = 0;
+  Http2TransactionPump pump_;
+  std::set<int32_t> activeStreams_;
 
 public:
-  Http2Transaction();
-  ~Http2Transaction();
+  explicit Http2MultiplexExchange(Http2Transport& transport);
+  explicit Http2MultiplexExchange(std::unique_ptr<Http2Transport> transport);
+  ~Http2MultiplexExchange();
 
-  Http2Transaction(const Http2Transaction&) = delete;
-  Http2Transaction& operator=(const Http2Transaction&) = delete;
+  Http2MultiplexExchange(const Http2MultiplexExchange&) = delete;
+  Http2MultiplexExchange&
+  operator=(const Http2MultiplexExchange&) = delete;
 
+  int32_t submitRequest(HttpRequest& request);
   int32_t submitRequest(const Http2HeaderBlock& headers);
-  std::string drainOutboundData();
-  void feedInboundData(const std::string& data);
-  Http2Connection& getConnection();
+  bool flushOutboundData();
+  bool readInboundData();
+  bool pump();
 
-  bool hasActiveStream() const;
-  int32_t getStreamId() const;
-  Http2TransactionState getState() const;
-  const Http2ResponseEvent* findResponseEvent() const;
-  std::string popResponseBody(size_t maxLen);
-  std::unique_ptr<HttpResponse> createHttpResponse() const;
-  std::unique_ptr<Http2ResponseEvent> popResponseEvent();
-  std::unique_ptr<HttpResponse> popHttpResponse();
+  bool wantRead() const;
+  bool wantWrite() const;
+
+  bool hasActiveStreams() const;
+  bool hasActiveStream(int32_t streamId) const;
+  size_t countActiveStreams() const;
+  Http2TransactionState getState(int32_t streamId) const;
+  std::unique_ptr<HttpResponse> createHttpResponse(int32_t streamId) const;
+  std::string popResponseBody(int32_t streamId, size_t maxLen);
+  std::unique_ptr<Http2ResponseEvent> popResponseEvent(int32_t streamId);
+  std::unique_ptr<HttpResponse> popHttpResponse(int32_t streamId);
 };
 
 } // namespace aria2
 
 #endif // HAVE_LIBNGHTTP2
 
-#endif // D_HTTP2_TRANSACTION_H
+#endif // D_HTTP2_MULTIPLEX_EXCHANGE_H
