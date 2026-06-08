@@ -2,7 +2,7 @@
 
 > 状态：当前分支草稿。本文只整理命令行/配置项说明，不修改源码。
 >
-> 主要来源：`src/OptionHandlerFactory.cc::OptionHandlerFactory::createOptionHandlers()`、`src/usage_text.h`、`doc/manual-src/en/aria2c.rst`。新增网络能力额外核对了 `src/TLSSNIHostMapping.cc`、`src/HostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc` 等实现文件。
+> 主要来源：`src/OptionHandlerFactory.cc::OptionHandlerFactory::createOptionHandlers()`、`src/usage_text.h`、`doc/manual-src/en/aria2c.rst`。新增网络能力额外核对了 `src/TLSSNIHostMapping.cc`、`src/HostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/DownloadEngine.cc`、`src/download_helper.cc` 等实现文件。
 
 ## 1. 基本用法
 
@@ -18,6 +18,12 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 - 布尔选项通常可写成 `--foo`、`--foo=true` 或 `--foo=false`；不带值时由对应 `OptionHandler` 的 `OPT_ARG` 规则处理。
 - `OptionHandlerFactory.cc` 是当前可注册选项的准绳；`usage_text.h` 是 `aria2c --help` 文案；英文 manual 是长说明。三者不一致时，本文会标出差异。
 - 以下表格里的“默认值”优先来自 `OptionHandlerFactory.cc` / manual；没有明确默认值的写“无”或“依构建/平台”。
+
+多 URL 和下载项：
+
+- 命令行里连续给出多个 HTTP/FTP 等 URL 时，默认会作为同一个下载项的多个 URI 进入同一个 `RequestGroup`，通常表示同一个文件的多个镜像源，而不是多个独立下载。源码落点是 `src/download_helper.cc::createRequestGroupForUri()`：在未启用 `--force-sequential=true` 时，流式协议 URL 会先被 `splitURI()` 合并成一组，再创建一个 `RequestGroup`。
+- 要把多个 URL 当成多个独立下载，常用做法是使用 `--force-sequential=true`，或在 `--input-file` 中按 aria2 输入文件格式分成多个下载项。每个独立下载项会有自己的 `RequestGroup`。
+- 这个边界会影响 HTTP/2 复用：当前 active/idle H2 连接复用只在同一个 `RequestGroup` 内发生。命令行多个镜像 URL 如果属于同一个下载项，才可能命中该复用；多个独立下载项之间不会因为同 origin 就共享 H2 连接。
 
 ## 2. 新增/重点网络能力
 
@@ -104,14 +110,15 @@ aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://[2606:47
 
 DoT 规则：
 
-- 格式为 `IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。
+- 解析器能接受 `HOST`、`HOST:PORT`、`IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。
+- 当前 `AsyncNameResolverMan` 采用直连 DNS server 模式，随后会调用 `validateAsyncDnsDotServerConfigForDirectConnect()`，因此实际可用配置要求 server host 是数值地址。写 `dns.example.org` 这类域名会在配置校验阶段失败，避免解析 DNS server 本身时递归套娃。
 - `--async-dns-mode=dot` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoT server configured”。
-- `AsyncDnsServerConfig.cc::validateAsyncDnsDotServerConfigForDirectConnect()` 要求 server host 是数值地址，避免解析 DNS 服务器本身时递归套娃。
 - `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 默认不会形成普通 DNS SNI。
 
 DoH 规则：
 
-- 格式必须是数值 HTTPS URL，例如 `https://1.1.1.1/dns-query` 或 `https://[2606:4700:4700::1111]/dns-query`，默认端口 `443`。
+- 解析器能接受 HTTPS URL，例如 `https://1.1.1.1/dns-query`、`https://[2606:4700:4700::1111]/dns-query` 或 `https://dns.example.org/dns-query`，默认端口 `443`。
+- 当前直连校验同样要求 URL host 是数值地址；`https://dns.example.org/dns-query` 能被解析，但会被 `validateAsyncDnsDohServerConfigForDirectConnect()` 拒绝。
 - `--async-dns-mode=doh` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoH server configured”。
 - URL 必须有 path，拒绝 userinfo、密码、fragment；query 允许作为 path 的一部分发送。
 - `AsyncDohNameResolver.cc::createDohRequest()` 发送 HTTP/1.1 `POST`，`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
@@ -152,7 +159,7 @@ XP/Win7 注意：
 - `--enable-http-pipelining=true` 时不会向 ALPN 放入 `h2`，因此 HTTP/2 与 HTTP/1.1 pipelining 仍互斥。
 - 首条 H2 连接仍要求当前下载最多 1 个 segment；`HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
 - active registry 只保存仍有 active stream 的 H2 连接；最后一个 stream 完成后，同 origin 连接可进入 idle pool，默认保留 15 秒。
-- 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。
+- 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。命令行多个流式 URL 默认通常是同一个下载项的镜像 URI；独立下载项之间即使 host 相同，也不会复用这里的 active/idle H2 context。
 - 复用还要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate；这不是 HTTP/2 origin coalescing。
 - idle pool 命中前会检查 socket 仍打开、未超时、不可读；socket 可读时按保守策略视为可能 EOF/GOAWAY，直接驱逐而不复用。
 - `EvictSocketPoolCommand.cc` 会随普通 socket pool 定时扫描一起调用 `DownloadEngine::evictIdleHttp2Connections()`，避免 idle H2 context 长时间强持有 `RequestGroup`。
@@ -176,6 +183,8 @@ XP/Win7 注意：
 ```console
 aria2c --enable-http2=true --enable-http-pipelining=false https://example.com/file
 aria2c --enable-http2=true --log-level=network --console-log-level=network https://example.com/file
+# 下面两个 URL 默认是同一个下载项的镜像 URI；不是两个独立下载。
+aria2c --enable-http2=true https://example.com/file https://example.com/file?mirror=1
 ```
 
 ### 2.5 `network` 日志级别
