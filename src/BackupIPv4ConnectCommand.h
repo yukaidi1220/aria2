@@ -48,11 +48,10 @@ class RequestGroup;
 class DownloadEngine;
 class SocketCore;
 
-// Used to communicate mainCommand and backup IPv4 connection command.
+// Used to communicate mainCommand and backup connection command.
 // When backup connection succeeds, ipaddr is filled with connected
-// IPv4 address and socket is a socket connected to the ipaddr.  If
-// mainCommand wants to cancel backup connection command, cancel
-// member becomes true.
+// address and socket is a socket connected to the ipaddr.  If mainCommand
+// wants to cancel backup connection command, cancel member becomes true.
 struct BackupConnectInfo {
   std::string ipaddr;
   std::shared_ptr<SocketCore> socket;
@@ -60,8 +59,8 @@ struct BackupConnectInfo {
   BackupConnectInfo();
 };
 
-// Make backup connection to IPv4 address. This is a simplest RFC 6555
-// "Happy Eyeballs" implementation.
+// Make backup connection to an opposite-family address. This is a simplest
+// RFC 6555 "Happy Eyeballs" implementation.
 class BackupIPv4ConnectCommand : public Command {
 public:
   BackupIPv4ConnectCommand(cuid_t cuid, const std::string& ipaddr,

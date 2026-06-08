@@ -37,10 +37,16 @@
 
 #include "AbstractCommand.h"
 
+#include <string>
+#include <vector>
+
 namespace aria2 {
 
 struct BackupConnectInfo;
 class ConnectCommand;
+
+std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
+                                  const std::string& ipaddr);
 
 class InitiateConnectionCommand : public AbstractCommand {
 protected:

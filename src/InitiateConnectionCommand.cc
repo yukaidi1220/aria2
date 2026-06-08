@@ -57,6 +57,33 @@
 
 namespace aria2 {
 
+namespace {
+
+bool isNumericAddressFamily(const std::string& addr, int family)
+{
+  union {
+    in_addr ipv4;
+    in6_addr ipv6;
+  } buf;
+  if (family == AF_INET) {
+    return inetPton(family, addr.c_str(), &buf.ipv4) == 0;
+  }
+  return inetPton(family, addr.c_str(), &buf.ipv6) == 0;
+}
+
+int getBackupAddressFamily(const std::string& ipaddr)
+{
+  if (isNumericAddressFamily(ipaddr, AF_INET6)) {
+    return AF_INET;
+  }
+  if (isNumericAddressFamily(ipaddr, AF_INET)) {
+    return AF_INET6;
+  }
+  return 0;
+}
+
+} // namespace
+
 InitiateConnectionCommand::InitiateConnectionCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
@@ -131,21 +158,29 @@ void InitiateConnectionCommand::setConnectedAddrInfo(
   req->setConnectedAddrInfo(hostname, endpoint.addr, endpoint.port);
 }
 
+std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
+                                  const std::string& ipaddr)
+{
+  int backupFamily = getBackupAddressFamily(ipaddr);
+  if (backupFamily == 0) {
+    return std::string();
+  }
+  for (auto i = addrs.begin(), eoi = addrs.end(); i != eoi; ++i) {
+    if (isNumericAddressFamily(*i, backupFamily)) {
+      return *i;
+    }
+  }
+  return std::string();
+}
+
 std::shared_ptr<BackupConnectInfo>
 InitiateConnectionCommand::createBackupConnectCommand(
     const std::string& hostname, const std::string& ipaddr, uint16_t port,
     Command* mainCommand)
 {
   std::shared_ptr<BackupConnectInfo> info;
-  char buf[sizeof(in6_addr)];
-  int backupFamily = 0;
-  if (inetPton(AF_INET6, ipaddr.c_str(), &buf) == 0) {
-    backupFamily = AF_INET;
-  }
-  else if (inetPton(AF_INET, ipaddr.c_str(), &buf) == 0) {
-    backupFamily = AF_INET6;
-  }
-  else {
+  int backupFamily = getBackupAddressFamily(ipaddr);
+  if (backupFamily == 0) {
     return info;
   }
   A2_LOG_INFO(fmt("Searching IPv%d address for backup connection attempt",
@@ -153,20 +188,17 @@ InitiateConnectionCommand::createBackupConnectCommand(
   std::vector<std::string> addrs;
   getDownloadEngine()->findAllCachedIPAddresses(std::back_inserter(addrs),
                                                  hostname, port);
-  for (std::vector<std::string>::const_iterator i = addrs.begin(),
-                                                eoi = addrs.end();
-       i != eoi; ++i) {
-    if (inetPton(backupFamily, (*i).c_str(), &buf) == 0) {
-      info = std::make_shared<BackupConnectInfo>();
-      auto command = make_unique<BackupIPv4ConnectCommand>(
-          getDownloadEngine()->newCUID(), *i, port, info, mainCommand,
-          getRequestGroup(), getDownloadEngine());
-      A2_LOG_INFO(fmt("Issue backup connection command CUID#%" PRId64
-                      ", addr=%s",
-                      command->getCuid(), (*i).c_str()));
-      getDownloadEngine()->addCommand(std::move(command));
-      return info;
-    }
+  auto backupAddr = selectBackupIPAddress(addrs, ipaddr);
+  if (!backupAddr.empty()) {
+    info = std::make_shared<BackupConnectInfo>();
+    auto command = make_unique<BackupIPv4ConnectCommand>(
+        getDownloadEngine()->newCUID(), backupAddr, port, info, mainCommand,
+        getRequestGroup(), getDownloadEngine());
+    A2_LOG_INFO(fmt("Issue backup connection command CUID#%" PRId64
+                    ", addr=%s",
+                    command->getCuid(), backupAddr.c_str()));
+    getDownloadEngine()->addCommand(std::move(command));
+    return info;
   }
   return info;
 }

@@ -94,6 +94,7 @@ aria2c_SOURCES = AllTest.cc\
 	ParamedStringTest.cc\
 	RpcHelperTest.cc\
 	AbstractCommandTest.cc\
+	InitiateConnectionCommandTest.cc\
 	LoggerTest.cc\
 	SinkStreamFilterTest.cc\
 	WrDiskCacheTest.cc\
