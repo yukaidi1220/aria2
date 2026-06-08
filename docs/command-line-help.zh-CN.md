@@ -123,7 +123,7 @@ DoH 规则：
 - `AsyncNameResolverMan::startAsync()` 依据可用地址族启动 A/AAAA 查询；源码先放 IPv6 resolver，再放 IPv4 resolver。
 - `configureAsyncNameResolverMan()` 会调用 `net::checkAddrconfig()`，如果本机没有 IPv6 或 `--disable-ipv6=true`，则关闭 AAAA 查询。
 - `AbstractCommand::resolveHostname()` 拿到解析结果后写入 DNS cache，再由 `selectIPAddress()` / `getLeastUsedActiveAddressFamily()` 在 IPv4/IPv6 间选择。
-- 这不是完整 RFC 8305 Happy Eyeballs 并发连接实现；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果、后续连接按 active in-flight/confirmed 地址族和 CUID 分散选择地址”。
+- 这不是完整 RFC 8305 Happy Eyeballs 并发连接实现；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果，后续连接优先选择 active in-flight 较少的地址族；打平时由 `FileEntry` 按 host/port 保存的轮转游标在 IPv4/IPv6 间分散选择地址”。
 
 XP/Win7 注意：
 
@@ -139,16 +139,30 @@ XP/Win7 注意：
 - `src/HttpTLSHandshakeParams.cc::createHttpAlpnProtocols()`：有 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时，ALPN 顺序为 `h2`、`http/1.1`。
 - `src/SocketCore.cc::SocketCore::tlsConnect()` 调用 `TLSSession::setAlpnProtocols()`。
 - `src/HttpProtocol.cc::decideHttpProtocolFromSelectedAlpn()` 根据服务端选中的 ALPN 判定 HTTP/1.1 或 HTTP/2。
-- `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2MultiplexExchange`、`Http2SocketCoreTransport`、`Http2ResponseCommand`。
-- H2 内部目前涉及 `Http2Connection`、`Http2Session`、`Http2TransactionPump` 和 `Http2MultiplexExchange`；下载命令已经按 streamId 消费响应，但入口仍保持 one stream per connection 的行为。
+- `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2MultiplexExchange`、`Http2SocketCoreTransport` 和 `Http2ConnectionContext`，提交首个 stream 后调用 `DownloadEngine::registerActiveHttp2Connection()` 登记 active H2 context。
+- `src/DownloadEngine.cc` 维护 active H2 context registry：key 由 URL 协议/host/port 加已连接的 hostname/address/port 组成，value 是弱引用 `ActiveHttp2PoolEntry`，失效、socket 关闭或没有 active stream 时会被淘汰。
+- `src/HttpInitiateConnectionCommand.cc` 在新请求建连前调用 `DownloadEngine::findActiveHttp2Connection()`，命中 active context 后直接在既有 `Http2MultiplexExchange` 上 `submitRequest()` 创建新 stream。
+- `src/Http2ResponseCommand.cc` 和 `src/Http2DownloadCommand.cc` 都按 `streamId` 取响应/正文，并在 `executeInternal()` 中调用 `exchange_->pump()` 驱动共享连接。
+- `src/Http2ConnectionContext.cc` 在构造/析构时调用 `RequestGroup::increaseStreamConnection()` / `decreaseStreamConnection()` 持有连接计数；H2 stream command 传入 `incNumConnection=false`，避免每个 stream 都重复占用普通连接计数。
 
 限制：
 
 - 仅 HTTPS；依赖 TLS ALPN。
 - 依赖 libnghttp2 构建。
-- `usage_text.h` 明确写着当前 HTTP/2 “one stream per connection”，且 HTTP pipelining 开启时禁用。
-- `HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
+- `--enable-http-pipelining=true` 时不会向 ALPN 放入 `h2`，因此 HTTP/2 与 HTTP/1.1 pipelining 仍互斥。
+- 首条 H2 连接仍要求当前下载最多 1 个 segment；`HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
+- active registry 是 active-only：只有还有 active stream 的 H2 连接可被复用；连接空闲后不会进入这个 registry 继续复用。
+- 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。
+- 复用还要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate；这不是 HTTP/2 origin coalescing。
+- 当前源码使用 `MAX_ACTIVE_HTTP2_STREAMS = 8` 作为保守 active stream 上限；没有读取 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 来动态调整。
+- 首条 H2 stream 在注册 context 后会 `exchange->flushOutboundData()`；复用路径提交新 stream 后不提前 flush，交给 `Http2ResponseCommand::executeInternal()` / `exchange_->pump()` 统一驱动。
 - TLS 后端必须支持 ALPN；`TLSSession` 基类在协议列表非空时默认失败，当前源码里只有 OpenSSL 后端实现了 `setAlpnProtocols()`。其他 TLS 后端即使能普通 TLS/SNI，也可能在启用 H2 时快速失败，但不应崩溃。
+
+XP/Win7 注意：
+
+- HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 可能在 TLS 初始化阶段快速失败或退回不了 H2。
+- 需要兼容 XP/Win7 时，优先使用带 OpenSSL 且启用 ALPN 的构建；如果目标环境只要求能下载，保守做法是保持 `--enable-http2=false`，走 HTTP/1.1。
+- `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端 SNI override 能力限制，见 2.1。
 
 重要差异：
 
@@ -169,7 +183,7 @@ aria2c --enable-http2=true --log-level=network --console-log-level=network https
 - `AsyncNameResolverMan.cc`：DNS 模式、A/AAAA 家族、server 列表。
 - `AsyncDotNameResolver.cc` / `AsyncDohNameResolver.cc`：DoT/DoH 连接、失败、解析结果。
 - `AbstractCommand.cc`：hosts mapping、DNS cache hit、解析完成。
-- `HttpRequestCommand.cc`：HTTPS 连接建立、H2 分支。
+- `HttpRequestCommand.cc` / `HttpInitiateConnectionCommand.cc` / `DownloadEngine.cc`：HTTPS 连接建立、H2 active context 注册与复用。
 
 ## 3. 选项总览
 
@@ -497,7 +511,7 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 
 ## 6. 待主线程补齐/确认
 
-- HTTP/2 已有 `Http2MultiplexExchange*` 多 stream 核心，响应/下载命令也已按 streamId 消费；入口仍保持 one stream per connection。后续要补真正 multiplex 下载、连接复用、错误恢复、Range/redirect 行为。
+- HTTP/2 现有复用是 active-only，同一 `RequestGroup` 内复用仍在活跃的 H2 连接。后续阶段还要补空闲 H2 连接复用、HTTP/2 origin coalescing、根据 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 动态调整上限，以及继续完善错误恢复、Range/redirect 行为。
 - `doc/manual-src/en/aria2c.rst` 中 `--enable-http2` 仍是“未实现保留名”的旧说法，需要主线程同步英文 manual，否则中文/英文文档会冲突。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
