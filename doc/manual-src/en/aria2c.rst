@@ -1278,16 +1278,27 @@ Advanced Options
   Enable asynchronous DNS.
   Default: ``true``
 
-.. option:: --async-dns-server=<IPADDRESS>[,...]
+.. option:: --async-dns-mode=<cares|dot|doh>
+
+  Select asynchronous DNS resolver backend. ``cares`` uses the c-ares
+  resolver. ``dot`` uses DNS over TLS with numeric
+  :option:`--async-dns-server` entries. ``doh`` uses DNS over HTTPS over
+  HTTP/1.1 with numeric HTTPS :option:`--async-dns-server` URLs. ``dot`` and
+  ``doh`` are available only when aria2 is built with SSL/TLS support.
+  Default: ``cares``
+
+.. option:: --async-dns-server=<SERVER>[,...]
 
   Comma separated list of DNS server address used in asynchronous DNS
-  resolver. Usually asynchronous DNS resolver reads DNS server
-  addresses from ``/etc/resolv.conf``. When this option is used, it uses
-  DNS servers specified in this option instead of ones in
-  ``/etc/resolv.conf``. You can specify both IPv4 and IPv6 address. Use
-  ``[IPv6]:PORT`` format when specifying port. This option is useful when
-  the system does not have ``/etc/resolv.conf`` and
-  user does not have the permission to create it.
+  resolver. With the default ``cares`` backend, specify DNS server IP
+  addresses. With ``dot``, specify numeric DoT servers as ``IP``, ``IP:PORT``,
+  ``[IPv6]``, or ``[IPv6]:PORT``; the default port is 853. With ``doh``,
+  specify numeric HTTPS URLs such as ``https://1.1.1.1/dns-query`` or
+  ``https://[2606:4700:4700::1111]/dns-query``. Usually asynchronous DNS
+  resolver reads DNS server addresses from ``/etc/resolv.conf``. When this
+  option is used, it uses DNS servers specified in this option instead of ones
+  in ``/etc/resolv.conf``. This option is useful when the system does not have
+  ``/etc/resolv.conf`` and user does not have the permission to create it.
 
 .. option:: --auto-file-renaming [true|false]
 
