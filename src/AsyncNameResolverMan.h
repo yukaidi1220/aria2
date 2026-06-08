@@ -73,6 +73,10 @@ public:
                   Command* command);
   // Appends resolved addresses to |res|.
   void getResolvedAddress(std::vector<std::string>& res) const;
+  // Detaches still-querying resolvers so another command can continue
+  // them after the first successful family is already usable.
+  std::vector<std::shared_ptr<AsyncResolver>>
+  detachPendingResolvers(DownloadEngine* e, Command* command);
   // Adds resolvers to DownloadEngine to check event notification.
   void setNameResolverCheck(DownloadEngine* e, Command* command);
   // Removes resolvers from DownloadEngine.

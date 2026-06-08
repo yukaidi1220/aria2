@@ -100,6 +100,143 @@ bool isNumericAddressFamily(const std::string& addr, int family)
   }
   return inetPton(family, addr.c_str(), &buf.ipv6) == 0;
 }
+
+#ifdef ENABLE_ASYNC_DNS
+class AsyncDnsCacheCommand : public Command {
+private:
+  struct ResolverEntry {
+    explicit ResolverEntry(std::shared_ptr<AsyncResolver> resolver)
+        : resolver(std::move(resolver)), checked(false)
+    {
+    }
+
+    std::shared_ptr<AsyncResolver> resolver;
+    bool checked;
+  };
+
+  std::string hostname_;
+  uint16_t port_;
+  std::vector<ResolverEntry> resolvers_;
+  DownloadEngine* e_;
+  Timer checkPoint_;
+  std::chrono::seconds timeout_;
+
+  void addCommandSelf() { e_->addCommand(std::unique_ptr<Command>(this)); }
+
+  void deleteNameResolverCheck(ResolverEntry& entry)
+  {
+    if (entry.checked) {
+      e_->deleteNameResolverCheck(entry.resolver, this);
+      entry.checked = false;
+    }
+  }
+
+  void deleteNameResolverChecks()
+  {
+    for (auto& entry : resolvers_) {
+      if (entry.resolver) {
+        deleteNameResolverCheck(entry);
+      }
+    }
+  }
+
+public:
+  AsyncDnsCacheCommand(
+      cuid_t cuid, std::string hostname, uint16_t port,
+      std::vector<std::shared_ptr<AsyncResolver>> pendingResolvers,
+      DownloadEngine* e, std::chrono::seconds timeout)
+      : Command(cuid),
+        hostname_(std::move(hostname)),
+        port_(port),
+        e_(e),
+        timeout_(std::move(timeout))
+  {
+    for (auto& resolver : pendingResolvers) {
+      resolvers_.push_back(ResolverEntry(std::move(resolver)));
+    }
+  }
+
+  ~AsyncDnsCacheCommand() { deleteNameResolverChecks(); }
+
+  void start()
+  {
+    for (auto& entry : resolvers_) {
+      if (entry.resolver && entry.resolver->usable()) {
+        entry.checked = e_->addNameResolverCheck(entry.resolver, this);
+      }
+    }
+    setStatusRealtime();
+    e_->setNoWait(true);
+  }
+
+  bool execute() CXX11_OVERRIDE
+  {
+    if (e_->isHaltRequested() ||
+        e_->getRequestGroupMan()->downloadFinished()) {
+      return true;
+    }
+
+    if (checkPoint_.difference(global::wallclock()) >= timeout_) {
+      A2_LOG_NETWORK(
+          fmt("DNS: background cache fill timed out for %s", hostname_.c_str()));
+      return true;
+    }
+
+    bool querying = false;
+    for (auto& entry : resolvers_) {
+      if (!entry.resolver) {
+        continue;
+      }
+
+      switch (entry.resolver->getStatus()) {
+      case AsyncResolver::STATUS_SUCCESS:
+        for (const auto& addr : entry.resolver->getResolvedAddresses()) {
+          e_->cacheIPAddress(hostname_, addr, port_);
+          A2_LOG_NETWORK(
+              fmt("DNS: background cache fill %s -> %s", hostname_.c_str(),
+                  addr.c_str()));
+        }
+        deleteNameResolverCheck(entry);
+        entry.resolver.reset();
+        break;
+      case AsyncResolver::STATUS_ERROR:
+        A2_LOG_NETWORK(
+            fmt("DNS: background query failed for %s: %s", hostname_.c_str(),
+                entry.resolver->getError().c_str()));
+        deleteNameResolverCheck(entry);
+        entry.resolver.reset();
+        break;
+      default:
+        querying = true;
+        break;
+      }
+    }
+
+    if (!querying) {
+      return true;
+    }
+
+    setStatusRealtime();
+    addCommandSelf();
+    return false;
+  }
+};
+
+void addAsyncDnsCacheCommand(
+    DownloadEngine* e, const std::string& hostname, uint16_t port,
+    std::vector<std::shared_ptr<AsyncResolver>> pendingResolvers)
+{
+  if (pendingResolvers.empty()) {
+    return;
+  }
+
+  auto command = make_unique<AsyncDnsCacheCommand>(
+      e->newCUID(), hostname, port, std::move(pendingResolvers), e,
+      std::chrono::seconds(e->getOption()->getAsInt(PREF_DNS_TIMEOUT)));
+  command->start();
+  e->addCommand(std::move(command));
+}
+#endif // ENABLE_ASYNC_DNS
 } // namespace
 
 AbstractCommand::AbstractCommand(
@@ -940,7 +1077,9 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
 
   std::string ipaddr;
 #ifdef ENABLE_ASYNC_DNS
+  bool asyncDnsUsed = false;
   if (getOption()->getAsBool(PREF_ASYNC_DNS)) {
+    asyncDnsUsed = true;
     if (!asyncNameResolverMan_->started()) {
       asyncNameResolverMan_->startAsync(hostname, e_, this);
     }
@@ -983,6 +1122,13 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   for (const auto& addr : addrs) {
     e_->cacheIPAddress(hostname, addr, port);
   }
+#ifdef ENABLE_ASYNC_DNS
+  if (asyncDnsUsed) {
+    addAsyncDnsCacheCommand(
+        e_, hostname, port,
+        asyncNameResolverMan_->detachPendingResolvers(e_, this));
+  }
+#endif // ENABLE_ASYNC_DNS
   std::vector<std::string> cachedAddrs;
   e_->findAllCachedIPAddresses(std::back_inserter(cachedAddrs), hostname,
                                 port);

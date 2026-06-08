@@ -190,7 +190,7 @@ void AsyncNameResolverMan::startAsyncFamily(const std::string& hostname,
 {
   asyncNameResolver_[numResolver_] = createResolver(family);
   asyncNameResolver_[numResolver_]->resolve(hostname);
-  if (asyncNameResolver_[numResolver_]->usable()) {
+  if (asyncNameResolver_[numResolver_]->usable() && e && command) {
     setNameResolverCheck(numResolver_, e, command);
   }
 }
@@ -211,6 +211,29 @@ void AsyncNameResolverMan::getResolvedAddress(
     }
   }
   return;
+}
+
+std::vector<std::shared_ptr<AsyncResolver>>
+AsyncNameResolverMan::detachPendingResolvers(DownloadEngine* e,
+                                             Command* command)
+{
+  std::vector<std::shared_ptr<AsyncResolver>> pendingResolvers;
+  for (size_t i = 0; i < numResolver_; ++i) {
+    auto& resolver = asyncNameResolver_[i];
+    if (!resolver ||
+        (resolver->getStatus() != AsyncResolver::STATUS_READY &&
+         resolver->getStatus() != AsyncResolver::STATUS_QUERYING) ||
+        !resolver->usable()) {
+      continue;
+    }
+
+    if (e && command && (resolverCheck_ & (1 << i))) {
+      e->deleteNameResolverCheck(resolver, command);
+      resolverCheck_ &= ~(1 << i);
+    }
+    pendingResolvers.push_back(std::move(resolver));
+  }
+  return pendingResolvers;
 }
 
 void AsyncNameResolverMan::setNameResolverCheck(DownloadEngine* e,
@@ -265,7 +288,7 @@ int AsyncNameResolverMan::getStatus() const
       break;
     }
   }
-  if (success && success + error == numResolver_) {
+  if (success) {
     return 1;
   }
   else if (error == numResolver_) {
