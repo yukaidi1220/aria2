@@ -1,0 +1,196 @@
+name: build-unix-all
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+    - ci/unix-all
+    - ci/unix-all/**
+
+jobs:
+  linux:
+    name: linux (${{ matrix.os }}, ${{ matrix.compiler }}, ${{ matrix.crypto }}, ${{ matrix.bittorrent }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - ubuntu-22.04
+        - ubuntu-24.04
+        - ubuntu-22.04-arm
+        - ubuntu-24.04-arm
+        compiler:
+        - gcc
+        - clang
+        crypto:
+        - openssl
+        - gnutls
+        bittorrent:
+        - with-bt
+        - without-bt
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          autoconf \
+          automake \
+          autopoint \
+          autotools-dev \
+          clang \
+          g++ \
+          gcc \
+          libcppunit-dev \
+          libc-ares-dev \
+          libgnutls28-dev \
+          libgmp-dev \
+          libexpat1-dev \
+          libnghttp2-dev \
+          libsqlite3-dev \
+          libssh2-1-dev \
+          libssl-dev \
+          libtool \
+          libxml2-dev \
+          nettle-dev \
+          pkg-config \
+          zlib1g-dev
+
+    - name: Select compiler
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+        else
+          echo "CC=gcc" >> "$GITHUB_ENV"
+          echo "CXX=g++" >> "$GITHUB_ENV"
+        fi
+
+    - name: Configure feature flags
+      run: |
+        feature_flags=
+
+        if [ "${{ matrix.bittorrent }}" = "without-bt" ]; then
+          feature_flags="$feature_flags --disable-bittorrent"
+        fi
+
+        echo "FEATURE_FLAGS=$feature_flags" >> "$GITHUB_ENV"
+
+    - name: Generate configure script
+      run: autoreconf -i
+
+    - name: Configure with OpenSSL
+      if: matrix.crypto == 'openssl'
+      run: ./configure --without-gnutls --with-openssl $FEATURE_FLAGS
+
+    - name: Configure with GnuTLS
+      if: matrix.crypto == 'gnutls'
+      run: ./configure --with-gnutls --without-openssl $FEATURE_FLAGS
+
+    - name: Build and test
+      run: make -j"$(nproc)" check
+
+    - name: Collect artifact
+      run: |
+        mkdir -p out
+        cp src/aria2c out/aria2c
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: aria2-${{ matrix.os }}-${{ matrix.compiler }}-${{ matrix.crypto }}-${{ matrix.bittorrent }}
+        path: out/aria2c
+
+  macos:
+    name: macos (${{ matrix.os }}, ${{ matrix.compiler }}, appletls)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+        - macos-14
+        - macos-15
+        - macos-15-intel
+        compiler:
+        - clang
+        - gcc
+
+    steps:
+    - uses: actions/checkout@v6
+
+    - name: Install dependencies
+      run: |
+        brew install \
+          autoconf \
+          automake \
+          c-ares \
+          cppunit \
+          expat \
+          gettext \
+          gmp \
+          libssh2 \
+          libtool \
+          libxml2 \
+          nettle \
+          nghttp2 \
+          openssl \
+          pkg-config \
+          sqlite3
+
+    - name: Install GNU GCC
+      if: matrix.compiler == 'gcc'
+      run: brew install gcc
+
+    - name: Select compiler
+      run: |
+        if [ "${{ matrix.compiler }}" = "clang" ]; then
+          echo "CC=clang" >> "$GITHUB_ENV"
+          echo "CXX=clang++" >> "$GITHUB_ENV"
+        else
+          gcc_bin="$(find "$(brew --prefix gcc)/bin" -name 'gcc-[0-9]*' | awk -F- '{ print $NF " " $0 }' | sort -n | tail -n 1 | cut -d' ' -f2-)"
+          if [ -z "$gcc_bin" ]; then
+            echo "Homebrew gcc executable not found" >&2
+            exit 1
+          fi
+          gcc_ver="${gcc_bin##*-}"
+          echo "CC=$gcc_bin" >> "$GITHUB_ENV"
+          echo "CXX=$(brew --prefix gcc)/bin/g++-$gcc_ver" >> "$GITHUB_ENV"
+        fi
+
+    - name: Configure Homebrew pkg-config paths
+      run: |
+        pkg_config_path=
+        for formula in c-ares cppunit expat libssh2 libxml2 nghttp2 openssl sqlite3; do
+          prefix="$(brew --prefix "$formula")"
+          if [ -d "$prefix/lib/pkgconfig" ]; then
+            pkg_config_path="$prefix/lib/pkgconfig:$pkg_config_path"
+          fi
+        done
+        echo "PKG_CONFIG_PATH=$pkg_config_path$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
+
+    - name: Generate configure script
+      run: autoreconf -i
+
+    - name: Configure with AppleTLS
+      run: |
+        ./configure \
+          --without-openssl \
+          --without-gnutls \
+          --with-appletls \
+          --disable-nls
+
+    - name: Build and test
+      run: make -j"$(sysctl -n hw.ncpu)" check
+
+    - name: Collect artifact
+      run: |
+        mkdir -p out
+        cp src/aria2c out/aria2c
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: aria2-${{ matrix.os }}-${{ matrix.compiler }}-appletls
+        path: out/aria2c
