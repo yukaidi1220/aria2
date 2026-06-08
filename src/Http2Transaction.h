@@ -68,6 +68,7 @@ public:
   bool hasActiveStream() const;
   int32_t getStreamId() const;
   const Http2ResponseEvent* findResponseEvent() const;
+  std::string popResponseBody(size_t maxLen);
   std::unique_ptr<Http2ResponseEvent> popResponseEvent();
   std::unique_ptr<HttpResponse> popHttpResponse();
 };

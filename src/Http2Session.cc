@@ -311,6 +311,15 @@ const Http2ResponseEvent* Http2Session::findResponseEvent(
   return &itr->second;
 }
 
+std::string Http2Session::popResponseBody(int32_t streamId, size_t maxLen)
+{
+  auto itr = impl_->responses.find(streamId);
+  if (itr == impl_->responses.end()) {
+    return std::string();
+  }
+  return itr->second.body.pop(maxLen);
+}
+
 std::unique_ptr<Http2ResponseEvent>
 Http2Session::popResponseEvent(int32_t streamId)
 {

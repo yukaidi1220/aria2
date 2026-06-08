@@ -21,6 +21,7 @@ class Http2TransactionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSubmitRequestStoresSingleStreamId);
   CPPUNIT_TEST(testDrainOutboundDataAfterSubmit);
   CPPUNIT_TEST(testFeedInboundDataPopHttpResponse);
+  CPPUNIT_TEST(testPopResponseBodyKeepsActiveStream);
   CPPUNIT_TEST(testPopResponseEventDrainsBody);
   CPPUNIT_TEST(testPopResponseEventKeepsActiveUntilStreamClose);
   CPPUNIT_TEST(testPopHttpResponseKeepsActiveUntilStreamClose);
@@ -32,6 +33,7 @@ public:
   void testSubmitRequestStoresSingleStreamId();
   void testDrainOutboundDataAfterSubmit();
   void testFeedInboundDataPopHttpResponse();
+  void testPopResponseBodyKeepsActiveStream();
   void testPopResponseEventDrainsBody();
   void testPopResponseEventKeepsActiveUntilStreamClose();
   void testPopHttpResponseKeepsActiveUntilStreamClose();
@@ -87,6 +89,26 @@ void Http2TransactionTest::testFeedInboundDataPopHttpResponse()
   CPPUNIT_ASSERT(!transaction.hasActiveStream());
   CPPUNIT_ASSERT(!transaction.findResponseEvent());
   CPPUNIT_ASSERT(!transaction.popHttpResponse());
+}
+
+void Http2TransactionTest::testPopResponseBodyKeepsActiveStream()
+{
+  Http2Transaction transaction;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponse(streamId, http2test::createResponseHeaders(), "body");
+  transaction.feedInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT_EQUAL(std::string("bo"), transaction.popResponseBody(2));
+  CPPUNIT_ASSERT(transaction.hasActiveStream());
+  CPPUNIT_ASSERT(transaction.findResponseEvent());
+
+  auto event = transaction.popResponseEvent();
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT_EQUAL(std::string("dy"), event->body.drainAll());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
 }
 
 void Http2TransactionTest::testPopResponseEventDrainsBody()

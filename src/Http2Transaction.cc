@@ -76,6 +76,14 @@ const Http2ResponseEvent* Http2Transaction::findResponseEvent() const
   return connection_.findResponseEvent(streamId_);
 }
 
+std::string Http2Transaction::popResponseBody(size_t maxLen)
+{
+  if (streamId_ == 0) {
+    return std::string();
+  }
+  return connection_.popResponseBody(streamId_, maxLen);
+}
+
 std::unique_ptr<Http2ResponseEvent> Http2Transaction::popResponseEvent()
 {
   if (streamId_ == 0) {

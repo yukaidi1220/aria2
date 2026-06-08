@@ -20,6 +20,7 @@ class Http2SessionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseHeaders);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseBodyAndClose);
   CPPUNIT_TEST(testFeedInboundDataAcceptsPartialFrames);
+  CPPUNIT_TEST(testPopResponseBodyKeepsEvent);
   CPPUNIT_TEST(testPopResponseEventRemovesEvent);
   CPPUNIT_TEST_SUITE_END();
 
@@ -30,6 +31,7 @@ public:
   void testFeedInboundDataCollectsResponseHeaders();
   void testFeedInboundDataCollectsResponseBodyAndClose();
   void testFeedInboundDataAcceptsPartialFrames();
+  void testPopResponseBodyKeepsEvent();
   void testPopResponseEventRemovesEvent();
 };
 
@@ -136,6 +138,27 @@ void Http2SessionTest::testFeedInboundDataAcceptsPartialFrames()
                        response->body.drainAll());
   CPPUNIT_ASSERT(response->streamClosed);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
+}
+
+void Http2SessionTest::testPopResponseBodyKeepsEvent()
+{
+  Http2Session client;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId =
+      client.submitRequestHeaders(http2test::createRequestHeaders());
+
+  server.feedInboundData(client.drainOutboundData());
+  server.submitResponse(streamId, http2test::createResponseHeaders(), "hello");
+  client.feedInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT_EQUAL(std::string("he"), client.popResponseBody(streamId, 2));
+  auto response = client.findResponseEvent(streamId);
+  CPPUNIT_ASSERT(response);
+  CPPUNIT_ASSERT_EQUAL((size_t)3, response->body.size());
+
+  auto popped = client.popResponseEvent(streamId);
+  CPPUNIT_ASSERT(popped);
+  CPPUNIT_ASSERT_EQUAL(std::string("llo"), popped->body.drainAll());
 }
 
 void Http2SessionTest::testPopResponseEventRemovesEvent()

@@ -66,6 +66,7 @@ public:
 
   bool hasResponseEvent(int32_t streamId) const;
   const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;
+  std::string popResponseBody(int32_t streamId, size_t maxLen);
   std::unique_ptr<Http2ResponseEvent> popResponseEvent(int32_t streamId);
   std::unique_ptr<HttpResponse> popHttpResponse(int32_t streamId);
 };

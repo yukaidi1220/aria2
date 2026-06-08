@@ -20,6 +20,7 @@ class Http2ConnectionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2ConnectionTest);
   CPPUNIT_TEST(testSubmitRequestDrainsOutboundData);
   CPPUNIT_TEST(testFeedInboundDataFindsResponseEvent);
+  CPPUNIT_TEST(testPopResponseBodyKeepsEvent);
   CPPUNIT_TEST(testPopResponseEventRemovesEvent);
   CPPUNIT_TEST(testPopHttpResponseConsumesEvent);
   CPPUNIT_TEST(testPopHttpResponseWaitsForStreamClose);
@@ -29,6 +30,7 @@ class Http2ConnectionTest : public CppUnit::TestFixture {
 public:
   void testSubmitRequestDrainsOutboundData();
   void testFeedInboundDataFindsResponseEvent();
+  void testPopResponseBodyKeepsEvent();
   void testPopResponseEventRemovesEvent();
   void testPopHttpResponseConsumesEvent();
   void testPopHttpResponseWaitsForStreamClose();
@@ -74,6 +76,25 @@ void Http2ConnectionTest::testFeedInboundDataFindsResponseEvent()
                                              "content-type"));
   CPPUNIT_ASSERT(response->streamClosed);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
+}
+
+void Http2ConnectionTest::testPopResponseBodyKeepsEvent()
+{
+  Http2Connection connection;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = connection.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(connection.drainOutboundData());
+  server.submitResponse(streamId, http2test::createResponseHeaders(), "hello");
+  connection.feedInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT_EQUAL(std::string("hel"),
+                       connection.popResponseBody(streamId, 3));
+  CPPUNIT_ASSERT(connection.hasResponseEvent(streamId));
+
+  auto response = connection.popResponseEvent(streamId);
+  CPPUNIT_ASSERT(response);
+  CPPUNIT_ASSERT_EQUAL(std::string("lo"), response->body.drainAll());
 }
 
 void Http2ConnectionTest::testPopResponseEventRemovesEvent()
