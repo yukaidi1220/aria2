@@ -412,6 +412,8 @@ PrefPtr PREF_SAVE_COOKIES = makePref("save-cookies");
 PrefPtr PREF_ENABLE_HTTP_KEEP_ALIVE = makePref("enable-http-keep-alive");
 // values: true | false
 PrefPtr PREF_ENABLE_HTTP_PIPELINING = makePref("enable-http-pipelining");
+// values: true | false
+PrefPtr PREF_ENABLE_HTTP2 = makePref("enable-http2");
 // value: 1*digit
 PrefPtr PREF_MAX_HTTP_PIPELINING = makePref("max-http-pipelining");
 // value: string

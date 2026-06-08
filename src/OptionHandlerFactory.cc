@@ -1091,6 +1091,18 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+    OptionHandler* op(new UnsupportedFeatureOptionHandler(
+        PREF_ENABLE_HTTP2, TEXT_ENABLE_HTTP2, A2_V_FALSE, "HTTP/2",
+        OptionHandler::OPT_ARG));
+    op->addTag(TAG_EXPERIMENTAL);
+    op->addTag(TAG_HTTP);
+    op->addTag(TAG_HTTPS);
+    op->setInitialOption(true);
+    op->setChangeGlobalOption(true);
+    op->setChangeOptionForReserved(true);
+    handlers.push_back(op);
+  }
+  {
     OptionHandler* op(new DefaultOptionHandler(
         PREF_HOSTS_MAPPING, TEXT_HOSTS_MAPPING, NO_DEFAULT_VALUE,
         "HOST:IPADDR[,IPADDR:HOST]..."));

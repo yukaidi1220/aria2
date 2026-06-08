@@ -117,6 +117,21 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
   options.push_back(KeyVals::value_type(PREF_ENABLE_ECH->k, A2_V_TRUE));
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP2->k, A2_V_FALSE));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP2));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP2->k, A2_V_TRUE));
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP2));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP2->k, ""));
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP2));
 }
 
 void OptionHandlerTest::testNumberOptionHandler()

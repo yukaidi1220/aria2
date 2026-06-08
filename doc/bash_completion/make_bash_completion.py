@@ -101,6 +101,7 @@ _aria2c()
                      '--download-result',
                      '--async-dns-mode',
                      '--enable-ech',
+                     '--enable-http2',
                      '--min-tls-version',
                      '--console-log-level']:
         opt = opts[long_opt]

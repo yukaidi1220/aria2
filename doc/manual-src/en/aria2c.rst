@@ -485,6 +485,16 @@ HTTP Specific Options
 
   Default: ``false``
 
+.. option:: --enable-http2 [false]
+
+  Reserve the HTTP/2 option name for future use. HTTP/2 is not implemented in
+  this aria2 build. Setting this option to ``true`` fails during option parsing
+  instead of silently continuing as HTTP/1.1.
+
+  This option does not enable ALPN negotiation and does not use libnghttp2.
+
+  Default: ``false``
+
 .. option:: --hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>
 
   Set host mappings for HTTP and HTTPS requests. Entries are comma separated
