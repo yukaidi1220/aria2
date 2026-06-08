@@ -428,6 +428,10 @@ SRCS += SSHSession.cc SSHSession.h \
 	SftpFinishDownloadCommand.cc SftpFinishDownloadCommand.h
 endif # HAVE_LIBSSH2
 
+if HAVE_LIBNGHTTP2
+SRCS += Http2Session.cc Http2Session.h
+endif # HAVE_LIBNGHTTP2
+
 if ENABLE_ASYNC_DNS
 SRCS += \
 	AsyncNameResolver.cc AsyncNameResolver.h\

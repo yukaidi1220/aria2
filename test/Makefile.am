@@ -122,6 +122,10 @@ if HAVE_SQLITE3
 aria2c_SOURCES += Sqlite3CookieParserTest.cc
 endif # HAVE_SQLITE3
 
+if HAVE_LIBNGHTTP2
+aria2c_SOURCES += Http2SessionTest.cc
+endif # HAVE_LIBNGHTTP2
+
 aria2c_SOURCES += MessageDigestHelperTest.cc\
 	IteratableChunkChecksumValidatorTest.cc\
 	IteratableChecksumValidatorTest.cc\
