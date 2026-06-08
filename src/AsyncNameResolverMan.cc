@@ -103,6 +103,9 @@ AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
   if (mode == V_DOT) {
     return AsyncNameResolverMan::RESOLVER_DOT;
   }
+  if (mode == V_DOH) {
+    return AsyncNameResolverMan::RESOLVER_DOH;
+  }
 #endif // ENABLE_SSL
   abort();
 }

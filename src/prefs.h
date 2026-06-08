@@ -110,6 +110,7 @@ extern const std::string V_HTTPS;
 extern const std::string V_FTP;
 extern const std::string V_CARES;
 extern const std::string V_DOT;
+extern const std::string V_DOH;
 extern const std::string A2_V_TLS11;
 extern const std::string A2_V_TLS12;
 extern const std::string A2_V_TLS13;

@@ -102,7 +102,8 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
   {
     OptionHandler* op(new ParameterOptionHandler(
 #  ifdef ENABLE_SSL
-        PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_CARES, {V_CARES, V_DOT}));
+        PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_CARES,
+        {V_CARES, V_DOT, V_DOH}));
 #  else  // !ENABLE_SSL
         PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_CARES, {V_CARES}));
 #  endif // !ENABLE_SSL

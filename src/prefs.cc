@@ -153,6 +153,7 @@ const std::string V_HTTPS("https");
 const std::string V_FTP("ftp");
 const std::string V_CARES("cares");
 const std::string V_DOT("dot");
+const std::string V_DOH("doh");
 const std::string A2_V_TLS11("TLSv1.1");
 const std::string A2_V_TLS12("TLSv1.2");
 const std::string A2_V_TLS13("TLSv1.3");

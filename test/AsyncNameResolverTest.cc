@@ -37,6 +37,9 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testConfigureAcceptsDotIpServers);
   CPPUNIT_TEST(testConfigureRejectsDotDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDotEmptyServerList);
+  CPPUNIT_TEST(testConfigureAcceptsDohIpServers);
+  CPPUNIT_TEST(testConfigureRejectsDohDomainServer);
+  CPPUNIT_TEST(testConfigureRejectsDohEmptyServerList);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
 
@@ -63,6 +66,9 @@ public:
   void testConfigureAcceptsDotIpServers();
   void testConfigureRejectsDotDomainServer();
   void testConfigureRejectsDotEmptyServerList();
+  void testConfigureAcceptsDohIpServers();
+  void testConfigureRejectsDohDomainServer();
+  void testConfigureRejectsDohEmptyServerList();
 #endif // ENABLE_SSL
 };
 
@@ -210,6 +216,38 @@ void AsyncNameResolverTest::testConfigureRejectsDotEmptyServerList()
 {
   Option option;
   option.put(PREF_ASYNC_DNS_MODE, V_DOT);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+  AsyncNameResolverMan resolverMan;
+
+  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
+                       Exception);
+}
+
+void AsyncNameResolverTest::testConfigureAcceptsDohIpServers()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+  option.put(PREF_ASYNC_DNS_SERVER, "https://1.1.1.1/dns-query");
+  AsyncNameResolverMan resolverMan;
+
+  configureAsyncNameResolverMan(&resolverMan, &option);
+}
+
+void AsyncNameResolverTest::testConfigureRejectsDohDomainServer()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+  option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
+  AsyncNameResolverMan resolverMan;
+
+  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
+                       Exception);
+}
+
+void AsyncNameResolverTest::testConfigureRejectsDohEmptyServerList()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "");
   AsyncNameResolverMan resolverMan;
 

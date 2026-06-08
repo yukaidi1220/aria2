@@ -453,8 +453,9 @@
   _(" --async-dns[=true|false]     Enable asynchronous DNS.")
 #ifdef ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
-  _(" --async-dns-mode=cares|dot  Select asynchronous DNS resolver backend.\n" \
-    "                              DoT requires numeric --async-dns-server.")
+  _(" --async-dns-mode=cares|dot|doh Select asynchronous DNS resolver backend.\n" \
+    "                              DoT requires numeric --async-dns-server.\n" \
+    "                              DoH requires numeric HTTPS --async-dns-server URL.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
