@@ -174,6 +174,12 @@ void Http2HeaderBlockTest::testRejectMalformedRequest()
                            "\r\n",
                            ""),
                        DlAbortEx);
+  CPPUNIT_ASSERT_THROW(createHttp2HeaderBlockFromHttp1Request(
+                           "GET https:///path HTTP/1.1\r\n"
+                           "Host: example.org\r\n"
+                           "\r\n",
+                           "https"),
+                       DlAbortEx);
 }
 
 } // namespace aria2

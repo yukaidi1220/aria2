@@ -136,12 +136,18 @@ Http2RequestTarget parseHttp1RequestTarget(const std::string& target,
   auto pathBegin = target.find_first_of("/?", authorityBegin);
   if (pathBegin == std::string::npos) {
     result.authority = stripUserinfo(target.substr(authorityBegin));
+    if (result.authority.empty()) {
+      throw DL_ABORT_EX("Malformed HTTP request target");
+    }
     result.path = "/";
     return result;
   }
 
   result.authority =
       stripUserinfo(target.substr(authorityBegin, pathBegin - authorityBegin));
+  if (result.authority.empty()) {
+    throw DL_ABORT_EX("Malformed HTTP request target");
+  }
   if (target[pathBegin] == '?') {
     result.path = "/" + target.substr(pathBegin);
   }
