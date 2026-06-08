@@ -37,6 +37,7 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include "Http2HeaderBlock.h"
+#  include "HttpResponse.h"
 #  include "HttpRequest.h"
 #  include "Http2Transport.h"
 
