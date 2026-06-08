@@ -79,6 +79,8 @@ RUN tar xf c-ares-1.34.6.tar.gz && \
     sed -i 's/-D_WIN32_WINNT=0x0602/-DWINVER=0x0501 -D_WIN32_WINNT=0x0501/g' configure && \
     ac_cv_have_decl_ConvertInterfaceIndexToLuid=no \
     ac_cv_have_decl_ConvertInterfaceLuidToNameA=no \
+    ac_cv_have_decl_if_indextoname=no \
+    ac_cv_have_decl_if_nametoindex=no \
     ./configure \
         --disable-shared --enable-static --without-random \
         --disable-cares-threads \

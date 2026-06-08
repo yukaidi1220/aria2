@@ -129,8 +129,9 @@ jobs:
             autoreconf -i &&
             ./mingw-config &&
             make -j\$(nproc) &&
-            if ${{ matrix.host }}-objdump -p src/aria2c.exe | grep -q ConvertInterfaceIndexToLuid; then
-              echo 'aria2c.exe imports ConvertInterfaceIndexToLuid, which is unavailable on Windows XP.'
+            if ${{ matrix.host }}-objdump -p src/aria2c.exe | grep -Eiq 'ConvertInterfaceIndexToLuid|ConvertInterfaceLuidToNameA|if_indextoname|if_nametoindex'; then
+              echo 'aria2c.exe imports a Windows Vista+ IPHLPAPI symbol unavailable on Windows XP.'
+              ${{ matrix.host }}-objdump -p src/aria2c.exe | grep -Ei 'ConvertInterfaceIndexToLuid|ConvertInterfaceLuidToNameA|if_indextoname|if_nametoindex'
               exit 1
             fi &&
             ${{ matrix.host }}-strip src/aria2c.exe &&
