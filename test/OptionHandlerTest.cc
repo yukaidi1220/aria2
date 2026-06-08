@@ -3,8 +3,11 @@
 #include <cppunit/extensions/HelperMacros.h>
 
 #include "Option.h"
+#include "OptionParser.h"
+#include "OptionHandlerFactory.h"
 #include "prefs.h"
 #include "Exception.h"
+#include "error_code.h"
 #include "help_tags.h"
 
 namespace aria2 {
@@ -13,6 +16,8 @@ class OptionHandlerTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(OptionHandlerTest);
   CPPUNIT_TEST(testBooleanOptionHandler);
+  CPPUNIT_TEST(testUnsupportedFeatureOptionHandler);
+  CPPUNIT_TEST(testUnsupportedFeatureOptionParser);
   CPPUNIT_TEST(testNumberOptionHandler);
   CPPUNIT_TEST(testNumberOptionHandler_min);
   CPPUNIT_TEST(testNumberOptionHandler_max);
@@ -31,6 +36,8 @@ class OptionHandlerTest : public CppUnit::TestFixture {
 
 public:
   void testBooleanOptionHandler();
+  void testUnsupportedFeatureOptionHandler();
+  void testUnsupportedFeatureOptionParser();
   void testNumberOptionHandler();
   void testNumberOptionHandler_min();
   void testNumberOptionHandler_max();
@@ -65,6 +72,51 @@ void OptionHandlerTest::testBooleanOptionHandler()
   }
   CPPUNIT_ASSERT_EQUAL(std::string("true, false"),
                        handler.createPossibleValuesString());
+}
+
+void OptionHandlerTest::testUnsupportedFeatureOptionHandler()
+{
+  UnsupportedFeatureOptionHandler handler(
+      PREF_ENABLE_ECH, "", A2_V_FALSE, "Encrypted ClientHello",
+      OptionHandler::OPT_ARG);
+  Option option;
+  handler.parse(option, A2_V_FALSE);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
+  try {
+    handler.parse(option, A2_V_TRUE);
+    CPPUNIT_FAIL("exception must be thrown.");
+  }
+  catch (Exception& e) {
+    CPPUNIT_ASSERT_EQUAL(error_code::OPTION_ERROR, e.getErrorCode());
+  }
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
+  try {
+    handler.parse(option, "");
+    CPPUNIT_FAIL("exception must be thrown.");
+  }
+  catch (Exception& e) {
+    CPPUNIT_ASSERT_EQUAL(error_code::OPTION_ERROR, e.getErrorCode());
+  }
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
+  CPPUNIT_ASSERT_EQUAL(std::string("false"),
+                       handler.createPossibleValuesString());
+}
+
+void OptionHandlerTest::testUnsupportedFeatureOptionParser()
+{
+  OptionParser parser;
+  parser.setOptionHandlers(OptionHandlerFactory::createOptionHandlers());
+  Option option;
+  KeyVals options;
+
+  options.push_back(KeyVals::value_type(PREF_ENABLE_ECH->k, A2_V_FALSE));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_ECH->k, A2_V_TRUE));
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
 }
 
 void OptionHandlerTest::testNumberOptionHandler()

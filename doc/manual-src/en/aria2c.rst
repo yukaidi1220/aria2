@@ -476,6 +476,14 @@ HTTP Specific Options
   If the first request is redirected to ``redirect.example``, the redirected
   HTTPS request uses ``redirect-front.example`` as the SNI hostname.
 
+.. option:: --enable-ech [false]
+
+  Reserve the Encrypted ClientHello (ECH) option name for future use. ECH is
+  not implemented in this aria2 build. Setting this option to ``true`` fails
+  during option parsing instead of silently falling back to ordinary TLS.
+
+  Default: ``false``
+
 .. option:: --hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>
 
   Set host mappings for HTTP and HTTPS requests. Entries are comma separated

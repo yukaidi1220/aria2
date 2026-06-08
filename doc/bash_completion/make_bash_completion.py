@@ -99,6 +99,8 @@ _aria2c()
                      '--follow-torrent',
                      '--stream-piece-selector',
                      '--download-result',
+                     '--async-dns-mode',
+                     '--enable-ech',
                      '--min-tls-version',
                      '--console-log-level']:
         opt = opts[long_opt]

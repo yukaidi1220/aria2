@@ -101,6 +101,34 @@ std::string BooleanOptionHandler::createPossibleValuesString() const
   return "true, false";
 }
 
+UnsupportedFeatureOptionHandler::UnsupportedFeatureOptionHandler(
+    PrefPtr pref, const char* description, const std::string& defaultValue,
+    const std::string& featureName, OptionHandler::ARG_TYPE argType,
+    char shortName)
+    : BooleanOptionHandler(pref, description, defaultValue, argType, shortName),
+      featureName_(featureName.empty() ? pref->k : featureName)
+{
+}
+
+UnsupportedFeatureOptionHandler::~UnsupportedFeatureOptionHandler() = default;
+
+void UnsupportedFeatureOptionHandler::parseArg(Option& option,
+                                               const std::string& optarg) const
+{
+  if (optarg == "true" || ((argType_ == OptionHandler::OPT_ARG ||
+                            argType_ == OptionHandler::NO_ARG) &&
+                           optarg.empty())) {
+    throw DL_ABORT_EX(
+        fmt("%s is not supported in this aria2 build.", featureName_.c_str()));
+  }
+  BooleanOptionHandler::parseArg(option, optarg);
+}
+
+std::string UnsupportedFeatureOptionHandler::createPossibleValuesString() const
+{
+  return "false";
+}
+
 IntegerRangeOptionHandler::IntegerRangeOptionHandler(
     PrefPtr pref, const char* description, const std::string& defaultValue,
     int32_t min, int32_t max, char shortName)

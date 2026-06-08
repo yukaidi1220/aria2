@@ -554,6 +554,9 @@
     "                              address. SNI must be a DNS hostname, not an\n" \
     "                              IP address. Mappings are looked up using the\n" \
     "                              current request host after redirects.")
+#define TEXT_ENABLE_ECH                                                 \
+  _(" --enable-ech[=false]       Reserve the ECH option name. Encrypted ClientHello\n" \
+    "                              is not implemented; setting true fails fast.")
 #define TEXT_HOSTS_MAPPING                                              \
   _(" --hosts-mapping=HOST:IPADDR[,IPADDR:HOST]...\n"                   \
     "                              Set host mappings. HOST:IPADDR connects HOST\n" \

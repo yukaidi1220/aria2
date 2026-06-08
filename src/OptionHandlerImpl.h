@@ -59,6 +59,23 @@ public:
   virtual std::string createPossibleValuesString() const CXX11_OVERRIDE;
 };
 
+class UnsupportedFeatureOptionHandler : public BooleanOptionHandler {
+private:
+  std::string featureName_;
+
+public:
+  UnsupportedFeatureOptionHandler(
+      PrefPtr pref, const char* description,
+      const std::string& defaultValue = NO_DEFAULT_VALUE,
+      const std::string& featureName = A2STR::NIL,
+      OptionHandler::ARG_TYPE argType = OptionHandler::REQ_ARG,
+      char shortName = 0);
+  virtual ~UnsupportedFeatureOptionHandler();
+  virtual void parseArg(Option& option,
+                        const std::string& optarg) const CXX11_OVERRIDE;
+  virtual std::string createPossibleValuesString() const CXX11_OVERRIDE;
+};
+
 class IntegerRangeOptionHandler : public AbstractOptionHandler {
 private:
   int32_t min_;

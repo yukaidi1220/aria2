@@ -373,6 +373,8 @@ extern PrefPtr PREF_HEADER;
 extern PrefPtr PREF_TLS_SNI_HOST;
 // values: comma separated HOST:IPADDR or IPADDR:HOST
 extern PrefPtr PREF_HOSTS_MAPPING;
+// value: true | false
+extern PrefPtr PREF_ENABLE_ECH;
 // value: string that your file system recognizes as a file name.
 extern PrefPtr PREF_CERTIFICATE;
 // value: string that your file system recognizes as a file name.
