@@ -56,13 +56,13 @@ jobs:
     - name: Build
       run: make -j"$(nproc)"
 
-    - name: Smoke test
-      run: src/aria2c -v
-
     - name: Collect artifact
       run: |
         mkdir -p out
         cp src/aria2c out/aria2c
+
+    - name: Smoke test
+      run: out/aria2c -v
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
@@ -129,16 +129,60 @@ jobs:
     - name: Build
       run: make -j"$(sysctl -n hw.ncpu)"
 
-    - name: Smoke test
-      run: src/aria2c -v
-
-    - name: Collect artifact
+    - name: Bundle Homebrew dylibs
       run: |
-        mkdir -p out
+        set -euo pipefail
+        mkdir -p out/lib
         cp src/aria2c out/aria2c
+        targets="out/aria2c"
+
+        while [ -n "$targets" ]; do
+          target="${targets%%$'\n'*}"
+          if [ "$targets" = "$target" ]; then
+            targets=
+          else
+            targets="${targets#*$'\n'}"
+          fi
+
+          deps="$(otool -L "$target" | awk 'NR > 1 { print $1 }' | grep -E '^(/opt/homebrew|/usr/local)/(opt|Cellar)/' || true)"
+          while IFS= read -r dep; do
+            [ -n "$dep" ] || continue
+            base="$(basename "$dep")"
+            bundled="out/lib/$base"
+
+            if [ ! -e "$bundled" ]; then
+              cp "$dep" "$bundled"
+              chmod u+w "$bundled"
+              install_name_tool -id "@rpath/$base" "$bundled"
+              targets="${targets}${targets:+$'\n'}$bundled"
+            fi
+
+            if [ "$target" = "out/aria2c" ]; then
+              install_name_tool -change "$dep" "@executable_path/lib/$base" "$target"
+            else
+              install_name_tool -change "$dep" "@loader_path/$base" "$target"
+            fi
+          done <<< "$deps"
+        done
+
+        if ls out/lib/*.dylib >/dev/null 2>&1; then
+          codesign --force --sign - out/aria2c out/lib/*.dylib
+        else
+          codesign --force --sign - out/aria2c
+        fi
+
+    - name: Smoke test packaged binary
+      run: out/aria2c -v
+
+    - name: Check macOS artifact portability
+      run: |
+        if otool -L out/aria2c out/lib/*.dylib 2>/dev/null | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)'; then
+          echo "macOS artifact still depends on Homebrew absolute library paths."
+          exit 1
+        fi
 
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: aria2-macos-${{ matrix.arch }}
-        path: out/aria2c
+        path: out
