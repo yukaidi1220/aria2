@@ -47,6 +47,7 @@
 namespace aria2 {
 
 class Http2MultiplexExchange;
+class Http2ConnectionContext;
 class HttpResponse;
 class StreamFilter;
 
@@ -55,6 +56,7 @@ private:
   std::shared_ptr<Http2MultiplexExchange> exchange_;
   int32_t streamId_;
   std::unique_ptr<HttpResponse> httpResponse_;
+  std::shared_ptr<Http2ConnectionContext> connectionContext_;
   int64_t expectedBodyLength_;
   int64_t bodyLength_;
   bool expectedBodyLengthKnown_;
@@ -74,7 +76,8 @@ public:
       std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpResponse> httpResponse,
       std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true);
+      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true,
+      std::shared_ptr<Http2ConnectionContext> connectionContext = nullptr);
   ~Http2DownloadCommand();
 };
 

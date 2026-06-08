@@ -58,6 +58,7 @@
 namespace aria2 {
 
 class Option;
+class RequestGroup;
 class RequestGroupMan;
 class StatCalc;
 class SocketCore;
@@ -66,6 +67,10 @@ class AuthConfigFactory;
 class Request;
 class EventPoll;
 class Command;
+#ifdef HAVE_LIBNGHTTP2
+class Http2ConnectionContext;
+class Http2MultiplexExchange;
+#endif // HAVE_LIBNGHTTP2
 #ifdef ENABLE_BITTORRENT
 class BtRegistry;
 #endif // ENABLE_BITTORRENT
@@ -123,6 +128,21 @@ private:
   // key = IP address:port, value = SocketPoolEntry
   std::multimap<std::string, SocketPoolEntry> socketPool_;
 
+#ifdef HAVE_LIBNGHTTP2
+  class ActiveHttp2PoolEntry {
+  private:
+    std::weak_ptr<Http2ConnectionContext> context_;
+
+  public:
+    explicit ActiveHttp2PoolEntry(
+        const std::shared_ptr<Http2ConnectionContext>& context);
+
+    std::shared_ptr<Http2ConnectionContext> getContext() const;
+  };
+
+  std::multimap<std::string, ActiveHttp2PoolEntry> activeHttp2Pool_;
+#endif // HAVE_LIBNGHTTP2
+
   Timer lastSocketPoolScan_;
 
   bool noWait_;
@@ -178,6 +198,16 @@ private:
   std::unique_ptr<util::security::HMACResult> tokenExpected_;
 
 public:
+#ifdef HAVE_LIBNGHTTP2
+  struct ActiveHttp2Connection {
+    std::shared_ptr<Http2ConnectionContext> context;
+    std::shared_ptr<Http2MultiplexExchange> exchange;
+    std::shared_ptr<SocketCore> socket;
+
+    bool isActive() const { return context && exchange && socket; }
+  };
+#endif // HAVE_LIBNGHTTP2
+
   DownloadEngine(std::unique_ptr<EventPoll> eventPoll);
 
   ~DownloadEngine();
@@ -301,6 +331,20 @@ public:
                   uint16_t port, const std::string& username);
 
   void evictSocketPool();
+
+#ifdef HAVE_LIBNGHTTP2
+  void registerActiveHttp2Connection(
+      const Request* request,
+      const std::shared_ptr<Http2ConnectionContext>& context);
+
+  ActiveHttp2Connection findActiveHttp2Connection(
+      RequestGroup* requestGroup, const Request* request,
+      const std::string& connectedHostname, const std::string& connectedAddr,
+      uint16_t connectedPort,
+      const std::function<bool(const std::shared_ptr<SocketCore>&)>& predicate);
+
+  void evictActiveHttp2Connections();
+#endif // HAVE_LIBNGHTTP2
 
   const std::unique_ptr<CookieStorage>& getCookieStorage() const;
 

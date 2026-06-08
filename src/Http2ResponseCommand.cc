@@ -38,6 +38,7 @@
 
 #  include "DlAbortEx.h"
 #  include "DownloadEngine.h"
+#  include "Http2ConnectionContext.h"
 #  include "Http2DownloadCommand.h"
 #  include "Http2MultiplexExchange.h"
 #  include "HttpHeader.h"
@@ -61,12 +62,14 @@ Http2ResponseCommand::Http2ResponseCommand(
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
     std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
     std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
-    const std::shared_ptr<SocketCore>& s, bool incNumConnection)
+    const std::shared_ptr<SocketCore>& s, bool incNumConnection,
+    std::shared_ptr<Http2ConnectionContext> connectionContext)
     : HttpResponseCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr,
                           incNumConnection),
       exchange_(std::move(exchange)),
       streamId_(streamId),
       httpRequest_(std::move(httpRequest)),
+      connectionContext_(std::move(connectionContext)),
       expectedSkipBodyLength_(0),
       skippedBodyLength_(0),
       expectedSkipBodyLengthKnown_(false),
@@ -121,7 +124,8 @@ std::unique_ptr<Command> Http2ResponseCommand::createHttpDownloadCommand(
   return make_unique<Http2DownloadCommand>(
       getCuid(), getRequest(), getFileEntry(), getRequestGroup(), exchange_,
       streamId_, std::move(httpResponse), std::move(streamFilter),
-      getDownloadEngine(), getSocket(), incNumConnection_);
+      getDownloadEngine(), getSocket(), incNumConnection_,
+      connectionContext_);
 }
 
 bool Http2ResponseCommand::skipResponseBody(

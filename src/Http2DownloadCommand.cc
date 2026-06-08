@@ -41,6 +41,7 @@
 #  include "DlAbortEx.h"
 #  include "DownloadEngine.h"
 #  include "FileEntry.h"
+#  include "Http2ConnectionContext.h"
 #  include "Http2MultiplexExchange.h"
 #  include "HttpHeader.h"
 #  include "HttpResponse.h"
@@ -68,12 +69,14 @@ Http2DownloadCommand::Http2DownloadCommand(
     std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
-    const std::shared_ptr<SocketCore>& s, bool incNumConnection)
+    const std::shared_ptr<SocketCore>& s, bool incNumConnection,
+    std::shared_ptr<Http2ConnectionContext> connectionContext)
     : DownloadCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr,
                       incNumConnection),
       exchange_(std::move(exchange)),
       streamId_(streamId),
       httpResponse_(std::move(httpResponse)),
+      connectionContext_(std::move(connectionContext)),
       expectedBodyLength_(0),
       bodyLength_(0),
       expectedBodyLengthKnown_(false)

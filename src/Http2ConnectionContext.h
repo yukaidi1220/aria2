@@ -32,8 +32,8 @@
  * it here.
  */
 /* copyright --> */
-#ifndef D_HTTP2_RESPONSE_COMMAND_H
-#define D_HTTP2_RESPONSE_COMMAND_H
+#ifndef D_HTTP2_CONNECTION_CONTEXT_H
+#define D_HTTP2_CONNECTION_CONTEXT_H
 
 #include "common.h"
 
@@ -41,54 +41,41 @@
 
 #  include <memory>
 
-#  include "HttpResponseCommand.h"
-
 namespace aria2 {
 
 class Http2MultiplexExchange;
-class Http2ConnectionContext;
-class HttpRequest;
-class HttpResponse;
-class StreamFilter;
+class RequestGroup;
+class SocketCore;
 
-class Http2ResponseCommand : public HttpResponseCommand {
+class Http2ConnectionContext {
 private:
+  RequestGroup* requestGroup_;
   std::shared_ptr<Http2MultiplexExchange> exchange_;
-  int32_t streamId_;
-  std::unique_ptr<HttpRequest> httpRequest_;
-  std::unique_ptr<HttpResponse> skipHttpResponse_;
-  std::shared_ptr<Http2ConnectionContext> connectionContext_;
-  int64_t expectedSkipBodyLength_;
-  int64_t skippedBodyLength_;
-  bool expectedSkipBodyLengthKnown_;
-  bool incNumConnection_;
-
-  bool drainSkippedResponseBody();
-
-protected:
-  bool executeInternal() CXX11_OVERRIDE;
-  std::unique_ptr<Command>
-  createHttpDownloadCommand(std::unique_ptr<HttpResponse> httpResponse,
-                            std::unique_ptr<StreamFilter> streamFilter)
-      CXX11_OVERRIDE;
-  bool skipResponseBody(std::unique_ptr<HttpResponse> httpResponse)
-      CXX11_OVERRIDE;
-  void poolConnection() CXX11_OVERRIDE;
-  virtual void requeueSelf();
+  std::shared_ptr<SocketCore> socket_;
 
 public:
-  Http2ResponseCommand(
-      cuid_t cuid, const std::shared_ptr<Request>& req,
-      const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
-      std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
-      std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s, bool incNumConnection = true,
-      std::shared_ptr<Http2ConnectionContext> connectionContext = nullptr);
-  ~Http2ResponseCommand();
+  Http2ConnectionContext(
+      RequestGroup* requestGroup,
+      const std::shared_ptr<Http2MultiplexExchange>& exchange,
+      const std::shared_ptr<SocketCore>& socket);
+  ~Http2ConnectionContext();
+
+  Http2ConnectionContext(const Http2ConnectionContext&) = delete;
+  Http2ConnectionContext&
+  operator=(const Http2ConnectionContext&) = delete;
+
+  const std::shared_ptr<Http2MultiplexExchange>& getExchange() const
+  {
+    return exchange_;
+  }
+
+  const std::shared_ptr<SocketCore>& getSocket() const { return socket_; }
+
+  RequestGroup* getRequestGroup() const { return requestGroup_; }
 };
 
 } // namespace aria2
 
 #endif // HAVE_LIBNGHTTP2
 
-#endif // D_HTTP2_RESPONSE_COMMAND_H
+#endif // D_HTTP2_CONNECTION_CONTEXT_H

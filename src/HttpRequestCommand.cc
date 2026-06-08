@@ -41,6 +41,7 @@
 #include "RequestGroup.h"
 #include "HttpResponseCommand.h"
 #ifdef HAVE_LIBNGHTTP2
+#  include "Http2ConnectionContext.h"
 #  include "Http2ResponseCommand.h"
 #  include "Http2MultiplexExchange.h"
 #  include "Http2SocketCoreTransport.h"
@@ -201,11 +202,16 @@ bool HttpRequestCommand::executeInternal()
 
       auto exchange = std::make_shared<Http2MultiplexExchange>(
           make_unique<Http2SocketCoreTransport>(getSocket()));
+      auto connectionContext = std::make_shared<Http2ConnectionContext>(
+          getRequestGroup(), exchange, getSocket());
       auto streamId = exchange->submitRequest(*httpRequest);
+      getDownloadEngine()->registerActiveHttp2Connection(getRequest().get(),
+                                                          connectionContext);
       exchange->flushOutboundData();
       getDownloadEngine()->addCommand(make_unique<Http2ResponseCommand>(
           getCuid(), getRequest(), getFileEntry(), getRequestGroup(), exchange,
-          streamId, std::move(httpRequest), getDownloadEngine(), getSocket()));
+          streamId, std::move(httpRequest), getDownloadEngine(), getSocket(),
+          false, connectionContext));
       return true;
     }
 #endif // HAVE_LIBNGHTTP2
