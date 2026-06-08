@@ -432,7 +432,8 @@ if HAVE_LIBNGHTTP2
 SRCS += \
 	Http2Connection.cc Http2Connection.h\
 	Http2ResponseAdapter.cc Http2ResponseAdapter.h\
-	Http2Session.cc Http2Session.h
+	Http2Session.cc Http2Session.h\
+	Http2Transaction.cc Http2Transaction.h
 endif # HAVE_LIBNGHTTP2
 
 if ENABLE_ASYNC_DNS
