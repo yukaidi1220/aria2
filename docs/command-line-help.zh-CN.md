@@ -129,6 +129,8 @@ DoH 规则：
 
 - `AsyncNameResolverMan::startAsync()` 依据可用地址族启动 A/AAAA 查询；源码先放 IPv6 resolver，再放 IPv4 resolver。
 - `configureAsyncNameResolverMan()` 会调用 `net::checkAddrconfig()`，如果本机没有 IPv6 或 `--disable-ipv6=true`，则关闭 AAAA 查询。
+- `AsyncNameResolverMan::getStatus()` 只要任一地址族成功就返回成功；只有已启动的地址族全失败才返回失败。`AbstractCommand::resolveHostname()` 会立即使用已成功的地址，不等待仍在查询的另一族。
+- `continueAsyncDnsCacheFill()` 会把仍在查询的 resolver 交给后台 `AsyncDnsCacheCommand`；后台后续拿到地址后写入 DNS cache，并尝试唤醒同一下载组创建后续连接。
 - `AbstractCommand::resolveHostname()` 拿到解析结果后写入 DNS cache，再由 `selectIPAddress()` / `getLeastUsedActiveAddressFamily()` 在 IPv4/IPv6 间选择。
 - 这不是完整 RFC 8305 Happy Eyeballs 并发连接实现；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果，后续连接优先选择 active in-flight 较少的地址族；打平时由 `FileEntry` 按 host/port 保存的轮转游标在 IPv4/IPv6 间分散选择地址”。
 

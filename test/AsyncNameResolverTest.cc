@@ -212,6 +212,10 @@ void AsyncNameResolverTest::testGetStatusSucceedsWhenIPv6SucceedsAndIPv4IsPendin
   resolverMan.startAsync("dual.example", nullptr, &command);
 
   CPPUNIT_ASSERT_EQUAL(1, resolverMan.getStatus());
+  std::vector<std::string> resolvedAddrs;
+  resolverMan.getResolvedAddress(resolvedAddrs);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolvedAddrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), resolvedAddrs[0]);
 
   auto pendingResolvers = resolverMan.detachPendingResolvers(nullptr, nullptr);
   CPPUNIT_ASSERT_EQUAL((size_t)1, pendingResolvers.size());
@@ -234,6 +238,10 @@ void AsyncNameResolverTest::testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPendin
   resolverMan.startAsync("dual.example", nullptr, &command);
 
   CPPUNIT_ASSERT_EQUAL(1, resolverMan.getStatus());
+  std::vector<std::string> resolvedAddrs;
+  resolverMan.getResolvedAddress(resolvedAddrs);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolvedAddrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), resolvedAddrs[0]);
 
   auto pendingResolvers = resolverMan.detachPendingResolvers(nullptr, nullptr);
   CPPUNIT_ASSERT_EQUAL((size_t)1, pendingResolvers.size());
