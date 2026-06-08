@@ -47,7 +47,7 @@
 #include "Option.h"
 #include "SocketCore.h"
 #include "HostMapping.h"
-#include "TLSSNIHostMapping.h"
+#include "HttpTLSHandshakeParams.h"
 #include "prefs.h"
 #include "a2functional.h"
 #include "util.h"
@@ -143,10 +143,8 @@ bool tryRetryTLSHandshakeWithNextAddress(
       req->getConnectedAddr().empty()) {
     return false;
   }
-  auto logicalHost = getLogicalHostForRequest(req->getHost(), option.get());
-  auto sniHostConfig =
-      getTLSSNIHostConfig(req->getHost(), logicalHost, option.get());
-  if (sniHostConfig.sniHost != logicalHost) {
+  auto tlsParams = createHttpTLSHandshakeParams(req.get(), option.get());
+  if (tlsParams.sniHost != tlsParams.verifyHost) {
     return false;
   }
 
@@ -183,13 +181,8 @@ bool HttpRequestCommand::executeInternal()
   if (httpConnection_->sendBufferIsEmpty()) {
 #ifdef ENABLE_SSL
     if (getRequest()->getProtocol() == "https") {
-      const auto verifyHost =
-          getLogicalHostForRequest(getRequest()->getHost(), getOption().get());
-      auto sniHostConfig =
-          getTLSSNIHostConfig(getRequest()->getHost(), verifyHost,
-                              getOption().get());
-      TLSHandshakeParams tlsParams(sniHostConfig.sniHost, verifyHost,
-                                   sniHostConfig.overridden);
+      auto tlsParams =
+          createHttpTLSHandshakeParams(getRequest().get(), getOption().get());
       try {
         if (!getSocket()->tlsConnect(tlsParams)) {
           setReadCheckSocketIf(getSocket(), getSocket()->wantRead());

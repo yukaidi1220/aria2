@@ -132,6 +132,7 @@ SRCS =  \
 	HttpRequest.cc HttpRequest.h\
 	HttpRequestCommand.cc HttpRequestCommand.h\
 	HttpRequestConnectChain.h\
+	HttpTLSHandshakeParams.cc HttpTLSHandshakeParams.h\
 	HttpResponse.cc HttpResponse.h\
 	HttpResponseCommand.cc HttpResponseCommand.h\
 	HttpServer.cc HttpServer.h\

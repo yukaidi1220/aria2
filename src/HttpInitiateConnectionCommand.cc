@@ -48,8 +48,7 @@
 #include "Logger.h"
 #include "LogFactory.h"
 #include "SocketCore.h"
-#include "HostMapping.h"
-#include "TLSSNIHostMapping.h"
+#include "HttpTLSHandshakeParams.h"
 #include "message.h"
 #include "prefs.h"
 #include "A2STR.h"
@@ -66,25 +65,13 @@ namespace aria2 {
 namespace {
 
 #ifdef ENABLE_SSL
-TLSHandshakeParams createTLSHandshakeParams(const Request* request,
-                                            const Option* option)
-{
-  const auto verifyHost = getLogicalHostForRequest(request->getHost(), option);
-  auto sniHostConfig =
-      getTLSSNIHostConfig(request->getHost(), verifyHost, option);
-  return TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
-                            sniHostConfig.overridden);
-}
-#endif // ENABLE_SSL
-
-#ifdef ENABLE_SSL
 std::function<bool(const std::shared_ptr<SocketCore>&)>
 createTLSSocketReusePredicate(const Request* request, const Option* option)
 {
   if (request->getProtocol() != "https") {
     return std::function<bool(const std::shared_ptr<SocketCore>&)>();
   }
-  auto tlsParams = createTLSHandshakeParams(request, option);
+  auto tlsParams = createHttpTLSHandshakeParams(request, option);
   return [tlsParams](const std::shared_ptr<SocketCore>& socket) {
     return socket->matchesTLSHandshakeParams(tlsParams);
   };
