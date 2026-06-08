@@ -25,55 +25,59 @@
  * including the two.
  * You must obey the GNU General Public License in all respects
  * for all of the code used other than OpenSSL.  If you modify
- * file(s) with this exception, you may extend this exception to your
- * version of the file(s), but you are not obligated to do so.  If you
- * do not wish to do so, delete this exception statement from your
- * version of the file(s).  If you delete this exception statement from
- * all source files in the program, then also delete it here.
+ * file(s) with this exception, you may extend this exception statement from
+ * your version, but you are not obligated to do so.  If you do not wish to do
+ * so, delete this exception statement from your version.  If you delete this
+ * exception statement from all source files in the program, then also delete
+ * it here.
  */
 /* copyright --> */
-#ifndef D_HTTP2_TRANSACTION_H
-#define D_HTTP2_TRANSACTION_H
+#ifndef D_HTTP2_BODY_QUEUE_H
+#define D_HTTP2_BODY_QUEUE_H
 
 #include "common.h"
 
 #ifdef HAVE_LIBNGHTTP2
 
+#  include <deque>
 #  include <cstdint>
-#  include <memory>
 #  include <string>
-
-#  include "Http2Connection.h"
 
 namespace aria2 {
 
-class HttpResponse;
-
-class Http2Transaction {
+class Http2BodyQueue {
 private:
-  Http2Connection connection_;
-  int32_t streamId_ = 0;
+  std::deque<std::string> chunks_;
+  size_t size_;
+  size_t capacity_;
+  bool closed_;
+  uint32_t errorCode_;
 
 public:
-  Http2Transaction();
-  ~Http2Transaction();
+  explicit Http2BodyQueue(size_t capacity = 256 * 1024);
+  ~Http2BodyQueue();
 
-  Http2Transaction(const Http2Transaction&) = delete;
-  Http2Transaction& operator=(const Http2Transaction&) = delete;
+  Http2BodyQueue(const Http2BodyQueue&) = default;
+  Http2BodyQueue& operator=(const Http2BodyQueue&) = default;
+  Http2BodyQueue(Http2BodyQueue&&) = default;
+  Http2BodyQueue& operator=(Http2BodyQueue&&) = default;
 
-  int32_t submitRequest(const Http2HeaderBlock& headers);
-  std::string drainOutboundData();
-  void feedInboundData(const std::string& data);
+  bool push(const unsigned char* data, size_t len);
+  std::string pop(size_t maxLen);
+  std::string drainAll();
+  void clear();
+  void close(uint32_t errorCode);
 
-  bool hasActiveStream() const;
-  int32_t getStreamId() const;
-  const Http2ResponseEvent* findResponseEvent() const;
-  std::unique_ptr<Http2ResponseEvent> popResponseEvent();
-  std::unique_ptr<HttpResponse> popHttpResponse();
+  bool empty() const { return size_ == 0; }
+  size_t size() const { return size_; }
+  size_t capacity() const { return capacity_; }
+  size_t available() const { return capacity_ - size_; }
+  bool closed() const { return closed_; }
+  uint32_t errorCode() const { return errorCode_; }
 };
 
 } // namespace aria2
 
 #endif // HAVE_LIBNGHTTP2
 
-#endif // D_HTTP2_TRANSACTION_H
+#endif // D_HTTP2_BODY_QUEUE_H

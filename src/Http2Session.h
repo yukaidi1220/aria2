@@ -43,15 +43,23 @@
 #  include <memory>
 #  include <string>
 
+#  include "Http2BodyQueue.h"
 #  include "Http2HeaderBlock.h"
 
 namespace aria2 {
 
 struct Http2ResponseEvent {
+  Http2ResponseEvent() = default;
+  ~Http2ResponseEvent() = default;
+  Http2ResponseEvent(const Http2ResponseEvent&) = default;
+  Http2ResponseEvent& operator=(const Http2ResponseEvent&) = default;
+  Http2ResponseEvent(Http2ResponseEvent&&) = default;
+  Http2ResponseEvent& operator=(Http2ResponseEvent&&) = default;
+
   int32_t streamId = 0;
   int status = 0;
   Http2HeaderBlock headers;
-  std::string body;
+  Http2BodyQueue body;
   bool headersComplete = false;
   bool streamClosed = false;
   uint32_t errorCode = 0;

@@ -80,7 +80,7 @@ Http2Connection::popResponseEvent(int32_t streamId)
 std::unique_ptr<HttpResponse> Http2Connection::popHttpResponse(int32_t streamId)
 {
   auto event = session_.findResponseEvent(streamId);
-  if (!event) {
+  if (!event || !event->streamClosed) {
     return nullptr;
   }
   auto response = createHttpResponseFromHttp2Event(*event);

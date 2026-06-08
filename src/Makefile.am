@@ -430,6 +430,7 @@ endif # HAVE_LIBSSH2
 
 if HAVE_LIBNGHTTP2
 SRCS += \
+	Http2BodyQueue.cc Http2BodyQueue.h\
 	Http2Connection.cc Http2Connection.h\
 	Http2ResponseAdapter.cc Http2ResponseAdapter.h\
 	Http2Session.cc Http2Session.h\

@@ -101,7 +101,8 @@ void Http2ResponseAdapterTest::testBodyDoesNotSynthesizeContentLength()
   Http2ResponseEvent event;
   event.headersComplete = true;
   event.status = 200;
-  event.body = "hello";
+  CPPUNIT_ASSERT(event.body.push(
+      reinterpret_cast<const unsigned char*>("hello"), 5));
 
   auto response = createHttpResponseFromHttp2Event(event);
 

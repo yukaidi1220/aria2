@@ -135,6 +135,21 @@ public:
     CPPUNIT_ASSERT(!callbackFailed_);
   }
 
+  void submitResponseHeaders(int32_t streamId,
+                             const Http2HeaderBlock& headers)
+  {
+    std::vector<nghttp2_nv> nva;
+    nva.reserve(headers.size());
+    std::transform(std::begin(headers), std::end(headers),
+                   std::back_inserter(nva), makeNV);
+
+    assertNghttp2Success(nghttp2_submit_headers(
+        session_, NGHTTP2_FLAG_NONE, streamId, nullptr, nva.data(),
+        nva.size(), nullptr));
+    assertNghttp2Success(nghttp2_session_send(session_));
+    CPPUNIT_ASSERT(!callbackFailed_);
+  }
+
   std::string drainOutboundData()
   {
     std::string data;

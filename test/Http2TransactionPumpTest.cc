@@ -210,14 +210,11 @@ void Http2TransactionPumpTest::testPumpFeedsInboundResponse()
   CPPUNIT_ASSERT(pump.wantRead());
   CPPUNIT_ASSERT(pump.pump());
 
-  auto event = transaction.findResponseEvent();
+  auto event = transaction.popResponseEvent();
   CPPUNIT_ASSERT(event);
-  CPPUNIT_ASSERT_EQUAL(std::string("body"), event->body);
-
-  auto response = transaction.popHttpResponse();
-  CPPUNIT_ASSERT(response);
-  CPPUNIT_ASSERT_EQUAL(200, response->getStatusCode());
-  CPPUNIT_ASSERT_EQUAL((int64_t)4LL, response->getContentLength());
+  CPPUNIT_ASSERT_EQUAL(std::string("body"), event->body.drainAll());
+  CPPUNIT_ASSERT(event->body.closed());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
 }
 
 void Http2TransactionPumpTest::testPumpHandlesPartialRead()
@@ -242,14 +239,11 @@ void Http2TransactionPumpTest::testPumpHandlesPartialRead()
     CPPUNIT_ASSERT(pump.pump());
   }
 
-  auto event = transaction.findResponseEvent();
+  auto event = transaction.popResponseEvent();
   CPPUNIT_ASSERT(event);
-  CPPUNIT_ASSERT_EQUAL(std::string("chunked-body"), event->body);
-
-  auto response = transaction.popHttpResponse();
-  CPPUNIT_ASSERT(response);
-  CPPUNIT_ASSERT_EQUAL(200, response->getStatusCode());
-  CPPUNIT_ASSERT_EQUAL((int64_t)12LL, response->getContentLength());
+  CPPUNIT_ASSERT_EQUAL(std::string("chunked-body"), event->body.drainAll());
+  CPPUNIT_ASSERT(event->body.closed());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
 }
 
 void Http2TransactionPumpTest::testWriteFailureThrows()

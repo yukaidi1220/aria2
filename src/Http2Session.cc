@@ -169,6 +169,7 @@ struct Http2Session::Impl {
         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
           response.streamClosed = true;
           response.errorCode = NGHTTP2_NO_ERROR;
+          response.body.close(NGHTTP2_NO_ERROR);
         }
       }
     }
@@ -221,8 +222,11 @@ struct Http2Session::Impl {
     (void)flags;
     auto impl = static_cast<Impl*>(userData);
     try {
-      impl->getResponse(streamId)
-          .body.append(reinterpret_cast<const char*>(data), len);
+      auto& response = impl->getResponse(streamId);
+      if (!response.body.push(data, len)) {
+        impl->setCallbackFailure("HTTP/2 response body queue is full");
+        return NGHTTP2_ERR_CALLBACK_FAILURE;
+      }
     }
     catch (...) {
       impl->setCallbackFailure("nghttp2 data callback failed");
@@ -240,6 +244,7 @@ struct Http2Session::Impl {
       auto& response = impl->getResponse(streamId);
       response.streamClosed = true;
       response.errorCode = errorCode;
+      response.body.close(errorCode);
     }
     catch (...) {
       impl->setCallbackFailure("nghttp2 stream close callback failed");

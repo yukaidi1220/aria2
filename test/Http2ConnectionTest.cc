@@ -22,6 +22,7 @@ class Http2ConnectionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testFeedInboundDataFindsResponseEvent);
   CPPUNIT_TEST(testPopResponseEventRemovesEvent);
   CPPUNIT_TEST(testPopHttpResponseConsumesEvent);
+  CPPUNIT_TEST(testPopHttpResponseWaitsForStreamClose);
   CPPUNIT_TEST(testPopHttpResponseKeepsMalformedEvent);
   CPPUNIT_TEST_SUITE_END();
 
@@ -30,6 +31,7 @@ public:
   void testFeedInboundDataFindsResponseEvent();
   void testPopResponseEventRemovesEvent();
   void testPopHttpResponseConsumesEvent();
+  void testPopHttpResponseWaitsForStreamClose();
   void testPopHttpResponseKeepsMalformedEvent();
 };
 
@@ -86,7 +88,7 @@ void Http2ConnectionTest::testPopResponseEventRemovesEvent()
 
   auto response = connection.popResponseEvent(streamId);
   CPPUNIT_ASSERT(response);
-  CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body);
+  CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body.drainAll());
   CPPUNIT_ASSERT(!connection.hasResponseEvent(streamId));
   CPPUNIT_ASSERT(!connection.popResponseEvent(streamId));
 }
@@ -112,6 +114,24 @@ void Http2ConnectionTest::testPopHttpResponseConsumesEvent()
   CPPUNIT_ASSERT_EQUAL((int64_t)123LL, response->getContentLength());
   CPPUNIT_ASSERT(!connection.hasResponseEvent(streamId));
   CPPUNIT_ASSERT(!connection.popHttpResponse(streamId));
+}
+
+void Http2ConnectionTest::testPopHttpResponseWaitsForStreamClose()
+{
+  Http2Connection connection;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = connection.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(connection.drainOutboundData());
+  server.submitResponseHeaders(streamId, http2test::createResponseHeaders());
+  connection.feedInboundData(server.drainOutboundData());
+
+  auto event = connection.findResponseEvent(streamId);
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT(event->headersComplete);
+  CPPUNIT_ASSERT(!event->streamClosed);
+  CPPUNIT_ASSERT(!connection.popHttpResponse(streamId));
+  CPPUNIT_ASSERT(connection.hasResponseEvent(streamId));
 }
 
 void Http2ConnectionTest::testPopHttpResponseKeepsMalformedEvent()

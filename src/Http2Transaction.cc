@@ -76,9 +76,29 @@ const Http2ResponseEvent* Http2Transaction::findResponseEvent() const
   return connection_.findResponseEvent(streamId_);
 }
 
+std::unique_ptr<Http2ResponseEvent> Http2Transaction::popResponseEvent()
+{
+  if (streamId_ == 0) {
+    return nullptr;
+  }
+  auto response = connection_.findResponseEvent(streamId_);
+  if (!response || !response->streamClosed) {
+    return nullptr;
+  }
+  auto event = connection_.popResponseEvent(streamId_);
+  if (event) {
+    streamId_ = 0;
+  }
+  return event;
+}
+
 std::unique_ptr<HttpResponse> Http2Transaction::popHttpResponse()
 {
   if (streamId_ == 0) {
+    return nullptr;
+  }
+  auto event = connection_.findResponseEvent(streamId_);
+  if (!event || !event->streamClosed) {
     return nullptr;
   }
   auto response = connection_.popHttpResponse(streamId_);

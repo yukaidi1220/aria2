@@ -87,6 +87,7 @@ void Http2SessionTest::testFeedInboundDataCollectsResponseHeaders()
   CPPUNIT_ASSERT_EQUAL(streamId, response->streamId);
   CPPUNIT_ASSERT_EQUAL(200, response->status);
   CPPUNIT_ASSERT(response->headersComplete);
+  CPPUNIT_ASSERT(response->body.closed());
   CPPUNIT_ASSERT_EQUAL(std::string("text/plain"),
                        http2test::findHeader(response->headers,
                                              "content-type"));
@@ -107,9 +108,10 @@ void Http2SessionTest::testFeedInboundDataCollectsResponseBodyAndClose()
   server.submitResponse(streamId, http2test::createResponseHeaders(), "hello");
   client.feedInboundData(server.drainOutboundData());
 
-  auto response = client.findResponseEvent(streamId);
+  auto response = client.popResponseEvent(streamId);
   CPPUNIT_ASSERT(response);
-  CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body);
+  CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body.drainAll());
+  CPPUNIT_ASSERT(response->body.closed());
   CPPUNIT_ASSERT(response->streamClosed);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
 }
@@ -126,11 +128,12 @@ void Http2SessionTest::testFeedInboundDataAcceptsPartialFrames()
                         "partial-body");
   http2test::feedInChunks(client, server.drainOutboundData());
 
-  auto response = client.findResponseEvent(streamId);
+  auto response = client.popResponseEvent(streamId);
   CPPUNIT_ASSERT(response);
   CPPUNIT_ASSERT_EQUAL(200, response->status);
   CPPUNIT_ASSERT(response->headersComplete);
-  CPPUNIT_ASSERT_EQUAL(std::string("partial-body"), response->body);
+  CPPUNIT_ASSERT_EQUAL(std::string("partial-body"),
+                       response->body.drainAll());
   CPPUNIT_ASSERT(response->streamClosed);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
 }
@@ -151,7 +154,7 @@ void Http2SessionTest::testPopResponseEventRemovesEvent()
   CPPUNIT_ASSERT(response);
   CPPUNIT_ASSERT_EQUAL(streamId, response->streamId);
   CPPUNIT_ASSERT_EQUAL(200, response->status);
-  CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body);
+  CPPUNIT_ASSERT_EQUAL(std::string("hello"), response->body.drainAll());
   CPPUNIT_ASSERT(!client.hasResponseEvent(streamId));
   CPPUNIT_ASSERT(!client.popResponseEvent(streamId));
 }

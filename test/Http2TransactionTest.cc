@@ -21,6 +21,9 @@ class Http2TransactionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSubmitRequestStoresSingleStreamId);
   CPPUNIT_TEST(testDrainOutboundDataAfterSubmit);
   CPPUNIT_TEST(testFeedInboundDataPopHttpResponse);
+  CPPUNIT_TEST(testPopResponseEventDrainsBody);
+  CPPUNIT_TEST(testPopResponseEventKeepsActiveUntilStreamClose);
+  CPPUNIT_TEST(testPopHttpResponseKeepsActiveUntilStreamClose);
   CPPUNIT_TEST(testRejectSecondSubmitWhileStreamActive);
   CPPUNIT_TEST(testMalformedResponseKeepsActiveStream);
   CPPUNIT_TEST_SUITE_END();
@@ -29,6 +32,9 @@ public:
   void testSubmitRequestStoresSingleStreamId();
   void testDrainOutboundDataAfterSubmit();
   void testFeedInboundDataPopHttpResponse();
+  void testPopResponseEventDrainsBody();
+  void testPopResponseEventKeepsActiveUntilStreamClose();
+  void testPopHttpResponseKeepsActiveUntilStreamClose();
   void testRejectSecondSubmitWhileStreamActive();
   void testMalformedResponseKeepsActiveStream();
 };
@@ -81,6 +87,62 @@ void Http2TransactionTest::testFeedInboundDataPopHttpResponse()
   CPPUNIT_ASSERT(!transaction.hasActiveStream());
   CPPUNIT_ASSERT(!transaction.findResponseEvent());
   CPPUNIT_ASSERT(!transaction.popHttpResponse());
+}
+
+void Http2TransactionTest::testPopResponseEventDrainsBody()
+{
+  Http2Transaction transaction;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponse(streamId, http2test::createResponseHeaders(), "body");
+  transaction.feedInboundData(server.drainOutboundData());
+
+  auto event = transaction.popResponseEvent();
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT_EQUAL(streamId, event->streamId);
+  CPPUNIT_ASSERT_EQUAL(std::string("body"), event->body.drainAll());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
+  CPPUNIT_ASSERT(!transaction.findResponseEvent());
+  CPPUNIT_ASSERT(!transaction.popResponseEvent());
+}
+
+void Http2TransactionTest::testPopResponseEventKeepsActiveUntilStreamClose()
+{
+  Http2Transaction transaction;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponseHeaders(streamId, http2test::createResponseHeaders());
+  transaction.feedInboundData(server.drainOutboundData());
+
+  auto event = transaction.findResponseEvent();
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT(event->headersComplete);
+  CPPUNIT_ASSERT(!event->streamClosed);
+  CPPUNIT_ASSERT(!transaction.popResponseEvent());
+  CPPUNIT_ASSERT(transaction.hasActiveStream());
+  CPPUNIT_ASSERT_THROW(
+      transaction.submitRequest(http2test::createRequestHeaders()), DlAbortEx);
+}
+
+void Http2TransactionTest::testPopHttpResponseKeepsActiveUntilStreamClose()
+{
+  Http2Transaction transaction;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+
+  server.feedInboundData(transaction.drainOutboundData());
+  server.submitResponseHeaders(streamId, http2test::createResponseHeaders());
+  transaction.feedInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT(!transaction.popHttpResponse());
+  CPPUNIT_ASSERT(transaction.hasActiveStream());
+  CPPUNIT_ASSERT(transaction.findResponseEvent());
+  CPPUNIT_ASSERT_THROW(
+      transaction.submitRequest(http2test::createRequestHeaders()), DlAbortEx);
 }
 
 void Http2TransactionTest::testRejectSecondSubmitWhileStreamActive()
