@@ -124,6 +124,7 @@ SRCS =  \
 	HttpDownloadCommand.cc HttpDownloadCommand.h\
 	HttpHeader.cc HttpHeader.h\
 	HttpHeaderProcessor.cc HttpHeaderProcessor.h\
+	Http2HeaderBlock.cc Http2HeaderBlock.h\
 	HttpInitiateConnectionCommand.cc HttpInitiateConnectionCommand.h\
 	HttpListenCommand.cc HttpListenCommand.h\
 	HttpProtocol.cc HttpProtocol.h\
