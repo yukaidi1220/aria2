@@ -20,6 +20,8 @@ class AsyncDotNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(AsyncDotNameResolverTest);
   CPPUNIT_TEST(testResolveAResponseWithFragmentedRead);
   CPPUNIT_TEST(testResolveAAAAResponse);
+  CPPUNIT_TEST(testNumericServerUsesAddressForHandshake);
+  CPPUNIT_TEST(testNumericIPv6ServerUsesAddressForHandshake);
   CPPUNIT_TEST(testTlsWantReadUpdatesSocketEvents);
   CPPUNIT_TEST(testTlsWantWriteUpdatesSocketEvents);
   CPPUNIT_TEST(testWriteWantWriteThenSucceeds);
@@ -35,6 +37,8 @@ class AsyncDotNameResolverTest : public CppUnit::TestFixture {
 public:
   void testResolveAResponseWithFragmentedRead();
   void testResolveAAAAResponse();
+  void testNumericServerUsesAddressForHandshake();
+  void testNumericIPv6ServerUsesAddressForHandshake();
   void testTlsWantReadUpdatesSocketEvents();
   void testTlsWantWriteUpdatesSocketEvents();
   void testWriteWantWriteThenSucceeds();
@@ -399,6 +403,45 @@ void AsyncDotNameResolverTest::testResolveAAAAResponse()
   CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getResolvedAddresses().size());
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
                        resolver.getResolvedAddresses()[0]);
+}
+
+void AsyncDotNameResolverTest::testNumericServerUsesAddressForHandshake()
+{
+  FakeDotTransportFactory factory;
+  AsyncDotNameResolver resolver(AF_INET, {{"1.1.1.1", 8853, ""}},
+                                makeTransportFactory(factory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteQueryDone(resolver, factory);
+
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), transport->connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8853, transport->connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), transport->tlsParams.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"),
+                       transport->tlsParams.verifyHost);
+  CPPUNIT_ASSERT(transport->tlsParams.alpnProtocols.empty());
+}
+
+void AsyncDotNameResolverTest::testNumericIPv6ServerUsesAddressForHandshake()
+{
+  FakeDotTransportFactory factory;
+  AsyncDotNameResolver resolver(
+      AF_INET, {{"2606:4700:4700::1111", 853, ""}},
+      makeTransportFactory(factory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteQueryDone(resolver, factory);
+
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       transport->connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)853, transport->connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       transport->tlsParams.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       transport->tlsParams.verifyHost);
+  CPPUNIT_ASSERT(transport->tlsParams.alpnProtocols.empty());
 }
 
 void AsyncDotNameResolverTest::testTlsWantReadUpdatesSocketEvents()
