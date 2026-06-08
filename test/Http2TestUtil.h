@@ -215,6 +215,16 @@ public:
 
   ~FakeHttp2ServerSession() { nghttp2_session_del(session_); }
 
+  void submitMaxConcurrentStreams(uint32_t maxConcurrentStreams)
+  {
+    nghttp2_settings_entry entry = {NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS,
+                                    maxConcurrentStreams};
+    assertNghttp2Success(
+        nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, &entry, 1));
+    assertNghttp2Success(nghttp2_session_send(session_));
+    CPPUNIT_ASSERT(!callbackFailed_);
+  }
+
   void feedInboundData(const std::string& data)
   {
     assertNghttp2Success(nghttp2_session_mem_recv(

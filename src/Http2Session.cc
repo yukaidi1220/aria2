@@ -296,6 +296,12 @@ void Http2Session::feedInboundData(const std::string& data)
   impl_->sendPendingData("nghttp2_session_send");
 }
 
+size_t Http2Session::getRemoteMaxConcurrentStreams() const
+{
+  return nghttp2_session_get_remote_settings(
+      impl_->session, NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS);
+}
+
 bool Http2Session::hasResponseEvent(int32_t streamId) const
 {
   return impl_->responses.find(streamId) != impl_->responses.end();

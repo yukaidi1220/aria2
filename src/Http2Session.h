@@ -39,6 +39,7 @@
 
 #ifdef HAVE_LIBNGHTTP2
 
+#  include <cstddef>
 #  include <cstdint>
 #  include <memory>
 #  include <string>
@@ -80,6 +81,7 @@ public:
   int32_t submitRequestHeaders(const Http2HeaderBlock& headers);
   std::string drainOutboundData();
   void feedInboundData(const std::string& data);
+  size_t getRemoteMaxConcurrentStreams() const;
   bool hasResponseEvent(int32_t streamId) const;
   const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;
   std::string popResponseBody(int32_t streamId, size_t maxLen);

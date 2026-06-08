@@ -428,7 +428,9 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
       ++i;
       continue;
     }
-    if (exchange->countActiveStreams() >= MAX_ACTIVE_HTTP2_STREAMS ||
+    auto maxActiveStreams = std::min(
+        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    if (exchange->countActiveStreams() >= maxActiveStreams ||
         (predicate && !predicate(socket))) {
       ++i;
       continue;

@@ -104,6 +104,11 @@ size_t Http2MultiplexExchange::countActiveStreams() const
   return activeStreams_.size();
 }
 
+size_t Http2MultiplexExchange::getRemoteMaxConcurrentStreams() const
+{
+  return connection_.getRemoteMaxConcurrentStreams();
+}
+
 Http2TransactionState
 Http2MultiplexExchange::getState(int32_t streamId) const
 {

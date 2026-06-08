@@ -25,6 +25,7 @@ class Http2MultiplexExchangeTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSubmitTwoRequestsAndReadOutOfOrderResponses);
   CPPUNIT_TEST(testSubmitRequestMakesExchangeWantWrite);
   CPPUNIT_TEST(testReadInboundDataMakesExchangeWantWrite);
+  CPPUNIT_TEST(testReadInboundDataUpdatesRemoteMaxConcurrentStreams);
   CPPUNIT_TEST(testPopResponseEventKeepsOtherStreamsActive);
   CPPUNIT_TEST(testCreateHttpResponseWaitsPerStream);
   CPPUNIT_TEST(testUnknownStreamIsIgnored);
@@ -35,6 +36,7 @@ public:
   void testSubmitTwoRequestsAndReadOutOfOrderResponses();
   void testSubmitRequestMakesExchangeWantWrite();
   void testReadInboundDataMakesExchangeWantWrite();
+  void testReadInboundDataUpdatesRemoteMaxConcurrentStreams();
   void testPopResponseEventKeepsOtherStreamsActive();
   void testCreateHttpResponseWaitsPerStream();
   void testUnknownStreamIsIgnored();
@@ -158,6 +160,20 @@ void Http2MultiplexExchangeTest::testReadInboundDataMakesExchangeWantWrite()
   CPPUNIT_ASSERT(exchange.flushOutboundData());
   CPPUNIT_ASSERT(!transport.drainOutboundData().empty());
   CPPUNIT_ASSERT(!exchange.wantWrite());
+}
+
+void Http2MultiplexExchangeTest::
+    testReadInboundDataUpdatesRemoteMaxConcurrentStreams()
+{
+  http2test::MemoryHttp2Transport transport;
+  Http2MultiplexExchange exchange(transport);
+  http2test::FakeHttp2ServerSession server;
+
+  server.submitMaxConcurrentStreams(2);
+  transport.appendInboundData(server.drainOutboundData());
+  CPPUNIT_ASSERT(exchange.readInboundData());
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, exchange.getRemoteMaxConcurrentStreams());
 }
 
 void Http2MultiplexExchangeTest::

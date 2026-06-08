@@ -154,7 +154,7 @@ XP/Win7 注意：
 - active registry 是 active-only：只有还有 active stream 的 H2 连接可被复用；连接空闲后不会进入这个 registry 继续复用。
 - 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。
 - 复用还要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate；这不是 HTTP/2 origin coalescing。
-- 当前源码使用 `MAX_ACTIVE_HTTP2_STREAMS = 8` 作为保守 active stream 上限；没有读取 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 来动态调整。
+- active stream 上限使用本地保守上限 `MAX_ACTIVE_HTTP2_STREAMS = 8` 与 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 的较小值；服务端未发 SETTINGS 限制时退回本地 8 条上限。
 - 首条 H2 stream 在注册 context 后会 `exchange->flushOutboundData()`；复用路径提交新 stream 后不提前 flush，交给 `Http2ResponseCommand::executeInternal()` / `exchange_->pump()` 统一驱动。
 - TLS 后端必须支持 ALPN；`TLSSession` 基类在协议列表非空时默认失败，当前源码里只有 OpenSSL 后端实现了 `setAlpnProtocols()`。其他 TLS 后端即使能普通 TLS/SNI，也可能在启用 H2 时快速失败，但不应崩溃。
 
@@ -511,7 +511,7 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 
 ## 6. 待主线程补齐/确认
 
-- HTTP/2 现有复用是 active-only，同一 `RequestGroup` 内复用仍在活跃的 H2 连接。后续阶段还要补空闲 H2 连接复用、HTTP/2 origin coalescing、根据 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 动态调整上限，以及继续完善错误恢复、Range/redirect 行为。
+- HTTP/2 现有复用是 active-only，同一 `RequestGroup` 内复用仍在活跃的 H2 连接。后续阶段还要补空闲 H2 连接复用、HTTP/2 origin coalescing，以及继续完善错误恢复、Range/redirect 行为。
 - `doc/manual-src/en/aria2c.rst` 中 `--enable-http2` 仍是“未实现保留名”的旧说法，需要主线程同步英文 manual，否则中文/英文文档会冲突。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。

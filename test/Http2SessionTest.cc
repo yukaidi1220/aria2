@@ -17,6 +17,7 @@ class Http2SessionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSubmitRequestHeadersProducesClientBytes);
   CPPUNIT_TEST(testDrainOutboundDataClearsBuffer);
   CPPUNIT_TEST(testFeedInboundDataFlushesSettingsAck);
+  CPPUNIT_TEST(testFeedInboundDataUpdatesRemoteMaxConcurrentStreams);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseHeaders);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseBodyAndClose);
   CPPUNIT_TEST(testFeedInboundDataAcceptsPartialFrames);
@@ -28,6 +29,7 @@ public:
   void testSubmitRequestHeadersProducesClientBytes();
   void testDrainOutboundDataClearsBuffer();
   void testFeedInboundDataFlushesSettingsAck();
+  void testFeedInboundDataUpdatesRemoteMaxConcurrentStreams();
   void testFeedInboundDataCollectsResponseHeaders();
   void testFeedInboundDataCollectsResponseBodyAndClose();
   void testFeedInboundDataAcceptsPartialFrames();
@@ -70,6 +72,17 @@ void Http2SessionTest::testFeedInboundDataFlushesSettingsAck()
 
   auto data = client.drainOutboundData();
   CPPUNIT_ASSERT(http2test::containsSettingsAck(data));
+}
+
+void Http2SessionTest::testFeedInboundDataUpdatesRemoteMaxConcurrentStreams()
+{
+  Http2Session client;
+  http2test::FakeHttp2ServerSession server;
+
+  server.submitMaxConcurrentStreams(2);
+  client.feedInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, client.getRemoteMaxConcurrentStreams());
 }
 
 void Http2SessionTest::testFeedInboundDataCollectsResponseHeaders()
