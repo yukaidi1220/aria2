@@ -16,14 +16,17 @@
 #  include "DownloadContext.h"
 #  include "DownloadEngine.h"
 #  include "FileEntry.h"
+#  include "Http2DownloadCommand.h"
 #  include "Http2SingleStreamExchange.h"
 #  include "Http2TestUtil.h"
 #  include "HttpRequest.h"
+#  include "HttpResponse.h"
 #  include "Option.h"
 #  include "Request.h"
 #  include "RequestGroup.h"
 #  include "RequestGroupMan.h"
 #  include "SelectEventPoll.h"
+#  include "StreamFilter.h"
 #  include "TestUtil.h"
 #  include "prefs.h"
 #  include "util.h"
@@ -34,7 +37,9 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2ResponseCommandTest);
   CPPUNIT_TEST(testWaitsForHeaders);
   CPPUNIT_TEST(testZeroLengthResponseCompletes);
-  CPPUNIT_TEST(testBodyDownloadNotImplemented);
+  CPPUNIT_TEST(testBodyDownloadCommandCreationDoesNotThrow);
+  CPPUNIT_TEST(testDownloadCommandDrainsKnownLengthBody);
+  CPPUNIT_TEST(testDownloadCommandAbortsClosedBeforeComplete);
   CPPUNIT_TEST(testSkipBodyNotImplemented);
   CPPUNIT_TEST(testTransportFailureThrows);
   CPPUNIT_TEST(testStreamClosedBeforeHeadersThrows);
@@ -43,7 +48,9 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
 public:
   void testWaitsForHeaders();
   void testZeroLengthResponseCompletes();
-  void testBodyDownloadNotImplemented();
+  void testBodyDownloadCommandCreationDoesNotThrow();
+  void testDownloadCommandDrainsKnownLengthBody();
+  void testDownloadCommandAbortsClosedBeforeComplete();
   void testSkipBodyNotImplemented();
   void testTransportFailureThrows();
   void testStreamClosedBeforeHeadersThrows();
@@ -70,6 +77,31 @@ public:
   }
 
   using Http2ResponseCommand::executeInternal;
+
+  bool requeued() const { return requeued_; }
+
+protected:
+  void requeueSelf() CXX11_OVERRIDE { requeued_ = true; }
+};
+
+class TestHttp2DownloadCommand : public Http2DownloadCommand {
+private:
+  bool requeued_ = false;
+
+public:
+  TestHttp2DownloadCommand(
+      cuid_t cuid, const std::shared_ptr<Request>& req,
+      const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
+      std::shared_ptr<Http2SingleStreamExchange> exchange,
+      std::unique_ptr<HttpResponse> httpResponse, DownloadEngine* e,
+      const std::shared_ptr<SocketCore>& s)
+      : Http2DownloadCommand(cuid, req, fileEntry, requestGroup,
+                             std::move(exchange), std::move(httpResponse),
+                             std::unique_ptr<StreamFilter>{}, e, s)
+  {
+  }
+
+  using Http2DownloadCommand::executeInternal;
 
   bool requeued() const { return requeued_; }
 
@@ -174,10 +206,31 @@ struct CommandFixture {
         &engine, nullptr);
   }
 
+  std::unique_ptr<TestHttp2DownloadCommand> makeDownloadCommand(
+      std::unique_ptr<HttpResponse> httpResponse)
+  {
+    return make_unique<TestHttp2DownloadCommand>(
+        1, request, fileEntry, requestGroup.get(), exchange,
+        std::move(httpResponse), &engine, nullptr);
+  }
+
   void submitResponseHeaders(Http2HeaderBlock headers)
   {
     server.submitResponseHeaders(streamId, headers);
     transport.appendInboundData(server.drainOutboundData());
+  }
+
+  std::unique_ptr<HttpResponse> receiveResponse(Http2HeaderBlock headers,
+                                                const std::string& body)
+  {
+    server.submitResponse(streamId, headers, body);
+    transport.appendInboundData(server.drainOutboundData());
+    CPPUNIT_ASSERT(exchange->pump());
+    auto httpResponse = exchange->createHttpResponse();
+    CPPUNIT_ASSERT(httpResponse);
+    httpResponse->setCuid(1);
+    httpResponse->setHttpRequest(makeHttpRequest());
+    return httpResponse;
   }
 };
 
@@ -211,11 +264,29 @@ void Http2ResponseCommandTest::testZeroLengthResponseCompletes()
   CPPUNIT_ASSERT(command->executeInternal());
 }
 
-void Http2ResponseCommandTest::testBodyDownloadNotImplemented()
+void Http2ResponseCommandTest::testBodyDownloadCommandCreationDoesNotThrow()
 {
   CommandFixture fixture(4, false, true);
   auto command = fixture.makeCommand();
   fixture.submitResponseHeaders(createHeaders(200, 4));
+
+  CPPUNIT_ASSERT(command->executeInternal());
+}
+
+void Http2ResponseCommandTest::testDownloadCommandDrainsKnownLengthBody()
+{
+  CommandFixture fixture(4, false, true);
+  auto httpResponse = fixture.receiveResponse(createHeaders(200, 4), "body");
+  auto command = fixture.makeDownloadCommand(std::move(httpResponse));
+
+  CPPUNIT_ASSERT(command->executeInternal());
+}
+
+void Http2ResponseCommandTest::testDownloadCommandAbortsClosedBeforeComplete()
+{
+  CommandFixture fixture(4, false, true);
+  auto httpResponse = fixture.receiveResponse(createHeaders(200, 4), "");
+  auto command = fixture.makeDownloadCommand(std::move(httpResponse));
 
   CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
 }

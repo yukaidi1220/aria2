@@ -37,6 +37,7 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include "DlAbortEx.h"
+#  include "Http2DownloadCommand.h"
 #  include "Http2SingleStreamExchange.h"
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
@@ -96,9 +97,10 @@ std::unique_ptr<Command> Http2ResponseCommand::createHttpDownloadCommand(
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> streamFilter)
 {
-  (void)httpResponse;
-  (void)streamFilter;
-  throw DL_ABORT_EX("HTTP/2 response body download is not implemented");
+  return make_unique<Http2DownloadCommand>(
+      getCuid(), getRequest(), getFileEntry(), getRequestGroup(), exchange_,
+      std::move(httpResponse), std::move(streamFilter), getDownloadEngine(),
+      getSocket());
 }
 
 bool Http2ResponseCommand::skipResponseBody(
