@@ -22,7 +22,7 @@ RUN apt-get update && \
 RUN curl --fail -L --retry 5 --retry-all-errors -O https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz && \
     curl --fail -L --retry 5 --retry-all-errors -o expat-2.8.1.tar.bz2 https://downloads.sourceforge.net/project/expat/expat/2.8.1/expat-2.8.1.tar.bz2 && \
     curl --fail -L --retry 5 --retry-all-errors -O https://www.sqlite.org/2026/sqlite-autoconf-3530200.tar.gz && \
-    curl --fail -L --retry 5 --retry-all-errors -O https://zlib.net/zlib-1.3.2.tar.gz && \
+    curl --fail -L --retry 5 --retry-all-errors -O https://zlib.net/fossils/zlib-1.3.2.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o c-ares-1.34.6.tar.gz https://deb.debian.org/debian/pool/main/c/c-ares/c-ares_1.34.6.orig.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o libssh2-1.11.1.tar.gz https://libssh2.org/download/libssh2-1.11.1.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o openssl-1.1.1w.tar.gz https://deb.debian.org/debian/pool/main/o/openssl/openssl_1.1.1w.orig.tar.gz
