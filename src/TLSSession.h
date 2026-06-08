@@ -76,6 +76,9 @@ public:
   // from the certificate verification hostname passed to tlsConnect().
   virtual bool supportsSNIHostnameOverride() const { return false; }
 
+  // Returns true if this backend can send ALPN protocols.
+  virtual bool supportsAlpnProtocols() const { return false; }
+
   // Sets ALPN protocols for client side session. The order is the
   // preference order. Backend implementations which do not support
   // ALPN must fail when |protocols| is not empty.

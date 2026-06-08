@@ -137,7 +137,7 @@ XP/Win7 注意：
 
 - `src/OptionHandlerFactory.cc`：有 `HAVE_LIBNGHTTP2` 时注册为 `BooleanOptionHandler`；没有 `HAVE_LIBNGHTTP2` 时注册为 `UnsupportedFeatureOptionHandler`，设置为 true 会快速失败。
 - `src/HttpTLSHandshakeParams.cc::createHttpAlpnProtocols()`：有 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时，ALPN 顺序为 `h2`、`http/1.1`。
-- `src/SocketCore.cc::SocketCore::tlsConnect()` 调用 `TLSSession::setAlpnProtocols()`。
+- `src/SocketCore.cc::SocketCore::tlsHandshake()` 先检查 `TLSSession::supportsAlpnProtocols()`；支持时调用 `setAlpnProtocols()`，不支持时跳过 ALPN 设置并继续普通 TLS 握手。
 - `src/HttpProtocol.cc::decideHttpProtocolFromSelectedAlpn()` 根据服务端选中的 ALPN 判定 HTTP/1.1 或 HTTP/2。
 - `src/HttpRequestCommand.cc` 在 `HTTP_PROTOCOL_H2` 下创建 `Http2MultiplexExchange`、`Http2SocketCoreTransport` 和 `Http2ConnectionContext`，提交首个 stream 后调用 `DownloadEngine::registerActiveHttp2Connection()` 登记 active H2 context。
 - `src/DownloadEngine.cc` 维护 active H2 context registry：key 由 URL 协议/host/port 加已连接的 hostname/address/port 组成，value 是弱引用 `ActiveHttp2PoolEntry`，失效、socket 关闭或没有 active stream 时会被淘汰。
@@ -156,12 +156,12 @@ XP/Win7 注意：
 - 复用还要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate；这不是 HTTP/2 origin coalescing。
 - active stream 上限使用本地保守上限 `MAX_ACTIVE_HTTP2_STREAMS = 8` 与 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 的较小值；服务端未发 SETTINGS 限制时退回本地 8 条上限。
 - 首条 H2 stream 在注册 context 后会 `exchange->flushOutboundData()`；复用路径提交新 stream 后不提前 flush，交给 `Http2ResponseCommand::executeInternal()` / `exchange_->pump()` 统一驱动。
-- TLS 后端必须支持 ALPN；`TLSSession` 基类在协议列表非空时默认失败，当前源码里只有 OpenSSL 后端实现了 `setAlpnProtocols()`。其他 TLS 后端即使能普通 TLS/SNI，也可能在启用 H2 时快速失败，但不应崩溃。
+- TLS 后端必须支持 ALPN 才能真正协商 H2；`SocketCore::tlsHandshake()` 会在后端不支持 ALPN 时跳过 ALPN 设置并继续握手，最终退回 HTTP/1.1。当前源码里只有 OpenSSL 后端声明支持 ALPN。
 
 XP/Win7 注意：
 
-- HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 可能在 TLS 初始化阶段快速失败或退回不了 H2。
-- 需要兼容 XP/Win7 时，优先使用带 OpenSSL 且启用 ALPN 的构建；如果目标环境只要求能下载，保守做法是保持 `--enable-http2=false`，走 HTTP/1.1。
+- HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 时会优雅退回 HTTP/1.1，不应因为 ALPN 缺失直接中断 HTTPS 下载。
+- 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用带 OpenSSL 且启用 ALPN 的构建；如果目标环境只要求能下载，HTTP/1.1 fallback 能保持可用。
 - `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端 SNI override 能力限制，见 2.1。
 
 重要差异：

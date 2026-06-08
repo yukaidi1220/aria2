@@ -62,6 +62,17 @@ public:
   }
   virtual int setAlpnProtocols(const std::vector<std::string>& protocols)
       CXX11_OVERRIDE;
+  virtual bool supportsAlpnProtocols() const CXX11_OVERRIDE
+  {
+#if !defined(OPENSSL_NO_TLSEXT) &&                                          \
+    defined(TLSEXT_TYPE_application_layer_protocol_negotiation)
+    return true;
+#else  // !(!defined(OPENSSL_NO_TLSEXT) &&
+       // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
+    return false;
+#endif // !(!defined(OPENSSL_NO_TLSEXT) &&
+       // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
+  }
   virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE;
   virtual int closeConnection() CXX11_OVERRIDE;
   virtual int checkDirection() CXX11_OVERRIDE;

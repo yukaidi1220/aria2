@@ -6,6 +6,9 @@
 
 #include "a2functional.h"
 #include "Exception.h"
+#ifdef ENABLE_SSL
+#  include "TLSSession.h"
+#endif // ENABLE_SSL
 
 namespace aria2 {
 
@@ -21,6 +24,7 @@ class SocketCoreTest : public CppUnit::TestFixture {
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testTLSHandshakeParams);
   CPPUNIT_TEST(testTLSHandshakeParamsComparison);
+  CPPUNIT_TEST(testTLSSessionAlpnSupportDefault);
   CPPUNIT_TEST(testMatchesTLSHandshakeParams);
   CPPUNIT_TEST(testIsTLSSNIHostname);
 #endif // ENABLE_SSL
@@ -40,6 +44,7 @@ public:
 #ifdef ENABLE_SSL
   void testTLSHandshakeParams();
   void testTLSHandshakeParamsComparison();
+  void testTLSSessionAlpnSupportDefault();
   void testMatchesTLSHandshakeParams();
   void testIsTLSSNIHostname();
 #endif // ENABLE_SSL
@@ -328,6 +333,66 @@ void SocketCoreTest::testTLSHandshakeParamsComparison()
   reversedAlpnProtocols.push_back("h2");
   CPPUNIT_ASSERT(withAlpn != TLSHandshakeParams("example.org", "example.org",
                                                 reversedAlpnProtocols));
+}
+
+namespace {
+class DefaultTLSSession : public TLSSession {
+public:
+  virtual int init(sock_t sockfd) CXX11_OVERRIDE
+  {
+    (void)sockfd;
+    return TLS_ERR_OK;
+  }
+  virtual int setSNIHostname(const std::string& hostname) CXX11_OVERRIDE
+  {
+    (void)hostname;
+    return TLS_ERR_OK;
+  }
+  virtual int closeConnection() CXX11_OVERRIDE { return TLS_ERR_OK; }
+  virtual int checkDirection() CXX11_OVERRIDE { return TLS_WANT_READ; }
+  virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE
+  {
+    (void)data;
+    return len;
+  }
+  virtual ssize_t readData(void* data, size_t len) CXX11_OVERRIDE
+  {
+    (void)data;
+    (void)len;
+    return TLS_ERR_WOULDBLOCK;
+  }
+  virtual int tlsConnect(const std::string& hostname, TLSVersion& version,
+                         std::string& handshakeError) CXX11_OVERRIDE
+  {
+    (void)hostname;
+    (void)handshakeError;
+    version = TLS_PROTO_TLS12;
+    return TLS_ERR_OK;
+  }
+  virtual int tlsAccept(TLSVersion& version) CXX11_OVERRIDE
+  {
+    version = TLS_PROTO_TLS12;
+    return TLS_ERR_OK;
+  }
+  virtual std::string getLastErrorString() CXX11_OVERRIDE
+  {
+    return std::string();
+  }
+  virtual size_t getRecvBufferedLength() CXX11_OVERRIDE { return 0; }
+};
+} // namespace
+
+void SocketCoreTest::testTLSSessionAlpnSupportDefault()
+{
+  DefaultTLSSession session;
+  std::vector<std::string> alpnProtocols;
+  alpnProtocols.push_back("h2");
+  alpnProtocols.push_back("http/1.1");
+
+  CPPUNIT_ASSERT(!session.supportsAlpnProtocols());
+  CPPUNIT_ASSERT_EQUAL(TLS_ERR_OK,
+                       session.setAlpnProtocols(std::vector<std::string>()));
+  CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR, session.setAlpnProtocols(alpnProtocols));
 }
 
 void SocketCoreTest::testMatchesTLSHandshakeParams()

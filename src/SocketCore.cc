@@ -984,6 +984,7 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
 {
   wantRead_ = false;
   wantWrite_ = false;
+  auto effectiveParams = params;
 
   if (secure_ == A2_TLS_CONNECTED) {
     if (!matchesTLSHandshakeParams(params)) {
@@ -993,7 +994,8 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
     return true;
   }
 
-  if (secure_ == A2_TLS_HANDSHAKING && !matchesTLSHandshakeParams(params)) {
+  if (secure_ == A2_TLS_HANDSHAKING &&
+      !matchesTLSHandshakeParams(params)) {
     throw DL_ABORT_EX(
         fmt("TLS connection parameters changed during handshake"));
   }
@@ -1032,9 +1034,14 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
         A2_LOG_DEBUG("TLS SNI hostname was not set");
       }
     }
-    if (clientSide && !params.alpnProtocols.empty()) {
-      rv = tlsSession_->setAlpnProtocols(params.alpnProtocols);
-      if (rv != TLS_ERR_OK) {
+    if (clientSide && !effectiveParams.alpnProtocols.empty()) {
+      if (!tlsSession_->supportsAlpnProtocols()) {
+        A2_LOG_NETWORK(
+            "TLS backend does not support ALPN; falling back to HTTP/1.1");
+        effectiveParams.alpnProtocols.clear();
+      }
+      else if ((rv = tlsSession_->setAlpnProtocols(
+                    effectiveParams.alpnProtocols)) != TLS_ERR_OK) {
         throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
                               tlsSession_->getLastErrorString().c_str()));
       }
