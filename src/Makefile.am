@@ -434,6 +434,7 @@ SRCS += \
 	Http2Connection.cc Http2Connection.h\
 	Http2ResponseAdapter.cc Http2ResponseAdapter.h\
 	Http2Session.cc Http2Session.h\
+	Http2SingleStreamExchange.cc Http2SingleStreamExchange.h\
 	Http2SocketCoreTransport.cc Http2SocketCoreTransport.h\
 	Http2Transaction.cc Http2Transaction.h\
 	Http2TransactionPump.cc Http2TransactionPump.h\

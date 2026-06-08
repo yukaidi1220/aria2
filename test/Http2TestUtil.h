@@ -6,10 +6,12 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include "Http2Session.h"
+#  include "Http2Transport.h"
 
 #  include <algorithm>
 #  include <cstring>
 #  include <iterator>
+#  include <limits>
 #  include <string>
 #  include <vector>
 
@@ -84,6 +86,110 @@ inline void assertNghttp2Success(ssize_t rv)
 {
   CPPUNIT_ASSERT(rv >= 0);
 }
+
+class MemoryHttp2Transport : public Http2Transport {
+private:
+  std::string inbound_;
+  std::string outbound_;
+  size_t maxWriteSize_;
+  size_t maxReadSize_;
+  bool blockAfterWrite_;
+  bool writeBlocked_;
+  bool failWrite_;
+  bool failRead_;
+  bool closed_;
+  bool wantRead_;
+  bool wantWrite_;
+
+public:
+  MemoryHttp2Transport()
+      : maxWriteSize_(std::numeric_limits<size_t>::max()),
+        maxReadSize_(std::numeric_limits<size_t>::max()),
+        blockAfterWrite_(false),
+        writeBlocked_(false),
+        failWrite_(false),
+        failRead_(false),
+        closed_(false),
+        wantRead_(false),
+        wantWrite_(false)
+  {
+  }
+
+  virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE
+  {
+    wantRead_ = false;
+    wantWrite_ = false;
+    if (failWrite_) {
+      return -1;
+    }
+    if (closed_) {
+      return 0;
+    }
+    if (writeBlocked_) {
+      writeBlocked_ = false;
+      wantWrite_ = true;
+      return 0;
+    }
+
+    auto nwrite = std::min(len, maxWriteSize_);
+    outbound_.append(static_cast<const char*>(data), nwrite);
+    if (blockAfterWrite_) {
+      writeBlocked_ = true;
+    }
+    return static_cast<ssize_t>(nwrite);
+  }
+
+  virtual ssize_t readData(void* data, size_t len) CXX11_OVERRIDE
+  {
+    wantRead_ = false;
+    wantWrite_ = false;
+    if (failRead_) {
+      return -1;
+    }
+    if (inbound_.empty()) {
+      if (!closed_) {
+        wantRead_ = true;
+      }
+      return 0;
+    }
+
+    auto nread = std::min(len, inbound_.size());
+    nread = std::min(nread, maxReadSize_);
+    std::memcpy(data, inbound_.data(), nread);
+    inbound_.erase(0, nread);
+    return static_cast<ssize_t>(nread);
+  }
+
+  virtual size_t getRecvBufferedLength() const CXX11_OVERRIDE
+  {
+    return inbound_.size();
+  }
+
+  virtual bool wantRead() const CXX11_OVERRIDE { return wantRead_; }
+
+  virtual bool wantWrite() const CXX11_OVERRIDE { return wantWrite_; }
+
+  void appendInboundData(const std::string& data) { inbound_.append(data); }
+
+  std::string drainOutboundData()
+  {
+    std::string data;
+    data.swap(outbound_);
+    return data;
+  }
+
+  void setMaxWriteSize(size_t size) { maxWriteSize_ = size; }
+
+  void setMaxReadSize(size_t size) { maxReadSize_ = size; }
+
+  void setBlockAfterWrite(bool f) { blockAfterWrite_ = f; }
+
+  void setFailWrite(bool f) { failWrite_ = f; }
+
+  void setFailRead(bool f) { failRead_ = f; }
+
+  void close() { closed_ = true; }
+};
 
 class FakeHttp2ServerSession {
 private:
