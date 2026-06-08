@@ -46,13 +46,14 @@
 
 namespace aria2 {
 
-class Http2SingleStreamExchange;
+class Http2MultiplexExchange;
 class HttpResponse;
 class StreamFilter;
 
 class Http2DownloadCommand : public DownloadCommand {
 private:
-  std::shared_ptr<Http2SingleStreamExchange> exchange_;
+  std::shared_ptr<Http2MultiplexExchange> exchange_;
+  int32_t streamId_;
   std::unique_ptr<HttpResponse> httpResponse_;
   int64_t expectedBodyLength_;
   int64_t bodyLength_;
@@ -70,7 +71,7 @@ public:
   Http2DownloadCommand(
       cuid_t cuid, const std::shared_ptr<Request>& req,
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
-      std::shared_ptr<Http2SingleStreamExchange> exchange,
+      std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpResponse> httpResponse,
       std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
       const std::shared_ptr<SocketCore>& s);

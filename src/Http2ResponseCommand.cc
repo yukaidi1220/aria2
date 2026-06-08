@@ -39,7 +39,7 @@
 #  include "DlAbortEx.h"
 #  include "DownloadEngine.h"
 #  include "Http2DownloadCommand.h"
-#  include "Http2SingleStreamExchange.h"
+#  include "Http2MultiplexExchange.h"
 #  include "HttpHeader.h"
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
@@ -59,11 +59,12 @@ const size_t SKIP_BODY_CHUNK_SIZE = 16_k;
 Http2ResponseCommand::Http2ResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
-    std::shared_ptr<Http2SingleStreamExchange> exchange,
+    std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
     std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
     const std::shared_ptr<SocketCore>& s)
     : HttpResponseCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr),
       exchange_(std::move(exchange)),
+      streamId_(streamId),
       httpRequest_(std::move(httpRequest)),
       expectedSkipBodyLength_(0),
       skippedBodyLength_(0),
@@ -81,7 +82,7 @@ bool Http2ResponseCommand::executeInternal()
 
   exchange_->pump();
 
-  auto state = exchange_->getState();
+  auto state = exchange_->getState(streamId_);
   if (!state.headersComplete) {
     if (state.streamClosed) {
       throw DL_ABORT_EX("HTTP/2 stream closed before response headers");
@@ -102,7 +103,10 @@ bool Http2ResponseCommand::executeInternal()
     throw DL_ABORT_EX("HTTP/2 response was already processed");
   }
 
-  auto httpResponse = exchange_->createHttpResponse();
+  auto httpResponse = exchange_->createHttpResponse(streamId_);
+  if (!httpResponse) {
+    throw DL_ABORT_EX("HTTP/2 response headers were not available");
+  }
   httpResponse->setCuid(getCuid());
   httpResponse->setHttpRequest(std::move(httpRequest_));
   return processHttpResponse(std::move(httpResponse));
@@ -114,8 +118,8 @@ std::unique_ptr<Command> Http2ResponseCommand::createHttpDownloadCommand(
 {
   return make_unique<Http2DownloadCommand>(
       getCuid(), getRequest(), getFileEntry(), getRequestGroup(), exchange_,
-      std::move(httpResponse), std::move(streamFilter), getDownloadEngine(),
-      getSocket());
+      streamId_, std::move(httpResponse), std::move(streamFilter),
+      getDownloadEngine(), getSocket());
 }
 
 bool Http2ResponseCommand::skipResponseBody(
@@ -141,13 +145,13 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
 {
   exchange_->pump();
 
-  auto state = exchange_->getState();
+  auto state = exchange_->getState(streamId_);
   if (state.errorCode != 0) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
 
   for (;;) {
-    auto body = exchange_->popResponseBody(SKIP_BODY_CHUNK_SIZE);
+    auto body = exchange_->popResponseBody(streamId_, SKIP_BODY_CHUNK_SIZE);
     if (body.empty()) {
       break;
     }
@@ -158,12 +162,12 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
     }
   }
 
-  state = exchange_->getState();
+  state = exchange_->getState(streamId_);
   if (state.errorCode != 0) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
   if (state.streamClosed) {
-    exchange_->popResponseEvent();
+    exchange_->popResponseEvent(streamId_);
     return processSkippedHttpResponse(
         this, skipHttpResponse_, [this]() { return prepareForRetry(0); });
   }

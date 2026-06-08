@@ -17,7 +17,7 @@
 #  include "DownloadEngine.h"
 #  include "FileEntry.h"
 #  include "Http2DownloadCommand.h"
-#  include "Http2SingleStreamExchange.h"
+#  include "Http2MultiplexExchange.h"
 #  include "Http2TestUtil.h"
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
@@ -36,6 +36,7 @@ namespace aria2 {
 class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2ResponseCommandTest);
   CPPUNIT_TEST(testWaitsForHeaders);
+  CPPUNIT_TEST(testWaitsForSelectedStreamHeaders);
   CPPUNIT_TEST(testZeroLengthResponseCompletes);
   CPPUNIT_TEST(testBodyDownloadCommandCreationDoesNotThrow);
   CPPUNIT_TEST(testDownloadCommandCompletesKnownLengthBody);
@@ -57,6 +58,7 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
 
 public:
   void testWaitsForHeaders();
+  void testWaitsForSelectedStreamHeaders();
   void testZeroLengthResponseCompletes();
   void testBodyDownloadCommandCreationDoesNotThrow();
   void testDownloadCommandCompletesKnownLengthBody();
@@ -88,11 +90,12 @@ public:
   TestHttp2ResponseCommand(
       cuid_t cuid, const std::shared_ptr<Request>& req,
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
-      std::shared_ptr<Http2SingleStreamExchange> exchange,
+      std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpRequest> httpRequest, DownloadEngine* e,
       const std::shared_ptr<SocketCore>& s)
       : Http2ResponseCommand(cuid, req, fileEntry, requestGroup,
-                             std::move(exchange), std::move(httpRequest), e, s)
+                             std::move(exchange), streamId,
+                             std::move(httpRequest), e, s)
   {
   }
 
@@ -112,11 +115,12 @@ public:
   TestHttp2DownloadCommand(
       cuid_t cuid, const std::shared_ptr<Request>& req,
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
-      std::shared_ptr<Http2SingleStreamExchange> exchange,
+      std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
       std::unique_ptr<HttpResponse> httpResponse, DownloadEngine* e,
       const std::shared_ptr<SocketCore>& s)
       : Http2DownloadCommand(cuid, req, fileEntry, requestGroup,
-                             std::move(exchange), std::move(httpResponse),
+                             std::move(exchange), streamId,
+                             std::move(httpResponse),
                              std::unique_ptr<StreamFilter>{}, e, s)
   {
   }
@@ -138,7 +142,7 @@ struct CommandFixture {
   std::shared_ptr<FileEntry> fileEntry;
   AuthConfigFactory authConfigFactory;
   http2test::MemoryHttp2Transport transport;
-  std::shared_ptr<Http2SingleStreamExchange> exchange;
+  std::shared_ptr<Http2MultiplexExchange> exchange;
   http2test::FakeHttp2ServerSession server;
   int32_t streamId;
 
@@ -152,7 +156,7 @@ struct CommandFixture {
         requestGroupMan(nullptr),
         request(makeRequest()),
         fileEntry(requestGroup->getDownloadContext()->getFirstFileEntry()),
-        exchange(std::make_shared<Http2SingleStreamExchange>(transport)),
+        exchange(std::make_shared<Http2MultiplexExchange>(transport)),
         streamId(0)
   {
     engine.setOption(option.get());
@@ -224,8 +228,8 @@ struct CommandFixture {
   std::unique_ptr<TestHttp2ResponseCommand> makeCommand()
   {
     return make_unique<TestHttp2ResponseCommand>(
-        1, request, fileEntry, requestGroup.get(), exchange, makeHttpRequest(),
-        &engine, nullptr);
+        1, request, fileEntry, requestGroup.get(), exchange, streamId,
+        makeHttpRequest(), &engine, nullptr);
   }
 
   std::unique_ptr<TestHttp2DownloadCommand> makeDownloadCommand(
@@ -233,7 +237,7 @@ struct CommandFixture {
   {
     return make_unique<TestHttp2DownloadCommand>(
         1, request, fileEntry, requestGroup.get(), exchange,
-        std::move(httpResponse), &engine, nullptr);
+        streamId, std::move(httpResponse), &engine, nullptr);
   }
 
   void submitResponseHeaders(Http2HeaderBlock headers)
@@ -248,7 +252,7 @@ struct CommandFixture {
     server.submitResponse(streamId, headers, body);
     transport.appendInboundData(server.drainOutboundData());
     CPPUNIT_ASSERT(exchange->pump());
-    auto httpResponse = exchange->createHttpResponse();
+    auto httpResponse = exchange->createHttpResponse(streamId);
     CPPUNIT_ASSERT(httpResponse);
     httpResponse->setCuid(1);
     httpResponse->setHttpRequest(makeHttpRequest());
@@ -259,7 +263,7 @@ struct CommandFixture {
   {
     submitResponseHeaders(std::move(headers));
     CPPUNIT_ASSERT(exchange->pump());
-    auto httpResponse = exchange->createHttpResponse();
+    auto httpResponse = exchange->createHttpResponse(streamId);
     CPPUNIT_ASSERT(httpResponse);
     httpResponse->setCuid(1);
     httpResponse->setHttpRequest(makeHttpRequest());
@@ -283,6 +287,22 @@ void Http2ResponseCommandTest::testWaitsForHeaders()
 {
   CommandFixture fixture;
   auto command = fixture.makeCommand();
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+}
+
+void Http2ResponseCommandTest::testWaitsForSelectedStreamHeaders()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  auto otherStreamId =
+      fixture.exchange->submitRequest(http2test::createRequestHeaders());
+  CPPUNIT_ASSERT(otherStreamId != fixture.streamId);
+  CPPUNIT_ASSERT(fixture.exchange->flushOutboundData());
+  fixture.server.feedInboundData(fixture.transport.drainOutboundData());
+  fixture.server.submitResponseHeaders(otherStreamId, createHeaders(200, 0));
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
 
   CPPUNIT_ASSERT(!command->executeInternal());
   CPPUNIT_ASSERT(command->requeued());

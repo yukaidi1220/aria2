@@ -41,7 +41,7 @@
 #  include "DlAbortEx.h"
 #  include "DownloadEngine.h"
 #  include "FileEntry.h"
-#  include "Http2SingleStreamExchange.h"
+#  include "Http2MultiplexExchange.h"
 #  include "HttpHeader.h"
 #  include "HttpResponse.h"
 #  include "Option.h"
@@ -65,12 +65,13 @@ const size_t BODY_CHUNK_SIZE = 16_k;
 Http2DownloadCommand::Http2DownloadCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
-    std::shared_ptr<Http2SingleStreamExchange> exchange,
+    std::shared_ptr<Http2MultiplexExchange> exchange, int32_t streamId,
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> streamFilter, DownloadEngine* e,
     const std::shared_ptr<SocketCore>& s)
     : DownloadCommand(cuid, req, fileEntry, requestGroup, e, s, nullptr),
       exchange_(std::move(exchange)),
+      streamId_(streamId),
       httpResponse_(std::move(httpResponse)),
       expectedBodyLength_(0),
       bodyLength_(0),
@@ -102,7 +103,7 @@ bool Http2DownloadCommand::executeInternal()
 
   exchange_->pump();
 
-  auto state = exchange_->getState();
+  auto state = exchange_->getState(streamId_);
   if (state.errorCode != 0) {
     throw DL_ABORT_EX(
         fmt("HTTP/2 stream failed while downloading body: errorCode=%u",
@@ -110,9 +111,9 @@ bool Http2DownloadCommand::executeInternal()
   }
 
   for (;;) {
-    state = exchange_->getState();
+    state = exchange_->getState(streamId_);
     if (pendingBody_.empty()) {
-      pendingBody_ = exchange_->popResponseBody(BODY_CHUNK_SIZE);
+      pendingBody_ = exchange_->popResponseBody(streamId_, BODY_CHUNK_SIZE);
       if (pendingBody_.empty()) {
         break;
       }
@@ -141,7 +142,7 @@ bool Http2DownloadCommand::executeInternal()
         throw DL_ABORT_EX("HTTP/2 response body was not fully consumed");
       }
       if (state.streamClosed) {
-        exchange_->popResponseEvent();
+        exchange_->popResponseEvent(streamId_);
       }
       return true;
     }
@@ -153,7 +154,7 @@ bool Http2DownloadCommand::executeInternal()
     }
   }
 
-  state = exchange_->getState();
+  state = exchange_->getState(streamId_);
   if (state.errorCode != 0) {
     throw DL_ABORT_EX(
         fmt("HTTP/2 stream failed while downloading body: errorCode=%u",
@@ -172,7 +173,7 @@ bool Http2DownloadCommand::executeInternal()
     if (result != ProcessDataResult::DONE) {
       throw DL_ABORT_EX("HTTP/2 response body did not complete on stream close");
     }
-    exchange_->popResponseEvent();
+    exchange_->popResponseEvent(streamId_);
     return true;
   }
 
@@ -192,7 +193,7 @@ bool Http2DownloadCommand::executeInternal()
 
 bool Http2DownloadCommand::noCheck() const
 {
-  auto state = exchange_->getState();
+  auto state = exchange_->getState(streamId_);
   return DownloadCommand::noCheck() || !pendingBody_.empty() ||
          state.bodyLength > 0 || state.streamClosed || state.errorCode != 0;
 }
