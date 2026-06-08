@@ -27,6 +27,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(AsyncNameResolverTest);
   CPPUNIT_TEST(testGetQueryStatusBeforeStart);
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails);
+  CPPUNIT_TEST(testGetStatusWaitsForIPv6WhenIPv4Succeeds);
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testCreateDotResolver);
@@ -57,6 +58,7 @@ public:
 
   void testGetQueryStatusBeforeStart();
   void testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails();
+  void testGetStatusWaitsForIPv6WhenIPv4Succeeds();
   void testValidateConfigLeavesCaresServersUnchanged();
 #ifdef ENABLE_SSL
   void testCreateDotResolver();
@@ -189,6 +191,23 @@ void AsyncNameResolverTest::testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails()
   resolverMan.getResolvedAddress(resolvedAddrs);
   CPPUNIT_ASSERT_EQUAL((size_t)1, resolvedAddrs.size());
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), resolvedAddrs[0]);
+}
+
+void AsyncNameResolverTest::testGetStatusWaitsForIPv6WhenIPv4Succeeds()
+{
+  std::vector<std::string> ipv6Addrs;
+  auto ipv6Resolver = std::make_shared<MockAsyncResolver>(
+      AF_INET6, AsyncResolver::STATUS_QUERYING, ipv6Addrs);
+  std::vector<std::string> ipv4Addrs;
+  ipv4Addrs.push_back("192.0.2.1");
+  auto ipv4Resolver = std::make_shared<MockAsyncResolver>(
+      AF_INET, AsyncResolver::STATUS_SUCCESS, ipv4Addrs);
+  MockAsyncNameResolverMan resolverMan(ipv6Resolver, ipv4Resolver);
+  MockCommand command(1);
+
+  resolverMan.startAsync("dual.example", nullptr, &command);
+
+  CPPUNIT_ASSERT_EQUAL(0, resolverMan.getStatus());
 }
 
 void AsyncNameResolverTest::testValidateConfigLeavesCaresServersUnchanged()

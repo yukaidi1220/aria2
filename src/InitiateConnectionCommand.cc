@@ -132,25 +132,31 @@ void InitiateConnectionCommand::setConnectedAddrInfo(
 }
 
 std::shared_ptr<BackupConnectInfo>
-InitiateConnectionCommand::createBackupIPv4ConnectCommand(
+InitiateConnectionCommand::createBackupConnectCommand(
     const std::string& hostname, const std::string& ipaddr, uint16_t port,
     Command* mainCommand)
 {
-  // Prepare IPv4 backup connection attempt in "Happy Eyeballs"
-  // fashion.
   std::shared_ptr<BackupConnectInfo> info;
   char buf[sizeof(in6_addr)];
-  if (inetPton(AF_INET6, ipaddr.c_str(), &buf) == -1) {
+  int backupFamily = 0;
+  if (inetPton(AF_INET6, ipaddr.c_str(), &buf) == 0) {
+    backupFamily = AF_INET;
+  }
+  else if (inetPton(AF_INET, ipaddr.c_str(), &buf) == 0) {
+    backupFamily = AF_INET6;
+  }
+  else {
     return info;
   }
-  A2_LOG_INFO("Searching IPv4 address for backup connection attempt");
+  A2_LOG_INFO(fmt("Searching IPv%d address for backup connection attempt",
+                  backupFamily == AF_INET ? 4 : 6));
   std::vector<std::string> addrs;
   getDownloadEngine()->findAllCachedIPAddresses(std::back_inserter(addrs),
-                                                hostname, port);
+                                                 hostname, port);
   for (std::vector<std::string>::const_iterator i = addrs.begin(),
                                                 eoi = addrs.end();
        i != eoi; ++i) {
-    if (inetPton(AF_INET, (*i).c_str(), &buf) == 0) {
+    if (inetPton(backupFamily, (*i).c_str(), &buf) == 0) {
       info = std::make_shared<BackupConnectInfo>();
       auto command = make_unique<BackupIPv4ConnectCommand>(
           getDownloadEngine()->newCUID(), *i, port, info, mainCommand,
@@ -170,7 +176,7 @@ void InitiateConnectionCommand::setupBackupConnection(
     ConnectCommand* c)
 {
   std::shared_ptr<BackupConnectInfo> backupConnectInfo =
-      createBackupIPv4ConnectCommand(hostname, addr, port, c);
+      createBackupConnectCommand(hostname, addr, port, c);
   if (backupConnectInfo) {
     c->setBackupConnectInfo(backupConnectInfo);
   }

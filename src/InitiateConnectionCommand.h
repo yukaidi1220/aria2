@@ -69,9 +69,9 @@ protected:
                             const std::shared_ptr<SocketCore>& socket);
 
   std::shared_ptr<BackupConnectInfo>
-  createBackupIPv4ConnectCommand(const std::string& hostname,
-                                 const std::string& ipaddr, uint16_t port,
-                                 Command* mainCommand);
+  createBackupConnectCommand(const std::string& hostname,
+                             const std::string& ipaddr, uint16_t port,
+                             Command* mainCommand);
 
   void setupBackupConnection(const std::string& hostname,
                              const std::string& addr, uint16_t port,
