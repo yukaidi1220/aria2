@@ -1,6 +1,8 @@
 #include "DNSCache.h"
 
 #include <cppunit/extensions/HelperMacros.h>
+#include <iterator>
+#include <vector>
 
 namespace aria2 {
 
@@ -8,6 +10,7 @@ class DNSCacheTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(DNSCacheTest);
   CPPUNIT_TEST(testFind);
+  CPPUNIT_TEST(testFindAll);
   CPPUNIT_TEST(testMarkBad);
   CPPUNIT_TEST(testPutBadAddr);
   CPPUNIT_TEST(testRemove);
@@ -26,6 +29,7 @@ public:
   }
 
   void testFind();
+  void testFindAll();
   void testMarkBad();
   void testPutBadAddr();
   void testRemove();
@@ -40,6 +44,23 @@ void DNSCacheTest::testFind()
   CPPUNIT_ASSERT_EQUAL(std::string("192.168.1.2"), cache_.find("proxy", 8080));
   CPPUNIT_ASSERT_EQUAL(std::string(""), cache_.find("www", 8080));
   CPPUNIT_ASSERT_EQUAL(std::string(""), cache_.find("another", 80));
+}
+
+void DNSCacheTest::testFindAll()
+{
+  std::vector<std::string> addrs;
+  cache_.findAll(std::back_inserter(addrs), "www", 80);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("::1"), addrs[1]);
+
+  cache_.markBad("www", "192.168.0.1", 80);
+  addrs.clear();
+  cache_.findAll(std::back_inserter(addrs), "www", 80);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("::1"), addrs[0]);
 }
 
 void DNSCacheTest::testMarkBad()
