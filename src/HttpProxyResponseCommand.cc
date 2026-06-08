@@ -33,6 +33,9 @@
  */
 /* copyright --> */
 #include "HttpProxyResponseCommand.h"
+
+#include <utility>
+
 #include "HttpRequestCommand.h"
 #include "Request.h"
 #include "HttpConnection.h"
@@ -47,9 +50,11 @@ HttpProxyResponseCommand::HttpProxyResponseCommand(
     cuid_t cuid, const std::shared_ptr<Request>& req,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
     const std::shared_ptr<HttpConnection>& httpConnection, DownloadEngine* e,
-    const std::shared_ptr<SocketCore>& s)
+    const std::shared_ptr<SocketCore>& s,
+    const std::shared_ptr<Request>& proxyRequest)
     : AbstractProxyResponseCommand(cuid, req, fileEntry, requestGroup,
-                                   httpConnection, e, s)
+                                   httpConnection, e, s),
+      proxyRequest_(proxyRequest)
 {
 }
 
@@ -57,9 +62,11 @@ HttpProxyResponseCommand::~HttpProxyResponseCommand() = default;
 
 std::unique_ptr<Command> HttpProxyResponseCommand::getNextCommand()
 {
-  return make_unique<HttpRequestCommand>(
+  auto command = make_unique<HttpRequestCommand>(
       getCuid(), getRequest(), getFileEntry(), getRequestGroup(),
       getHttpConnection(), getDownloadEngine(), getSocket());
+  command->setProxyRequest(proxyRequest_);
+  return std::move(command);
 }
 
 } // namespace aria2

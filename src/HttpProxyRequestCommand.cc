@@ -57,7 +57,7 @@ std::unique_ptr<Command> HttpProxyRequestCommand::getNextCommand()
 {
   return make_unique<HttpProxyResponseCommand>(
       getCuid(), getRequest(), getFileEntry(), getRequestGroup(),
-      getHttpConnection(), getDownloadEngine(), getSocket());
+      getHttpConnection(), getDownloadEngine(), getSocket(), getProxyRequest());
 }
 
 } // namespace aria2

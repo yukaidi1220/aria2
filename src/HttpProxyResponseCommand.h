@@ -42,12 +42,16 @@ namespace aria2 {
 class SocketCore;
 
 class HttpProxyResponseCommand : public AbstractProxyResponseCommand {
+private:
+  std::shared_ptr<Request> proxyRequest_;
+
 public:
   HttpProxyResponseCommand(
       cuid_t cuid, const std::shared_ptr<Request>& req,
       const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup,
       const std::shared_ptr<HttpConnection>& httpConnection, DownloadEngine* e,
-      const std::shared_ptr<SocketCore>& s);
+      const std::shared_ptr<SocketCore>& s,
+      const std::shared_ptr<Request>& proxyRequest);
   virtual ~HttpProxyResponseCommand();
 
   virtual std::unique_ptr<Command> getNextCommand() CXX11_OVERRIDE;
