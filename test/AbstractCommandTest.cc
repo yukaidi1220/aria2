@@ -14,6 +14,9 @@ class AbstractCommandTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(AbstractCommandTest);
   CPPUNIT_TEST(testGetProxyUri);
+  CPPUNIT_TEST(testSelectIPAddressReturnsEmptyForEmptyList);
+  CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
+  CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -22,6 +25,9 @@ public:
   void tearDown() {}
 
   void testGetProxyUri();
+  void testSelectIPAddressReturnsEmptyForEmptyList();
+  void testSelectIPAddressKeepsSingleFamilyOrder();
+  void testSelectIPAddressAlternatesDualStackByCuid();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AbstractCommandTest);
@@ -64,6 +70,39 @@ void AbstractCommandTest::testGetProxyUri()
   op.put(PREF_HTTP_PROXY_USER, "");
   CPPUNIT_ASSERT_EQUAL(std::string("http://httpproxy/"),
                        getProxyUri("http", &op));
+}
+
+void AbstractCommandTest::testSelectIPAddressReturnsEmptyForEmptyList()
+{
+  std::vector<std::string> addrs;
+
+  CPPUNIT_ASSERT_EQUAL(std::string(), selectIPAddress(addrs, 1));
+}
+
+void AbstractCommandTest::testSelectIPAddressKeepsSingleFamilyOrder()
+{
+  std::vector<std::string> ipv4Addrs;
+  ipv4Addrs.push_back("192.0.2.1");
+  ipv4Addrs.push_back("192.0.2.2");
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(ipv4Addrs, 2));
+
+  std::vector<std::string> ipv6Addrs;
+  ipv6Addrs.push_back("2001:db8::1");
+  ipv6Addrs.push_back("2001:db8::2");
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(ipv6Addrs, 2));
+}
+
+void AbstractCommandTest::testSelectIPAddressAlternatesDualStackByCuid()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("2001:db8::1");
+  addrs.push_back("192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(addrs, 1));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
 }
 
 } // namespace aria2

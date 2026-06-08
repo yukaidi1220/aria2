@@ -61,7 +61,7 @@ public:
   AsyncNameResolverMan();
   // Destructor does not call disableNameResolverCheck(). Application
   // must call it before the destruction of this object.
-  ~AsyncNameResolverMan();
+  virtual ~AsyncNameResolverMan();
   // Enable IPv4 address lookup. default: true
   void setIPv4(bool ipv4) { ipv4_ = ipv4; }
   // Enable IPv6 address lookup. default: true
@@ -95,7 +95,7 @@ public:
     resolverMode_ = resolverMode;
   }
 
-  std::shared_ptr<AsyncResolver> createResolver(int family) const;
+  virtual std::shared_ptr<AsyncResolver> createResolver(int family) const;
 
 private:
   void startAsyncFamily(const std::string& hostname, int family,

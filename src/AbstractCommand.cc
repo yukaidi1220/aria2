@@ -88,6 +88,18 @@ bool shouldWaitBeforeRetry(error_code::Value code)
     return false;
   }
 }
+
+bool isNumericAddressFamily(const std::string& addr, int family)
+{
+  union {
+    in_addr ipv4;
+    in6_addr ipv6;
+  } buf;
+  if (family == AF_INET) {
+    return inetPton(family, addr.c_str(), &buf.ipv4) == 0;
+  }
+  return inetPton(family, addr.c_str(), &buf.ipv6) == 0;
+}
 } // namespace
 
 AbstractCommand::AbstractCommand(
@@ -755,6 +767,35 @@ std::string getProxyUri(const std::string& protocol, const Option* option)
   return A2STR::NIL;
 }
 
+std::string selectIPAddress(const std::vector<std::string>& addrs,
+                            cuid_t cuid)
+{
+  if (addrs.empty()) {
+    return A2STR::NIL;
+  }
+
+  auto hasIPv4 =
+      std::find_if(std::begin(addrs), std::end(addrs),
+                   [](const std::string& addr) {
+                     return isNumericAddressFamily(addr, AF_INET);
+                   }) != std::end(addrs);
+  auto hasIPv6 =
+      std::find_if(std::begin(addrs), std::end(addrs),
+                   [](const std::string& addr) {
+                     return isNumericAddressFamily(addr, AF_INET6);
+                   }) != std::end(addrs);
+  if (!hasIPv4 || !hasIPv6) {
+    return addrs.front();
+  }
+
+  auto family = cuid % 2 == 0 ? AF_INET : AF_INET6;
+  auto addr = std::find_if(std::begin(addrs), std::end(addrs),
+                           [family](const std::string& addr) {
+                             return isNumericAddressFamily(addr, family);
+                           });
+  return addr == std::end(addrs) ? addrs.front() : *addr;
+}
+
 namespace {
 // Returns true if proxy is defined for the given protocol. Otherwise
 // returns false.
@@ -869,12 +910,12 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     A2_LOG_NETWORK(
         fmt("DNS: hosts mapping %s -> %s", hostname.c_str(),
             strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
-    return addrs.front();
+    return selectIPAddress(addrs, getCuid());
   }
 
   e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
   if (!addrs.empty()) {
-    auto ipaddr = addrs.front();
+    auto ipaddr = selectIPAddress(addrs, getCuid());
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
                     strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
     A2_LOG_NETWORK(
@@ -928,7 +969,16 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   for (const auto& addr : addrs) {
     e_->cacheIPAddress(hostname, addr, port);
   }
-  ipaddr = e_->findCachedIPAddress(hostname, port);
+  std::vector<std::string> cachedAddrs;
+  e_->findAllCachedIPAddresses(std::back_inserter(cachedAddrs), hostname,
+                                port);
+  addrs.swap(cachedAddrs);
+  if (addrs.empty()) {
+    throw DL_ABORT_EX2(fmt(MSG_NAME_RESOLUTION_FAILED, getCuid(),
+                           hostname.c_str(), "No usable address returned"),
+                       error_code::NAME_RESOLVE_ERROR);
+  }
+  ipaddr = selectIPAddress(addrs, getCuid());
   return ipaddr;
 }
 

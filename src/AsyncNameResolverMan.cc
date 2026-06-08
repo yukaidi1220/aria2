@@ -273,8 +273,10 @@ int AsyncNameResolverMan::getStatus() const
   // response. This is because DNS servers may drop AAAA queries and we
   // have to wait for a long time before timeout. We don't do the
   // inverse, because, based on today's deployment of DNS servers,
-  // almost all of them can respond to A queries just fine.
-  if ((success && ipv4Success) || success == numResolver_) {
+  // almost all of them can respond to A queries just fine. Once all
+  // active lookups reached terminal state, a single successful family
+  // is enough to proceed.
+  if (success && (ipv4Success || success + error == numResolver_)) {
     return 1;
   }
   else if (error == numResolver_) {

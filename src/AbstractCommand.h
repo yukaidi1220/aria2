@@ -240,6 +240,10 @@ public:
 // then returns an empty string.
 std::string getProxyUri(const std::string& protocol, const Option* option);
 
+// Selects an address for this command from resolved addresses.
+std::string selectIPAddress(const std::vector<std::string>& addrs,
+                            cuid_t cuid);
+
 } // namespace aria2
 
 #endif // D_ABSTRACT_COMMAND_H

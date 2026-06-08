@@ -6,9 +6,15 @@
 #include "AsyncNameResolverMan.h"
 
 #include <cstring>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "AsyncResolver.h"
+#include "Command.h"
 #include "Exception.h"
 #include "Option.h"
 #include "prefs.h"
@@ -20,6 +26,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(AsyncNameResolverTest);
   CPPUNIT_TEST(testGetQueryStatusBeforeStart);
+  CPPUNIT_TEST(testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails);
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testCreateDotResolver);
@@ -49,6 +56,7 @@ public:
   void tearDown() {}
 
   void testGetQueryStatusBeforeStart();
+  void testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails();
   void testValidateConfigLeavesCaresServersUnchanged();
 #ifdef ENABLE_SSL
   void testCreateDotResolver();
@@ -74,11 +82,113 @@ public:
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AsyncNameResolverTest);
 
+namespace {
+
+class MockAsyncResolver : public AsyncResolver {
+private:
+  int family_;
+  STATUS status_;
+  std::vector<std::string> addrs_;
+  std::string error_;
+  std::string hostname_;
+  std::vector<AsyncResolverSocketEntry> socks_;
+
+public:
+  MockAsyncResolver(int family, STATUS status, std::vector<std::string> addrs,
+                    std::string error = std::string())
+      : family_(family),
+        status_(status),
+        addrs_(std::move(addrs)),
+        error_(std::move(error))
+  {
+  }
+
+  void resolve(const std::string& name) CXX11_OVERRIDE { hostname_ = name; }
+
+  const std::vector<std::string>& getResolvedAddresses() const CXX11_OVERRIDE
+  {
+    return addrs_;
+  }
+
+  const std::string& getError() const CXX11_OVERRIDE { return error_; }
+
+  STATUS getStatus() const CXX11_OVERRIDE { return status_; }
+
+  bool usable() const CXX11_OVERRIDE { return false; }
+
+  int getFamily() const CXX11_OVERRIDE { return family_; }
+
+  const std::vector<AsyncResolverSocketEntry>& getsock() const CXX11_OVERRIDE
+  {
+    return socks_;
+  }
+
+  void process(sock_t readfd, sock_t writefd) CXX11_OVERRIDE
+  {
+    (void)readfd;
+    (void)writefd;
+  }
+
+  const std::string& getHostname() const CXX11_OVERRIDE { return hostname_; }
+};
+
+class MockAsyncNameResolverMan : public AsyncNameResolverMan {
+private:
+  std::shared_ptr<AsyncResolver> ipv6Resolver_;
+  std::shared_ptr<AsyncResolver> ipv4Resolver_;
+
+public:
+  MockAsyncNameResolverMan(std::shared_ptr<AsyncResolver> ipv6Resolver,
+                           std::shared_ptr<AsyncResolver> ipv4Resolver)
+      : ipv6Resolver_(std::move(ipv6Resolver)),
+        ipv4Resolver_(std::move(ipv4Resolver))
+  {
+  }
+
+  std::shared_ptr<AsyncResolver> createResolver(int family) const CXX11_OVERRIDE
+  {
+    if (family == AF_INET6) {
+      return ipv6Resolver_;
+    }
+    return ipv4Resolver_;
+  }
+};
+
+class MockCommand : public Command {
+public:
+  explicit MockCommand(cuid_t cuid) : Command(cuid) {}
+
+  bool execute() CXX11_OVERRIDE { return true; }
+};
+
+} // namespace
+
 void AsyncNameResolverTest::testGetQueryStatusBeforeStart()
 {
   AsyncNameResolverMan resolverMan;
 
   CPPUNIT_ASSERT_EQUAL(std::string(), resolverMan.getQueryStatus());
+}
+
+void AsyncNameResolverTest::testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails()
+{
+  std::vector<std::string> ipv6Addrs;
+  ipv6Addrs.push_back("2001:db8::1");
+  auto ipv6Resolver = std::make_shared<MockAsyncResolver>(
+      AF_INET6, AsyncResolver::STATUS_SUCCESS, ipv6Addrs);
+  std::vector<std::string> ipv4Addrs;
+  auto ipv4Resolver = std::make_shared<MockAsyncResolver>(
+      AF_INET, AsyncResolver::STATUS_ERROR, ipv4Addrs, "A failed");
+  MockAsyncNameResolverMan resolverMan(ipv6Resolver, ipv4Resolver);
+  MockCommand command(1);
+
+  resolverMan.startAsync("dual.example", nullptr, &command);
+
+  CPPUNIT_ASSERT_EQUAL(1, resolverMan.getStatus());
+  std::vector<std::string> resolvedAddrs;
+  resolverMan.getResolvedAddress(resolvedAddrs);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolvedAddrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), resolvedAddrs[0]);
 }
 
 void AsyncNameResolverTest::testValidateConfigLeavesCaresServersUnchanged()
