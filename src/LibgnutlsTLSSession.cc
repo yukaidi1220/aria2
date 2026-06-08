@@ -61,6 +61,94 @@ TLSVersion getProtocolFromSession(gnutls_session_t& session)
     return TLS_PROTO_NONE;
   }
 }
+
+bool getPeerCertificateNames(gnutls_session_t session,
+                             std::vector<std::string>& dnsNames,
+                             std::vector<std::string>& ipAddrs,
+                             std::string& commonName, int* rv,
+                             std::string* error)
+{
+  // certificate type: only X509 is allowed.
+  if (gnutls_certificate_type_get(session) != GNUTLS_CRT_X509) {
+    if (error) {
+      *error = "certificate type must be X509";
+    }
+    return false;
+  }
+
+  unsigned int peerCertsLength;
+  const gnutls_datum_t* peerCerts;
+  peerCerts = gnutls_certificate_get_peers(session, &peerCertsLength);
+  if (!peerCerts || peerCertsLength == 0) {
+    if (error) {
+      *error = "certificate not found";
+    }
+    return false;
+  }
+
+  gnutls_x509_crt_t cert;
+  auto ret = gnutls_x509_crt_init(&cert);
+  if (rv) {
+    *rv = ret;
+  }
+  if (ret != GNUTLS_E_SUCCESS) {
+    return false;
+  }
+  std::unique_ptr<std::remove_pointer<gnutls_x509_crt_t>::type,
+                  decltype(&gnutls_x509_crt_deinit)>
+      certDeleter(cert, gnutls_x509_crt_deinit);
+  ret = gnutls_x509_crt_import(cert, &peerCerts[0], GNUTLS_X509_FMT_DER);
+  if (rv) {
+    *rv = ret;
+  }
+  if (ret != GNUTLS_E_SUCCESS) {
+    return false;
+  }
+
+  char altName[256];
+  size_t altNameLen;
+  for (int i = 0; !(ret < 0); ++i) {
+    altNameLen = sizeof(altName);
+    ret =
+        gnutls_x509_crt_get_subject_alt_name(cert, i, altName, &altNameLen,
+                                             nullptr);
+    if (ret == GNUTLS_SAN_DNSNAME) {
+      if (altNameLen == 0) {
+        continue;
+      }
+
+      if (altName[altNameLen - 1] == '.') {
+        --altNameLen;
+        if (altNameLen == 0) {
+          continue;
+        }
+      }
+
+      dnsNames.push_back(std::string(altName, altNameLen));
+    }
+    else if (ret == GNUTLS_SAN_IPADDRESS) {
+      ipAddrs.push_back(std::string(altName, altNameLen));
+    }
+  }
+  altNameLen = sizeof(altName);
+  ret = gnutls_x509_crt_get_dn_by_oid(cert, GNUTLS_OID_X520_COMMON_NAME, 0, 0,
+                                      altName, &altNameLen);
+  if (ret == 0) {
+    if (altNameLen > 0) {
+      if (altName[altNameLen - 1] == '.') {
+        --altNameLen;
+        if (altNameLen > 0) {
+          commonName.assign(altName, altNameLen);
+        }
+      }
+      else {
+        commonName.assign(altName, altNameLen);
+      }
+    }
+  }
+
+  return true;
+}
 } // namespace
 
 namespace aria2 {
@@ -294,73 +382,12 @@ int GnuTLSSession::tlsConnect(const std::string& hostname, TLSVersion& version,
         return TLS_ERR_ERROR;
       }
     }
-    // certificate type: only X509 is allowed.
-    if (gnutls_certificate_type_get(sslSession_) != GNUTLS_CRT_X509) {
-      handshakeErr = "certificate type must be X509";
-      return TLS_ERR_ERROR;
-    }
-    unsigned int peerCertsLength;
-    const gnutls_datum_t* peerCerts;
-    peerCerts = gnutls_certificate_get_peers(sslSession_, &peerCertsLength);
-    if (!peerCerts || peerCertsLength == 0) {
-      handshakeErr = "certificate not found";
-      return TLS_ERR_ERROR;
-    }
-    gnutls_x509_crt_t cert;
-    rv_ = gnutls_x509_crt_init(&cert);
-    if (rv_ != GNUTLS_E_SUCCESS) {
-      return TLS_ERR_ERROR;
-    }
-    std::unique_ptr<std::remove_pointer<gnutls_x509_crt_t>::type,
-                    decltype(&gnutls_x509_crt_deinit)>
-        certDeleter(cert, gnutls_x509_crt_deinit);
-    rv_ = gnutls_x509_crt_import(cert, &peerCerts[0], GNUTLS_X509_FMT_DER);
-    if (rv_ != GNUTLS_E_SUCCESS) {
-      return TLS_ERR_ERROR;
-    }
     std::string commonName;
     std::vector<std::string> dnsNames;
     std::vector<std::string> ipAddrs;
-    int ret = 0;
-    char altName[256];
-    size_t altNameLen;
-    for (int i = 0; !(ret < 0); ++i) {
-      altNameLen = sizeof(altName);
-      ret = gnutls_x509_crt_get_subject_alt_name(cert, i, altName, &altNameLen,
-                                                 nullptr);
-      if (ret == GNUTLS_SAN_DNSNAME) {
-        if (altNameLen == 0) {
-          continue;
-        }
-
-        if (altName[altNameLen - 1] == '.') {
-          --altNameLen;
-          if (altNameLen == 0) {
-            continue;
-          }
-        }
-
-        dnsNames.push_back(std::string(altName, altNameLen));
-      }
-      else if (ret == GNUTLS_SAN_IPADDRESS) {
-        ipAddrs.push_back(std::string(altName, altNameLen));
-      }
-    }
-    altNameLen = sizeof(altName);
-    ret = gnutls_x509_crt_get_dn_by_oid(cert, GNUTLS_OID_X520_COMMON_NAME, 0, 0,
-                                        altName, &altNameLen);
-    if (ret == 0) {
-      if (altNameLen > 0) {
-        if (altName[altNameLen - 1] == '.') {
-          --altNameLen;
-          if (altNameLen > 0) {
-            commonName.assign(altName, altNameLen);
-          }
-        }
-        else {
-          commonName.assign(altName, altNameLen);
-        }
-      }
+    if (!getPeerCertificateNames(sslSession_, dnsNames, ipAddrs, commonName,
+                                 &rv_, &handshakeErr)) {
+      return TLS_ERR_ERROR;
     }
     if (!net::verifyHostname(hostname, dnsNames, ipAddrs, commonName)) {
       handshakeErr = "hostname does not match";
@@ -371,6 +398,38 @@ int GnuTLSSession::tlsConnect(const std::string& hostname, TLSVersion& version,
   version = getProtocolFromSession(sslSession_);
 
   return TLS_ERR_OK;
+}
+
+bool GnuTLSSession::peerCertificateMatchesHostname(
+    const std::string& hostname) const
+{
+  if (!sslSession_ || tlsContext_->getSide() != TLS_CLIENT ||
+      !tlsContext_->getVerifyPeer()) {
+    return false;
+  }
+
+  gnutls_typed_vdata_st data[] = {
+      {
+          GNUTLS_DT_KEY_PURPOSE_OID,
+          reinterpret_cast<unsigned char*>(
+              const_cast<char*>(GNUTLS_KP_TLS_WWW_SERVER)),
+      },
+  };
+  unsigned int status;
+  auto rv = gnutls_certificate_verify_peers(
+      sslSession_, data, sizeof(data) / sizeof(data[0]), &status);
+  if (rv != GNUTLS_E_SUCCESS || status) {
+    return false;
+  }
+
+  std::string commonName;
+  std::vector<std::string> dnsNames;
+  std::vector<std::string> ipAddrs;
+  if (!getPeerCertificateNames(sslSession_, dnsNames, ipAddrs, commonName,
+                               nullptr, nullptr)) {
+    return false;
+  }
+  return net::verifyHostname(hostname, dnsNames, ipAddrs, commonName);
 }
 
 int GnuTLSSession::tlsAccept(TLSVersion& version)

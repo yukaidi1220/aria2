@@ -74,6 +74,8 @@ public:
        // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
   }
   virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE;
+  virtual bool peerCertificateMatchesHostname(
+      const std::string& hostname) const CXX11_OVERRIDE;
   virtual int closeConnection() CXX11_OVERRIDE;
   virtual int checkDirection() CXX11_OVERRIDE;
   virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE;

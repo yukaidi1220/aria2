@@ -25,6 +25,7 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testTLSHandshakeParams);
   CPPUNIT_TEST(testTLSHandshakeParamsComparison);
   CPPUNIT_TEST(testTLSSessionAlpnSupportDefault);
+  CPPUNIT_TEST(testTLSSessionPeerCertificateMatchDefault);
   CPPUNIT_TEST(testMatchesTLSHandshakeParams);
   CPPUNIT_TEST(testIsTLSSNIHostname);
 #endif // ENABLE_SSL
@@ -45,6 +46,7 @@ public:
   void testTLSHandshakeParams();
   void testTLSHandshakeParamsComparison();
   void testTLSSessionAlpnSupportDefault();
+  void testTLSSessionPeerCertificateMatchDefault();
   void testMatchesTLSHandshakeParams();
   void testIsTLSSNIHostname();
 #endif // ENABLE_SSL
@@ -393,6 +395,13 @@ void SocketCoreTest::testTLSSessionAlpnSupportDefault()
   CPPUNIT_ASSERT_EQUAL(TLS_ERR_OK,
                        session.setAlpnProtocols(std::vector<std::string>()));
   CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR, session.setAlpnProtocols(alpnProtocols));
+}
+
+void SocketCoreTest::testTLSSessionPeerCertificateMatchDefault()
+{
+  DefaultTLSSession session;
+
+  CPPUNIT_ASSERT(!session.peerCertificateMatchesHostname("example.org"));
 }
 
 void SocketCoreTest::testMatchesTLSHandshakeParams()

@@ -53,6 +53,102 @@ const unsigned char* ASN1_STRING_get0_data(ASN1_STRING* x)
 } // namespace
 #endif // !OPENSSL_101_API
 
+namespace {
+bool getPeerCertificateNames(SSL* ssl, std::vector<std::string>& dnsNames,
+                             std::vector<std::string>& ipAddrs,
+                             std::string& commonName, std::string* error)
+{
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  auto peerCert = SSL_get1_peer_certificate(ssl);
+#else  // !(OPENSSL_VERSION_NUMBER >= 0x30000000L)
+  auto peerCert = SSL_get_peer_certificate(ssl);
+#endif // !(OPENSSL_VERSION_NUMBER >= 0x30000000L)
+  if (!peerCert) {
+    if (error) {
+      *error = "certificate not found";
+    }
+    return false;
+  }
+  std::unique_ptr<X509, decltype(&X509_free)> certDeleter(peerCert, X509_free);
+
+  GENERAL_NAMES* altNames;
+  altNames = reinterpret_cast<GENERAL_NAMES*>(
+      X509_get_ext_d2i(peerCert, NID_subject_alt_name, nullptr, NULL));
+  if (altNames) {
+    std::unique_ptr<GENERAL_NAMES, decltype(&GENERAL_NAMES_free)>
+        altNamesDeleter(altNames, GENERAL_NAMES_free);
+    size_t n = sk_GENERAL_NAME_num(altNames);
+    for (size_t i = 0; i < n; ++i) {
+      const GENERAL_NAME* altName = sk_GENERAL_NAME_value(altNames, i);
+      if (altName->type == GEN_DNS) {
+        auto name = ASN1_STRING_get0_data(altName->d.ia5);
+        if (!name) {
+          continue;
+        }
+        size_t len = ASN1_STRING_length(altName->d.ia5);
+        if (len == 0) {
+          continue;
+        }
+        if (name[len - 1] == '.') {
+          --len;
+          if (len == 0) {
+            continue;
+          }
+        }
+        dnsNames.push_back(std::string(name, name + len));
+      }
+      else if (altName->type == GEN_IPADD) {
+        const unsigned char* ipAddr = altName->d.iPAddress->data;
+        if (!ipAddr) {
+          continue;
+        }
+        size_t len = altName->d.iPAddress->length;
+        ipAddrs.push_back(
+            std::string(reinterpret_cast<const char*>(ipAddr), len));
+      }
+    }
+  }
+
+  X509_NAME* subjectName = X509_get_subject_name(peerCert);
+  if (!subjectName) {
+    if (error) {
+      *error = "could not get X509 name object from the certificate.";
+    }
+    return false;
+  }
+  int lastpos = -1;
+  while (1) {
+    lastpos =
+        X509_NAME_get_index_by_NID(subjectName, NID_commonName, lastpos);
+    if (lastpos == -1) {
+      break;
+    }
+    X509_NAME_ENTRY* entry = X509_NAME_get_entry(subjectName, lastpos);
+    unsigned char* out;
+    int outlen = ASN1_STRING_to_UTF8(&out, X509_NAME_ENTRY_get_data(entry));
+    if (outlen < 0) {
+      continue;
+    }
+    if (outlen == 0) {
+      OPENSSL_free(out);
+      continue;
+    }
+    if (out[outlen - 1] == '.') {
+      --outlen;
+      if (outlen == 0) {
+        OPENSSL_free(out);
+        continue;
+      }
+    }
+    commonName.assign(&out[0], &out[outlen]);
+    OPENSSL_free(out);
+    break;
+  }
+
+  return true;
+}
+} // namespace
+
 TLSSession* TLSSession::make(TLSContext* ctx)
 {
   return new OpenSSLTLSSession(static_cast<OpenSSLTLSContext*>(ctx));
@@ -285,17 +381,6 @@ int OpenSSLTLSSession::tlsConnect(const std::string& hostname,
   }
   if (tlsContext_->getSide() == TLS_CLIENT && tlsContext_->getVerifyPeer()) {
     // verify peer
-#if OPENSSL_VERSION_NUMBER >= 0x30000000L
-    auto peerCert = SSL_get1_peer_certificate(ssl_);
-#else  // !(OPENSSL_VERSION_NUMBER >= 0x30000000L)
-    auto peerCert = SSL_get_peer_certificate(ssl_);
-#endif // !(OPENSSL_VERSION_NUMBER >= 0x30000000L)
-    if (!peerCert) {
-      handshakeErr = "certificate not found";
-      return TLS_ERR_ERROR;
-    }
-    std::unique_ptr<X509, decltype(&X509_free)> certDeleter(peerCert,
-                                                            X509_free);
     long verifyResult = SSL_get_verify_result(ssl_);
     if (verifyResult != X509_V_OK) {
       handshakeErr = X509_verify_cert_error_string(verifyResult);
@@ -304,75 +389,9 @@ int OpenSSLTLSSession::tlsConnect(const std::string& hostname,
     std::string commonName;
     std::vector<std::string> dnsNames;
     std::vector<std::string> ipAddrs;
-    GENERAL_NAMES* altNames;
-    altNames = reinterpret_cast<GENERAL_NAMES*>(
-        X509_get_ext_d2i(peerCert, NID_subject_alt_name, nullptr, NULL));
-    if (altNames) {
-      std::unique_ptr<GENERAL_NAMES, decltype(&GENERAL_NAMES_free)>
-          altNamesDeleter(altNames, GENERAL_NAMES_free);
-      size_t n = sk_GENERAL_NAME_num(altNames);
-      for (size_t i = 0; i < n; ++i) {
-        const GENERAL_NAME* altName = sk_GENERAL_NAME_value(altNames, i);
-        if (altName->type == GEN_DNS) {
-          auto name = ASN1_STRING_get0_data(altName->d.ia5);
-          if (!name) {
-            continue;
-          }
-          size_t len = ASN1_STRING_length(altName->d.ia5);
-          if (len == 0) {
-            continue;
-          }
-          if (name[len - 1] == '.') {
-            --len;
-            if (len == 0) {
-              continue;
-            }
-          }
-          dnsNames.push_back(std::string(name, name + len));
-        }
-        else if (altName->type == GEN_IPADD) {
-          const unsigned char* ipAddr = altName->d.iPAddress->data;
-          if (!ipAddr) {
-            continue;
-          }
-          size_t len = altName->d.iPAddress->length;
-          ipAddrs.push_back(
-              std::string(reinterpret_cast<const char*>(ipAddr), len));
-        }
-      }
-    }
-    X509_NAME* subjectName = X509_get_subject_name(peerCert);
-    if (!subjectName) {
-      handshakeErr = "could not get X509 name object from the certificate.";
+    if (!getPeerCertificateNames(ssl_, dnsNames, ipAddrs, commonName,
+                                 &handshakeErr)) {
       return TLS_ERR_ERROR;
-    }
-    int lastpos = -1;
-    while (1) {
-      lastpos =
-          X509_NAME_get_index_by_NID(subjectName, NID_commonName, lastpos);
-      if (lastpos == -1) {
-        break;
-      }
-      X509_NAME_ENTRY* entry = X509_NAME_get_entry(subjectName, lastpos);
-      unsigned char* out;
-      int outlen = ASN1_STRING_to_UTF8(&out, X509_NAME_ENTRY_get_data(entry));
-      if (outlen < 0) {
-        continue;
-      }
-      if (outlen == 0) {
-        OPENSSL_free(out);
-        continue;
-      }
-      if (out[outlen - 1] == '.') {
-        --outlen;
-        if (outlen == 0) {
-          OPENSSL_free(out);
-          continue;
-        }
-      }
-      commonName.assign(&out[0], &out[outlen]);
-      OPENSSL_free(out);
-      break;
     }
     if (!net::verifyHostname(hostname, dnsNames, ipAddrs, commonName)) {
       handshakeErr = "hostname does not match";
@@ -381,6 +400,26 @@ int OpenSSLTLSSession::tlsConnect(const std::string& hostname,
   }
 
   return TLS_ERR_OK;
+}
+
+bool OpenSSLTLSSession::peerCertificateMatchesHostname(
+    const std::string& hostname) const
+{
+  if (!ssl_ || tlsContext_->getSide() != TLS_CLIENT ||
+      !tlsContext_->getVerifyPeer()) {
+    return false;
+  }
+  if (SSL_get_verify_result(ssl_) != X509_V_OK) {
+    return false;
+  }
+
+  std::string commonName;
+  std::vector<std::string> dnsNames;
+  std::vector<std::string> ipAddrs;
+  if (!getPeerCertificateNames(ssl_, dnsNames, ipAddrs, commonName, nullptr)) {
+    return false;
+  }
+  return net::verifyHostname(hostname, dnsNames, ipAddrs, commonName);
 }
 
 int OpenSSLTLSSession::tlsAccept(TLSVersion& version)

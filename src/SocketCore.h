@@ -355,6 +355,7 @@ public:
   bool matchesTLSHandshakeParams(const TLSHandshakeParams& params) const;
 
   std::string getSelectedAlpnProtocol() const;
+  bool peerCertificateMatchesHostname(const std::string& hostname) const;
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2

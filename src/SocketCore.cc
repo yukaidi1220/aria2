@@ -1150,6 +1150,12 @@ std::string SocketCore::getSelectedAlpnProtocol() const
   return tlsSession_ ? tlsSession_->getSelectedAlpnProtocol() : std::string();
 }
 
+bool SocketCore::peerCertificateMatchesHostname(
+    const std::string& hostname) const
+{
+  return tlsSession_ && tlsSession_->peerCertificateMatchesHostname(hostname);
+}
+
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2

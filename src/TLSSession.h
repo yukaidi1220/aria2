@@ -91,6 +91,14 @@ public:
   // negotiated or backend does not support ALPN.
   virtual std::string getSelectedAlpnProtocol() const { return std::string(); }
 
+  // Returns true if the verified peer certificate covers |hostname|.
+  // Backends which cannot inspect the peer certificate must return false.
+  virtual bool peerCertificateMatchesHostname(const std::string& hostname) const
+  {
+    (void)hostname;
+    return false;
+  }
+
   // Closes the SSL/TLS session. Don't close underlying transport
   // socket. This function returns TLS_ERR_OK if it succeeds, or
   // TLS_ERR_ERROR.
