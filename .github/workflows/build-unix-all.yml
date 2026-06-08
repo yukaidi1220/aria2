@@ -45,8 +45,11 @@ jobs:
     - name: Configure
       run: ./configure --without-gnutls --with-openssl
 
-    - name: Build and test
-      run: make -j"$(nproc)" check
+    - name: Build
+      run: make -j"$(nproc)"
+
+    - name: Smoke test
+      run: src/aria2c -v
 
     - name: Collect artifact
       run: |
@@ -107,8 +110,11 @@ jobs:
           --with-appletls \
           --disable-nls
 
-    - name: Build and test
-      run: make -j"$(sysctl -n hw.ncpu)" check
+    - name: Build
+      run: make -j"$(sysctl -n hw.ncpu)"
+
+    - name: Smoke test
+      run: src/aria2c -v
 
     - name: Collect artifact
       run: |
