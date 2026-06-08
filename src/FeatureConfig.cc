@@ -70,6 +70,9 @@
 #ifdef HAVE_LIBSSH2
 #  include <libssh2.h>
 #endif // HAVE_LIBSSH2
+#ifdef HAVE_LIBNGHTTP2
+#  include <nghttp2/nghttp2ver.h>
+#endif // HAVE_LIBNGHTTP2
 #include "util.h"
 
 namespace aria2 {
@@ -240,6 +243,9 @@ std::string usedLibs()
 #ifdef HAVE_LIBSSH2
   res += "libssh2/" LIBSSH2_VERSION " ";
 #endif // HAVE_LIBSSH2
+#ifdef HAVE_LIBNGHTTP2
+  res += "nghttp2/" NGHTTP2_VERSION " ";
+#endif // HAVE_LIBNGHTTP2
 
   if (!res.empty()) {
     res.erase(res.length() - 1);

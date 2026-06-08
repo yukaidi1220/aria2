@@ -67,6 +67,7 @@ ARIA2_ARG_WITHOUT([libz])
 ARIA2_ARG_WITH([tcmalloc])
 ARIA2_ARG_WITH([jemalloc])
 ARIA2_ARG_WITHOUT([libssh2])
+ARIA2_ARG_WITH([libnghttp2])
 
 ARIA2_ARG_DISABLE([ssl])
 ARIA2_ARG_DISABLE([bittorrent])
@@ -501,6 +502,21 @@ if test "x$with_libssh2" = "xyes"; then
   fi
 fi
 
+have_libnghttp2=no
+if test "x$with_libnghttp2" = "xyes"; then
+  PKG_CHECK_MODULES([LIBNGHTTP2], [libnghttp2], [have_libnghttp2=yes],
+                    [have_libnghttp2=no])
+  if test "x$have_libnghttp2" = "xyes"; then
+    AC_DEFINE([HAVE_LIBNGHTTP2], [1],
+              [Define to 1 if you have libnghttp2.])
+  else
+    AC_MSG_WARN([$LIBNGHTTP2_PKG_ERRORS])
+    if test "x$with_libnghttp2_requested" = "xyes"; then
+      ARIA2_DEP_NOT_MET([libnghttp2])
+    fi
+  fi
+fi
+
 have_libcares=no
 if test "x$with_libcares" = "xyes"; then
   PKG_CHECK_MODULES([LIBCARES], [libcares >= 1.16.0], [have_libcares=yes],
@@ -650,6 +666,9 @@ AM_CONDITIONAL([HAVE_SQLITE3], [test "x$have_sqlite3" = "xyes"])
 
 # Set conditional for libssh2
 AM_CONDITIONAL([HAVE_LIBSSH2], [test "x$have_libssh2" = "xyes"])
+
+# Set conditional for libnghttp2
+AM_CONDITIONAL([HAVE_LIBNGHTTP2], [test "x$have_libnghttp2" = "xyes"])
 
 case "$host" in
   *solaris*)
@@ -1112,6 +1131,7 @@ LibExpat:       $have_libexpat (CFLAGS='$EXPAT_CFLAGS' LIBS='$EXPAT_LIBS')
 LibCares:       $have_libcares (CFLAGS='$LIBCARES_CFLAGS' LIBS='$LIBCARES_LIBS')
 Zlib:           $have_zlib (CFLAGS='$ZLIB_CFLAGS' LIBS='$ZLIB_LIBS')
 Libssh2:        $have_libssh2 (CFLAGS='$LIBSSH2_CFLAGS' LIBS='$LIBSSH2_LIBS')
+Libnghttp2:     $have_libnghttp2 (CFLAGS='$LIBNGHTTP2_CFLAGS' LIBS='$LIBNGHTTP2_LIBS')
 Tcmalloc:       $have_tcmalloc (CFLAGS='$TCMALLOC_CFLAGS' LIBS='$TCMALLOC_LIBS')
 Jemalloc:       $have_jemalloc (CFLAGS='$JEMALLOC_CFLAGS' LIBS='$JEMALLOC_LIBS')
 Epoll:          $have_epoll

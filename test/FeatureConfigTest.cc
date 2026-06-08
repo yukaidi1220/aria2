@@ -16,12 +16,14 @@ class FeatureConfigTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetDefaultPort);
   CPPUNIT_TEST(testStrSupportedFeature);
   CPPUNIT_TEST(testFeatureSummary);
+  CPPUNIT_TEST(testUsedLibs);
   CPPUNIT_TEST_SUITE_END();
 
 public:
   void testGetDefaultPort();
   void testStrSupportedFeature();
   void testFeatureSummary();
+  void testUsedLibs();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(FeatureConfigTest);
@@ -94,6 +96,16 @@ void FeatureConfigTest::testFeatureSummary()
   std::string featuresString =
       strjoin(std::begin(features), std::end(features), ", ");
   CPPUNIT_ASSERT_EQUAL(featuresString, featureSummary());
+}
+
+void FeatureConfigTest::testUsedLibs()
+{
+  auto libs = usedLibs();
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(libs.find("nghttp2/") != std::string::npos);
+#else  // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(libs.find("nghttp2/") == std::string::npos);
+#endif // !HAVE_LIBNGHTTP2
 }
 
 } // namespace aria2
