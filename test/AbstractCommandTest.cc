@@ -19,7 +19,10 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressReturnsEmptyForEmptyList);
   CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
+  CPPUNIT_TEST(testSelectIPAddressPrefersIPv4OverScopedIPv6);
+  CPPUNIT_TEST(testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressRotatesDualStackByFileEntry);
+  CPPUNIT_TEST(testSelectIPAddressDoesNotRotateToScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressPrefersRequestedDualStackFamily);
   CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedActiveFamily);
   CPPUNIT_TEST(testSelectIPAddressRotatesWhenActiveFamiliesBalanced);
@@ -41,7 +44,10 @@ public:
   void testSelectIPAddressReturnsEmptyForEmptyList();
   void testSelectIPAddressKeepsSingleFamilyOrder();
   void testSelectIPAddressAlternatesDualStackByCuid();
+  void testSelectIPAddressPrefersIPv4OverScopedIPv6();
+  void testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6();
   void testSelectIPAddressRotatesDualStackByFileEntry();
+  void testSelectIPAddressDoesNotRotateToScopedIPv6();
   void testSelectIPAddressPrefersRequestedDualStackFamily();
   void testSelectIPAddressPrefersUnderusedActiveFamily();
   void testSelectIPAddressRotatesWhenActiveFamiliesBalanced();
@@ -129,6 +135,31 @@ void AbstractCommandTest::testSelectIPAddressAlternatesDualStackByCuid()
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
 }
 
+void AbstractCommandTest::testSelectIPAddressPrefersIPv4OverScopedIPv6()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("fd00::1");
+  addrs.push_back("fe80::1");
+  addrs.push_back("fec0::1");
+  addrs.push_back("::ffff:192.0.2.1");
+  addrs.push_back("::1");
+  addrs.push_back("ff02::1");
+  addrs.push_back("192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 1));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
+}
+
+void AbstractCommandTest::testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("fd00::1");
+  addrs.push_back("2001:db8::1");
+  addrs.push_back("192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), selectIPAddress(addrs, 1));
+}
+
 void AbstractCommandTest::testSelectIPAddressRotatesDualStackByFileEntry()
 {
   std::vector<std::string> addrs;
@@ -150,6 +181,21 @@ void AbstractCommandTest::testSelectIPAddressRotatesDualStackByFileEntry()
                                        8443));
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 5, fileEntry, "mirror.example",
+                                       443));
+}
+
+void AbstractCommandTest::testSelectIPAddressDoesNotRotateToScopedIPv6()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("fd00::1");
+  auto fileEntry = std::make_shared<FileEntry>();
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 1, fileEntry, "example.org",
+                                       443));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, fileEntry, "example.org",
                                        443));
 }
 

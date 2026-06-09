@@ -145,6 +145,43 @@ int getFirstSelectableAddressFamily(const std::vector<std::string>& addrs)
   return 0;
 }
 
+bool hasIPv6Address(const std::vector<std::string>& addrs,
+                    bool (*pred)(const std::string&))
+{
+  return std::find_if(std::begin(addrs), std::end(addrs),
+                      [pred](const std::string& addr) {
+                        return getNumericAddressFamily(addr) == AF_INET6 &&
+                               pred(addr);
+                      }) != std::end(addrs);
+}
+
+bool shouldPreferIPv4OverScopedIPv6(const std::vector<std::string>& addrs)
+{
+  return hasNumericAddressFamily(addrs, AF_INET) &&
+         hasNumericAddressFamily(addrs, AF_INET6) &&
+         !hasIPv6Address(addrs, isIPv6GlobalUnicastAddress);
+}
+
+std::vector<std::string>::const_iterator
+findPreferredAddressFamily(std::vector<std::string>::const_iterator first,
+                           std::vector<std::string>::const_iterator last,
+                           int family)
+{
+  if (family == AF_INET6) {
+    auto globalIPv6 = std::find_if(
+        first, last, [](const std::string& addr) {
+          return getNumericAddressFamily(addr) == AF_INET6 &&
+                 isIPv6GlobalUnicastAddress(addr);
+        });
+    if (globalIPv6 != last) {
+      return globalIPv6;
+    }
+  }
+  return std::find_if(first, last, [family](const std::string& addr) {
+    return getNumericAddressFamily(addr) == family;
+  });
+}
+
 int getOppositeAddressFamily(int family)
 {
   if (family == AF_INET) {
@@ -1382,13 +1419,18 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
     return addrs.front();
   }
 
-  auto family = isSelectableAddressFamily(preferredFamily)
-                    ? preferredFamily
-                    : (cuid % 2 == 0 ? AF_INET : AF_INET6);
-  auto addr = std::find_if(std::begin(addrs), std::end(addrs),
-                            [family](const std::string& addr) {
-                              return getNumericAddressFamily(addr) == family;
-                            });
+  auto family = 0;
+  if (isSelectableAddressFamily(preferredFamily)) {
+    family = preferredFamily;
+  }
+  else if (shouldPreferIPv4OverScopedIPv6(addrs)) {
+    family = AF_INET;
+  }
+  else {
+    family = cuid % 2 == 0 ? AF_INET : AF_INET6;
+  }
+  auto addr =
+      findPreferredAddressFamily(std::begin(addrs), std::end(addrs), family);
   return addr == std::end(addrs) ? addrs.front() : *addr;
 }
 
@@ -1513,9 +1555,10 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             const std::shared_ptr<FileEntry>& fileEntry,
                             const std::string& hostname, uint16_t port)
 {
-  auto family =
-      getLeastUsedActiveAddressFamily(fileEntry, hostname, port, addrs);
-  if (!isSelectableAddressFamily(family) && fileEntry &&
+  auto preferIPv4 = shouldPreferIPv4OverScopedIPv6(addrs);
+  auto family = preferIPv4 ? AF_INET : getLeastUsedActiveAddressFamily(
+                                           fileEntry, hostname, port, addrs);
+  if (!preferIPv4 && !isSelectableAddressFamily(family) && fileEntry &&
       hasNumericAddressFamily(addrs, AF_INET) &&
       hasNumericAddressFamily(addrs, AF_INET6)) {
     auto fallbackFamily = getFirstSelectableAddressFamily(addrs);
@@ -1529,7 +1572,8 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
     auto nextFamily = getOppositeAddressFamily(selectedFamily);
     if (isSelectableAddressFamily(nextFamily) &&
         hasNumericAddressFamily(addrs, nextFamily)) {
-      fileEntry->setNextAddressFamily(hostname, port, nextFamily);
+      fileEntry->setNextAddressFamily(hostname, port,
+                                      preferIPv4 ? AF_INET : nextFamily);
     }
   }
   return ipaddr;

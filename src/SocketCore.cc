@@ -1680,6 +1680,67 @@ int inetPton(int af, const char* src, void* dst)
   return -1;
 }
 
+bool isIPv6GlobalUnicastAddress(const std::string& addr)
+{
+  in6_addr dest;
+  if (inetPton(AF_INET6, addr.c_str(), &dest) != 0) {
+    return false;
+  }
+
+  const auto bytes = dest.s6_addr;
+  bool unspecified = true;
+  for (size_t i = 0; i < sizeof(dest); ++i) {
+    if (bytes[i] != 0) {
+      unspecified = false;
+      break;
+    }
+  }
+  if (unspecified) {
+    return false;
+  }
+
+  bool loopback = true;
+  for (size_t i = 0; i + 1 < sizeof(dest); ++i) {
+    if (bytes[i] != 0) {
+      loopback = false;
+      break;
+    }
+  }
+  if (loopback && bytes[sizeof(dest) - 1] == 1) {
+    return false;
+  }
+
+  bool ipv4Mapped = true;
+  for (size_t i = 0; i < 10; ++i) {
+    if (bytes[i] != 0) {
+      ipv4Mapped = false;
+      break;
+    }
+  }
+  if (ipv4Mapped && bytes[10] == 0xff && bytes[11] == 0xff) {
+    return false;
+  }
+
+  bool ipv4Compatible = true;
+  for (size_t i = 0; i < 12; ++i) {
+    if (bytes[i] != 0) {
+      ipv4Compatible = false;
+      break;
+    }
+  }
+  if (ipv4Compatible) {
+    return false;
+  }
+
+  if (bytes[0] == 0xff || (bytes[0] & 0xfe) == 0xfc ||
+      (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0x80) ||
+      (bytes[0] == 0xfe && (bytes[1] & 0xc0) == 0xc0)) {
+    return false;
+  }
+
+  return true;
+}
+
 namespace net {
 
 size_t getBinAddr(void* dest, const std::string& ip)

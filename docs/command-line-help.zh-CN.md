@@ -34,7 +34,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
 | DoT / DoH / DNS multi fallback | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot|multi`；server 可写数值 IP 或域名，域名会先用 plain c-ares DNS bootstrap 成 IP 再连接；`multi` 会并行 plain DNS、DoT、DoH，最快结果先用，未完成 resolver 后台填 cache；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncNameResolver.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
-| IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
+| IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；已有两族地址时做 active family 均衡；如果 IPv4 存在且 IPv6 只有 ULA/link-local/site-local/loopback/multicast/unspecified/IPv4-mapped 这类非公网 scope，主选址优先 IPv4；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand` 和 `selectIPAddress()`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
 | DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
 | HTTP/3 / H3 / QUIC / Alt-Svc | 第一阶段能力门；Alt-Svc parser 已落地 | 默认构建仍拒绝 `--enable-http3=true`；只有构建时显式带 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 且使用 OpenSSL TLS 后端时才接受该开关；`Alt-Svc: h3=...` parser 只解析 header 值，未接缓存、下载路径、QUIC 传输、H3 command 或 `h3` ALPN 分发 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/usage_text.h`、`src/AltSvcParser.cc` |
@@ -231,7 +231,8 @@ DoH 规则：
 - `AsyncNameResolverMan::getStatus()` 只要任一地址族成功就返回成功；只有已启动的地址族全失败才返回失败。`AbstractCommand::resolveHostname()` 会立即使用已成功的地址，不等待仍在查询的另一族。
 - `continueAsyncDnsCacheFill()` 会把仍在查询的 resolver 交给后台 `AsyncDnsCacheCommand`；后台后续拿到地址后写入 DNS cache，只有确实新增地址时才尝试唤醒同一下载组创建后续连接。
 - `AbstractCommand::resolveHostname()` 拿到解析结果后写入 DNS cache，再由 `selectIPAddress()` / `getLeastUsedActiveAddressFamily()` 在 IPv4/IPv6 间选择。
-- 当 cache 中 IPv4/IPv6 都可选时，`selectIPAddress()` 会先看同 host/port 当前 active 连接数，优先选择使用更少的地址族；如果 active 数相同，再用 `FileEntry::getNextAddressFamily()` 在同一下载项内轮换；没有 `FileEntry` 或轮换状态不可用时，才退回按 `cuid` 奇偶选择。
+- 当 cache 中 IPv4/IPv6 都可选时，`selectIPAddress()` 会先看 IPv6 scope：如果 IPv4 存在，而 IPv6 只有 ULA `fc00::/7`、link-local `fe80::/10`、site-local `fec0::/10`、loopback、unspecified、multicast 或 IPv4-mapped/compatible 这类非公网地址，主选址优先 IPv4。只有这些 IPv6 时仍会尝试 IPv6，不会把内网/局域网下载场景打死。
+- 如果 IPv6 至少有一个可作为公网单播候选，`selectIPAddress()` 再看同 host/port 当前 active 连接数，优先选择使用更少的地址族；如果 active 数相同，再用 `FileEntry::getNextAddressFamily()` 在同一下载项内轮换；没有 `FileEntry` 或轮换状态不可用时，才退回按 `cuid` 奇偶选择。选中 IPv6 地址族时，会优先使用公网单播 IPv6，再退到 ULA/link-local 等非公网候选。
 - `InitiateConnectionCommand::createBackupConnectCommand()` 会从 DNS cache 里找 opposite-family 地址，创建 `BackupIPv4ConnectCommand`。异步 DNS 开启且 IPv6 未禁用时，`getBackupConnectionDelay()` 返回 `0ms`，备份连接的延迟阈值降为 0，实际启动仍按 `DownloadEngine` 事件循环调度；否则保持传统 `300ms` 延迟。
 - 备份连接胜出时，`ConnectCommand` 会切换到备份 socket。它只在原主 socket 已经通过 `getSocketError()` 报出明确错误时才把原地址标为 bad；如果原地址只是慢，不会因为备份更快就污染 DNS cache。
 - 这仍不是完整 RFC 8305 地址排序队列；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果，后台补齐地址给后续线程复用；当两个地址族已在 cache 中时，连接层用现有主/备份 socket 机制做双栈竞速”。
@@ -240,14 +241,14 @@ DoH 规则：
 
 - aria2 的多连接下载仍由 `RequestGroup`、`FileEntry`、`--split`、`--max-connection-per-server`、DNS cache 和 URI 选择共同决定。双栈 DNS 只提供更多候选地址，不会凭空增加下载分片。
 - 首个连接通常使用最先可用的地址族；后台 resolver 后续写入另一族地址后，只有在确实新增 cache 地址时才唤醒同一下载组继续创建连接。
-- 已有两族地址时，`getLeastUsedActiveAddressFamily()` 先按同 host/port 的 active 连接数平衡 IPv4/IPv6；数量相等再按 `FileEntry` 的轮换状态选族。
+- 已有两族地址时，若 IPv6 不只是本地/非公网 scope，`getLeastUsedActiveAddressFamily()` 先按同 host/port 的 active 连接数平衡 IPv4/IPv6；数量相等再按 `FileEntry` 的轮换状态选族。IPv4 存在且 IPv6 全是本地/非公网 scope 时，主连接持续优先 IPv4，opposite-family 备份连接仍可尝试 IPv6。
 - `BackupIPv4ConnectCommand` 名字带有历史包袱，实际通过 `getBackupAddressFamily()` 做 opposite-family 备份：IPv6 主连时找 IPv4，IPv4 主连时找 IPv6。不要按类名误解为“只会备份 IPv4”。
 - 备份连接是“同一次连接尝试的候补 socket”，不是额外长期下载流。长期同时跑 IPv4/IPv6 要靠后续分片连接各自选到不同地址族。
 
 XP/Win7 注意：
 
 - `configure.ac` 的 mingw 注释说明 `getaddrinfo` 依赖 `_WIN32_WINNT >= 0x0501`；源码还保留了 Windows 地址配置探测路径。
-- `SocketCore::checkAddrconfig()` 在 mingw 下使用 `GetAdaptersAddresses()`；失败时会保守假设 IPv4/IPv6 都可用。因此旧系统若 IPv6 栈坏或 AAAA 查询拖慢，建议显式加 `--disable-ipv6=true`。
+- `SocketCore::checkAddrconfig()` 在 mingw 下使用 `GetAdaptersAddresses()`；失败时会保守假设 IPv4/IPv6 都可用。选址层会把“IPv4 存在但 IPv6 只有 ULA/link-local/site-local/IPv4-mapped 等非公网 scope”的主连接优先放到 IPv4，仍无法解决的旧系统 IPv6 栈故障可显式加 `--disable-ipv6=true`。
 - 默认 `--min-tls-version=TLSv1.2`。老 XP/Win7 的原生 TLS 栈可能不满足现代 TLS/ALPN/SNI 需求；需要兼容时优先考虑 OpenSSL/GnuTLS 构建；涉及 H2 时还必须确认 OpenSSL ALPN 或 GnuTLS ALPN 可用，或只在受控环境降低 TLS 版本。
 - DoT/DoH 在旧 Windows 上没有额外的系统 DNS 魔法：DoT/DoH server 连接仍走普通 socket + TLS。域名 server 的 bootstrap 复用 c-ares/plain DNS，不引入新的系统 API；证书校验、TLS 版本、IPv6 可达性仍受构建和系统环境影响。
 
@@ -777,6 +778,7 @@ aria2c --async-dns=true --disable-ipv6=false -s 16 -x 16 --console-log-level=net
 ```
 
 这会在双栈可用时并发启动 A/AAAA 查询，任一地址族先成功就先建连；后台拿到另一族新地址后会写入 DNS cache 并唤醒后续连接。已有 IPv4/IPv6 两族地址时，异步 DNS 路径会把 opposite-family 备份连接延迟阈值降为 `0ms`，方便主/备份连接尽早竞速；`--disable-ipv6=true` 或无异步 DNS 构建仍保持保守路径。
+如果解析结果同时包含 IPv4 和仅限本地/非公网 scope 的 IPv6（例如 ULA `fc00::/7`、link-local `fe80::/10` 或 site-local `fec0::/10`），主连接会优先 IPv4，避免“IPv4 能出公网、IPv6 只在局域网里有地址”的机器把首连押到 IPv6 黑洞；备份连接仍可尝试 IPv6。
 真正让同一下载任务长期同时使用 IPv4/IPv6 多条连接，还需要 DNS cache 里已有两族地址、文件可分片、`--split>=2`，并且同一 host 的 `--max-connection-per-server` 足够大，例如第二条命令里的 `-x 16`。backup connection 是主/备份竞速，胜者接管 socket，不能等同于长期两条下载流。
 
 ### 5.6 网络调试日志

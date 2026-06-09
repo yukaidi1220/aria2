@@ -25,6 +25,7 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetSocketError);
   CPPUNIT_TEST(testInetNtop);
   CPPUNIT_TEST(testInetPton);
+  CPPUNIT_TEST(testIsIPv6GlobalUnicastAddress);
   CPPUNIT_TEST(testGetBinAddr);
   CPPUNIT_TEST(testVerifyHostname);
 #ifdef ENABLE_SSL
@@ -54,6 +55,7 @@ public:
   void testGetSocketError();
   void testInetNtop();
   void testInetPton();
+  void testIsIPv6GlobalUnicastAddress();
   void testGetBinAddr();
   void testVerifyHostname();
 #ifdef ENABLE_SSL
@@ -179,6 +181,22 @@ void SocketCoreTest::testInetPton()
   unsigned char dest[16];
   CPPUNIT_ASSERT_EQUAL(-1, inetPton(AF_INET, "localhost", &dest));
   CPPUNIT_ASSERT_EQUAL(-1, inetPton(AF_INET6, "localhost", &dest));
+}
+
+void SocketCoreTest::testIsIPv6GlobalUnicastAddress()
+{
+  CPPUNIT_ASSERT(isIPv6GlobalUnicastAddress("2001:db8::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("fd00::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("fc00::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("fe80::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("fec0::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("::"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("::ffff:192.0.2.1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("::192.0.2.1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("ff02::1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("192.0.2.1"));
+  CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("localhost"));
 }
 
 void SocketCoreTest::testGetBinAddr()
