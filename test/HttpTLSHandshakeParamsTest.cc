@@ -6,6 +6,7 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "Exception.h"
 #include "HttpProtocol.h"
 #include "Option.h"
 #include "Request.h"
@@ -20,6 +21,10 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDefaultAlpnProtocolsEmpty);
   CPPUNIT_TEST(testHttp2AlpnProtocolsWhenEnabled);
   CPPUNIT_TEST(testHttp2AlpnProtocolsDisabledByPipelining);
+  CPPUNIT_TEST(testECHConfigBase64EnablesRequiredECH);
+  CPPUNIT_TEST(testEnableECHRequiresConfig);
+  CPPUNIT_TEST(testECHRejectsBadBase64);
+  CPPUNIT_TEST(testECHRejectsSNIOverride);
   CPPUNIT_TEST(testHostsMappingControlsVerifyHost);
   CPPUNIT_TEST(testExplicitSNIOverridesMappedVerifyHost);
   CPPUNIT_TEST(testMappedSNIRequestHostBeatsDefaultHost);
@@ -31,6 +36,10 @@ public:
   void testDefaultAlpnProtocolsEmpty();
   void testHttp2AlpnProtocolsWhenEnabled();
   void testHttp2AlpnProtocolsDisabledByPipelining();
+  void testECHConfigBase64EnablesRequiredECH();
+  void testEnableECHRequiresConfig();
+  void testECHRejectsBadBase64();
+  void testECHRejectsSNIOverride();
   void testHostsMappingControlsVerifyHost();
   void testExplicitSNIOverridesMappedVerifyHost();
   void testMappedSNIRequestHostBeatsDefaultHost();
@@ -103,6 +112,56 @@ void HttpTLSHandshakeParamsTest::testHttp2AlpnProtocolsDisabledByPipelining()
   auto protocols = createHttpAlpnProtocols(&option);
 
   CPPUNIT_ASSERT(protocols.empty());
+}
+
+void HttpTLSHandshakeParamsTest::testECHConfigBase64EnablesRequiredECH()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_ECH_CONFIG_BASE64, "AQIDBA==");
+
+  auto params = createHttpTLSHandshakeParams(&request, &option);
+
+  CPPUNIT_ASSERT(params.echParams.requested);
+  CPPUNIT_ASSERT(params.echParams.required);
+  CPPUNIT_ASSERT_EQUAL(std::string("\x01\x02\x03\x04", 4),
+                       params.echParams.configList);
+  CPPUNIT_ASSERT_EQUAL(std::string("manual"), params.echParams.source);
+}
+
+void HttpTLSHandshakeParamsTest::testEnableECHRequiresConfig()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_ENABLE_ECH, A2_V_TRUE);
+
+  CPPUNIT_ASSERT_THROW(createHttpTLSHandshakeParams(&request, &option),
+                       Exception);
+}
+
+void HttpTLSHandshakeParamsTest::testECHRejectsBadBase64()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_ECH_CONFIG_BASE64, "not/base64");
+
+  CPPUNIT_ASSERT_THROW(createHttpTLSHandshakeParams(&request, &option),
+                       Exception);
+}
+
+void HttpTLSHandshakeParamsTest::testECHRejectsSNIOverride()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_ECH_CONFIG_BASE64, "AQIDBA==");
+  option.put(PREF_TLS_SNI_HOST, "front.example");
+
+  CPPUNIT_ASSERT_THROW(createHttpTLSHandshakeParams(&request, &option),
+                       Exception);
 }
 
 void HttpTLSHandshakeParamsTest::testHostsMappingControlsVerifyHost()

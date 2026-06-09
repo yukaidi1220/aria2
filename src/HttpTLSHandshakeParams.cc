@@ -36,16 +36,98 @@
 
 #ifdef ENABLE_SSL
 
+#include <cctype>
+#include <iterator>
 #include <vector>
 
+#include "DlAbortEx.h"
 #include "HostMapping.h"
 #include "HttpProtocol.h"
 #include "Option.h"
 #include "Request.h"
 #include "TLSSNIHostMapping.h"
+#include "base64.h"
 #include "prefs.h"
 
 namespace aria2 {
+
+namespace {
+
+bool isBase64Char(unsigned char c)
+{
+  return ('A' <= c && c <= 'Z') || ('a' <= c && c <= 'z') ||
+         ('0' <= c && c <= '9') || c == '+' || c == '/';
+}
+
+std::string normalizeECHConfigBase64(const std::string& value)
+{
+  std::string normalized;
+  for (auto c : value) {
+    auto uc = static_cast<unsigned char>(c);
+    if (std::isspace(uc)) {
+      continue;
+    }
+    normalized.push_back(c);
+  }
+  return normalized;
+}
+
+std::string decodeECHConfigBase64(const std::string& value)
+{
+  auto encoded = normalizeECHConfigBase64(value);
+  if (encoded.empty() || encoded.size() % 4 != 0) {
+    throw DL_ABORT_EX("Bad ECHConfigList base64");
+  }
+
+  size_t padding = 0;
+  for (size_t i = 0; i < encoded.size(); ++i) {
+    auto c = static_cast<unsigned char>(encoded[i]);
+    if (c == '=') {
+      ++padding;
+      if (padding > 2 || i < encoded.size() - 2) {
+        throw DL_ABORT_EX("Bad ECHConfigList base64");
+      }
+      continue;
+    }
+    if (padding || !isBase64Char(c)) {
+      throw DL_ABORT_EX("Bad ECHConfigList base64");
+    }
+  }
+
+  auto decoded = base64::decode(std::begin(encoded), std::end(encoded));
+  if (decoded.empty()) {
+    throw DL_ABORT_EX("Bad ECHConfigList base64");
+  }
+  return decoded;
+}
+
+TLSECHParams createHttpECHParams(const Option* option,
+                                 const TLSSNIHostConfig& sniHostConfig)
+{
+  TLSECHParams echParams;
+  auto enabled = option && option->getAsBool(PREF_ENABLE_ECH);
+  auto configured = option && option->defined(PREF_ECH_CONFIG_BASE64);
+  if (!enabled && !configured) {
+    return echParams;
+  }
+
+  if (sniHostConfig.overridden) {
+    throw DL_ABORT_EX(
+        "TLS ECH cannot be combined with --tls-sni-host override");
+  }
+  if (!configured) {
+    throw DL_ABORT_EX("TLS ECH requires --ech-config-base64");
+  }
+
+  echParams.requested = true;
+  echParams.required = true;
+  echParams.configList =
+      decodeECHConfigBase64(option->get(PREF_ECH_CONFIG_BASE64));
+  echParams.source = "manual";
+  return echParams;
+}
+
+} // namespace
 
 std::vector<std::string> createHttpAlpnProtocols(const Option* option)
 {
@@ -68,9 +150,11 @@ TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
   const auto verifyHost = getLogicalHostForRequest(request->getHost(), option);
   auto sniHostConfig =
       getTLSSNIHostConfig(request->getHost(), verifyHost, option);
-  return TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
-                            createHttpAlpnProtocols(option),
-                            sniHostConfig.overridden);
+  auto params = TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
+                                   createHttpAlpnProtocols(option),
+                                   sniHostConfig.overridden);
+  params.echParams = createHttpECHParams(option, sniHostConfig);
+  return params;
 }
 
 } // namespace aria2

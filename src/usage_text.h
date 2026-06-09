@@ -556,8 +556,15 @@
     "                              IP address. Mappings are looked up using the\n" \
     "                              current request host after redirects.")
 #define TEXT_ENABLE_ECH                                                 \
-  _(" --enable-ech[=false]       Reserve the ECH option name. Encrypted ClientHello\n" \
-    "                              is not implemented; setting true fails fast.")
+  _(" --enable-ech[=true|false] Enable Encrypted ClientHello for HTTPS when\n" \
+    "                              --ech-config-base64 is also set. ECH is\n" \
+    "                              required when enabled; unsupported TLS\n" \
+    "                              backends fail gracefully.")
+#define TEXT_ECH_CONFIG_BASE64                                          \
+  _(" --ech-config-base64=BASE64  Set a base64 encoded binary ECHConfigList.\n" \
+    "                              This enables required ECH for HTTPS. It\n" \
+    "                              cannot be combined with --tls-sni-host\n" \
+    "                              overrides.")
 #define TEXT_ENABLE_HTTP2                                               \
   _(" --enable-http2[=true|false]\n"                                    \
     "                              Enable experimental HTTP/2 downloads over HTTPS\n" \

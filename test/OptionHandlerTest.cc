@@ -115,8 +115,19 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
 
   options.clear();
   options.push_back(KeyVals::value_type(PREF_ENABLE_ECH->k, A2_V_TRUE));
+#ifdef ENABLE_SSL
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE), option.get(PREF_ENABLE_ECH));
+#else  // !ENABLE_SSL
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_ECH));
+#endif // !ENABLE_SSL
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ECH_CONFIG_BASE64->k, "AQID"));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string("AQID"),
+                       option.get(PREF_ECH_CONFIG_BASE64));
 
   options.clear();
   options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP2->k, A2_V_FALSE));

@@ -1107,6 +1107,11 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
     }
 
     if (rv == TLS_ERR_OK) {
+      if (tlsctx->getSide() == TLS_CLIENT && params.echParams.required &&
+          tlsSession_->getECHStatus() != TLS_ECH_STATUS_ACCEPTED) {
+        throw DL_ABORT_EX("TLS ECH was not accepted");
+      }
+
       // We're good, more or less.
       // 1. Construct peerinfo
       std::stringstream ss;

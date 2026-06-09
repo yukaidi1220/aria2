@@ -477,13 +477,24 @@ HTTP Specific Options
   If the first request is redirected to ``redirect.example``, the redirected
   HTTPS request uses ``redirect-front.example`` as the SNI hostname.
 
-.. option:: --enable-ech [false]
+.. option:: --enable-ech [true|false]
 
-  Reserve the Encrypted ClientHello (ECH) option name for future use. ECH is
-  not implemented in this aria2 build. Setting this option to ``true`` fails
-  during option parsing instead of silently falling back to ordinary TLS.
+  Enable required Encrypted ClientHello (ECH) for HTTPS requests when
+  :option:`--ech-config-base64` is also set.  aria2 sends the configured
+  ECHConfigList to the TLS backend and fails the TLS handshake if ECH is not
+  accepted.  Unsupported TLS backends fail gracefully instead of silently
+  falling back to ordinary TLS.
 
   Default: ``false``
+
+.. option:: --ech-config-base64=BASE64
+
+  Set a base64 encoded binary ECHConfigList.  Supplying this option also
+  enables required ECH for HTTPS.  This first stage only supports manual
+  ECHConfigList input; HTTPS/SVCB discovery, retry configs, and HTTP/3
+  discovery are not implemented yet.
+
+  This option cannot be combined with :option:`--tls-sni-host` overrides.
 
 .. option:: --enable-http2 [true|false]
 

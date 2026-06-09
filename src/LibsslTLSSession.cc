@@ -54,6 +54,12 @@ namespace aria2 {
 #  define A2_OPENSSL_HAS_ECH 1
 #endif // OpenSSL ECH API
 
+#if defined(A2_OPENSSL_HAS_ECH) &&                                         \
+    defined(HAVE_DECL_SSL_ECH_GET1_STATUS) &&                              \
+    HAVE_DECL_SSL_ECH_GET1_STATUS && defined(HAVE_SSL_ECH_GET1_STATUS)
+#  define A2_OPENSSL_HAS_ECH_STATUS 1
+#endif // OpenSSL ECH status API
+
 #if !OPENSSL_101_API
 namespace {
 const unsigned char* ASN1_STRING_get0_data(ASN1_STRING* x)
@@ -285,6 +291,37 @@ int OpenSSLTLSSession::setECHConfigList(const std::string& echConfigList)
 #else  // !A2_OPENSSL_HAS_ECH
   return TLS_ERR_ERROR;
 #endif // !A2_OPENSSL_HAS_ECH
+}
+
+TLSECHStatus OpenSSLTLSSession::getECHStatus() const
+{
+#ifdef A2_OPENSSL_HAS_ECH_STATUS
+  char* innerName = nullptr;
+  char* outerName = nullptr;
+  auto status = SSL_ech_get1_status(ssl_, &innerName, &outerName);
+  if (innerName) {
+    OPENSSL_free(innerName);
+  }
+  if (outerName) {
+    OPENSSL_free(outerName);
+  }
+
+#  if defined(HAVE_DECL_SSL_ECH_STATUS_SUCCESS) &&                         \
+      HAVE_DECL_SSL_ECH_STATUS_SUCCESS
+  if (status == SSL_ECH_STATUS_SUCCESS) {
+    return TLS_ECH_STATUS_ACCEPTED;
+  }
+#  endif // HAVE_DECL_SSL_ECH_STATUS_SUCCESS
+#  if defined(HAVE_DECL_SSL_ECH_STATUS_FAILED) &&                          \
+      HAVE_DECL_SSL_ECH_STATUS_FAILED
+  if (status == SSL_ECH_STATUS_FAILED) {
+    return TLS_ECH_STATUS_REJECTED;
+  }
+#  endif // HAVE_DECL_SSL_ECH_STATUS_FAILED
+  return TLS_ECH_STATUS_UNSUPPORTED;
+#else  // !A2_OPENSSL_HAS_ECH_STATUS
+  return TLSSession::getECHStatus();
+#endif // !A2_OPENSSL_HAS_ECH_STATUS
 }
 
 int OpenSSLTLSSession::closeConnection()

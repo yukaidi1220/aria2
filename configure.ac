@@ -424,14 +424,17 @@ if test "x$with_openssl" = "xyes" && test "x$have_ssl" != "xyes"; then
     AC_CHECK_FUNCS([EVP_sha384])
     AC_CHECK_FUNCS([EVP_sha512])
     AC_CHECK_HEADERS([openssl/ech.h])
-    AC_CHECK_DECLS([SSL_set1_ech_config_list],
+    AC_CHECK_DECLS([SSL_set1_ech_config_list,
+                    SSL_ech_get1_status,
+                    SSL_ECH_STATUS_SUCCESS,
+                    SSL_ECH_STATUS_FAILED],
                    [], [], [[
 #include <openssl/ssl.h>
 #ifdef HAVE_OPENSSL_ECH_H
 # include <openssl/ech.h>
 #endif
 ]])
-    AC_CHECK_FUNCS([SSL_set1_ech_config_list])
+    AC_CHECK_FUNCS([SSL_set1_ech_config_list SSL_ech_get1_status])
     LIBS=$save_LIBS
   else
     AC_MSG_WARN([$OPENSSL_PKG_ERRORS])

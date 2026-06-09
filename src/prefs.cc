@@ -426,6 +426,8 @@ PrefPtr PREF_TLS_SNI_HOST = makePref("tls-sni-host");
 PrefPtr PREF_HOSTS_MAPPING = makePref("hosts-mapping");
 // value: true | false
 PrefPtr PREF_ENABLE_ECH = makePref("enable-ech");
+// value: base64 encoded binary ECHConfigList
+PrefPtr PREF_ECH_CONFIG_BASE64 = makePref("ech-config-base64");
 // value: string that your file system recognizes as a file name.
 PrefPtr PREF_CERTIFICATE = makePref("certificate");
 // value: string that your file system recognizes as a file name.

@@ -77,6 +77,7 @@ public:
   virtual bool supportsECHConfigList() const CXX11_OVERRIDE;
   virtual int setECHConfigList(const std::string& echConfigList)
       CXX11_OVERRIDE;
+  virtual TLSECHStatus getECHStatus() const CXX11_OVERRIDE;
   virtual bool peerCertificateMatchesHostname(
       const std::string& hostname) const CXX11_OVERRIDE;
   virtual int closeConnection() CXX11_OVERRIDE;

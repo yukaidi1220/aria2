@@ -379,6 +379,8 @@ extern PrefPtr PREF_TLS_SNI_HOST;
 extern PrefPtr PREF_HOSTS_MAPPING;
 // value: true | false
 extern PrefPtr PREF_ENABLE_ECH;
+// value: base64 encoded binary ECHConfigList
+extern PrefPtr PREF_ECH_CONFIG_BASE64;
 // value: string that your file system recognizes as a file name.
 extern PrefPtr PREF_CERTIFICATE;
 // value: string that your file system recognizes as a file name.
