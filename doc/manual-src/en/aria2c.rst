@@ -485,13 +485,22 @@ HTTP Specific Options
 
   Default: ``false``
 
-.. option:: --enable-http2 [false]
+.. option:: --enable-http2 [true|false]
 
-  Reserve the HTTP/2 option name for future use. HTTP/2 is not implemented in
-  this aria2 build. Setting this option to ``true`` fails during option parsing
+  Enable experimental HTTP/2 downloads over HTTPS when aria2 is built with
+  libnghttp2.  Builds without libnghttp2 reject ``true`` during option parsing
   instead of silently continuing as HTTP/1.1.
 
-  This option does not enable ALPN negotiation and does not use libnghttp2.
+  When enabled, aria2 advertises ``h2`` and ``http/1.1`` with TLS ALPN unless
+  :option:`--enable-http-pipelining` is enabled.  TLS backends without ALPN
+  support keep the HTTPS download working by falling back to HTTP/1.1.
+
+  HTTP/2 connections can be reused by active streams or kept briefly in the
+  idle HTTP/2 pool.  Cross-origin reuse is conservative: it is limited to the
+  same download item, requires HTTPS with negotiated ``h2``, avoids proxies
+  and explicit SNI overrides, requires the candidate connection's peer address
+  and port to match the current target, and requires the peer certificate to
+  cover the target host.
 
   Default: ``false``
 
