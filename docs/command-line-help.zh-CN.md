@@ -167,7 +167,7 @@ DoH 规则：
 - URL 必须有 path，拒绝 userinfo、密码；query 允许作为 path 的一部分发送。fragment 被当作 TLS/HTTP 逻辑主机名，只允许合法 DNS 主机名，不能是 IP、`localhost` 或单标签名。
 - `AsyncDohNameResolver.cc::createDohRequest()` 是 HTTP/1.1 fallback 路径，发送 `POST`、`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
 - 写了 `#TLS_HOST` 时，DoH TLS SNI、证书校验主机和 HTTP `Host:` 头都使用该主机；TCP 仍连接 URL 里的数值地址，HTTP request target 不包含 fragment。
-- 有 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时，DoH TLS 会请求配置 ALPN `h2,http/1.1`。服务端选中 `h2` 时使用 `Http2SingleStreamExchange`；未选中或 TLS 后端无 ALPN 时回落 HTTP/1.1。
+- `AsyncNameResolverMan::configureAsyncNameResolverMan()` 会根据 `--enable-http2=true` 且 `--enable-http-pipelining=false` 设置 `dohHttp2_`；有 `HAVE_LIBNGHTTP2` 时，`AsyncDohNameResolver` 才会给 DoH TLS 请求配置 ALPN `h2,http/1.1`。服务端选中 `h2` 时使用 `Http2SingleStreamExchange`；未选中或 TLS 后端无 ALPN 时回落 HTTP/1.1。
 - DoH over H2 的请求头由 `createDohHttp2Headers()` 生成：`:method=POST`、`:scheme=https`、`:authority`、`:path`、`accept: application/dns-message`、`content-type: application/dns-message`、`content-length`。DNS query body 通过 `Http2Session::submitRequest(headers, body)` 的 nghttp2 DATA provider 发送，并在 body 读完时置 `NGHTTP2_DATA_FLAG_EOF`。
 - HTTP/1.1 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。HTTP/2 响应要求 `:status=200`、stream 正常结束且 DNS message body 不超过上限。当前 DoH 不复用普通下载链路的 H2 连接，也不支持 DoH over H3。
 
@@ -178,6 +178,7 @@ DoH 规则：
 - `AsyncNameResolverMan::getStatus()` 只要任一地址族成功就返回成功；只有已启动的地址族全失败才返回失败。`AbstractCommand::resolveHostname()` 会立即使用已成功的地址，不等待仍在查询的另一族。
 - `continueAsyncDnsCacheFill()` 会把仍在查询的 resolver 交给后台 `AsyncDnsCacheCommand`；后台后续拿到地址后写入 DNS cache，只有确实新增地址时才尝试唤醒同一下载组创建后续连接。
 - `AbstractCommand::resolveHostname()` 拿到解析结果后写入 DNS cache，再由 `selectIPAddress()` / `getLeastUsedActiveAddressFamily()` 在 IPv4/IPv6 间选择。
+- 当 cache 中 IPv4/IPv6 都可选时，`selectIPAddress()` 会先看同 host/port 当前 active 连接数，优先选择使用更少的地址族；如果 active 数相同，再用 `FileEntry::getNextAddressFamily()` 在同一下载项内轮换；没有 `FileEntry` 或轮换状态不可用时，才退回按 `cuid` 奇偶选择。
 - `InitiateConnectionCommand::createBackupConnectCommand()` 会从 DNS cache 里找 opposite-family 地址，创建 `BackupIPv4ConnectCommand`。异步 DNS 开启且 IPv6 未禁用时，`getBackupConnectionDelay()` 返回 `0ms`，备份连接的延迟阈值降为 0，实际启动仍按 `DownloadEngine` 事件循环调度；否则保持传统 `300ms` 延迟。
 - 备份连接胜出时，`ConnectCommand` 会切换到备份 socket。它只在原主 socket 已经通过 `getSocketError()` 报出明确错误时才把原地址标为 bad；如果原地址只是慢，不会因为备份更快就污染 DNS cache。
 - 这仍不是完整 RFC 8305 地址排序队列；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果，后台补齐地址给后续线程复用；当两个地址族已在 cache 中时，连接层用现有主/备份 socket 机制做双栈竞速”。
@@ -269,7 +270,7 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 - `--ech-config-base64=BASE64` 会隐式启用 required ECH；也可以显式写 `--enable-ech=true --ech-config-base64=BASE64`。
 - `--enable-ech=true` 但没有 `--ech-config-base64` 会失败，不会尝试普通 TLS fallback。
 - `--ech-config-base64` 必须是标准 base64，解码结果不能为空；实际 ECHConfigList 结构由 TLS 后端继续校验。
-- `--tls-sni-host` 只要造成 SNI override，就不能和 ECH 混用。当前阶段先避免 outer/inner SNI 语义被 FakeSNI 搅乱。
+- `--tls-sni-host` 只要让 `TLSSNIHostConfig::overridden` 为 true，就不能和 ECH 混用；这包括显式单值 override，也包括 `TARGET:SNI` 映射命中。映射未命中、普通 SNI 与证书校验主机一致时不触发这个拒绝。当前阶段先避免 outer/inner SNI 语义被 FakeSNI 搅乱。
 - TLS 后端不支持 ECHConfigList，或者握手成功但 ECH 没被接受，都会中止本次 HTTPS 下载。
 
 未实现边界：
@@ -303,6 +304,7 @@ aria2c --enable-ech=true --ech-config-base64=BASE64 https://origin.example/file
 - ECH 需要 OpenSSL ECH API 和手动 ECHConfigList；WinTLS/AppleTLS 当前不支持 ECH。旧系统如果启用但 TLS 后端不支持，会以明确错误失败，不会崩溃。
 - FakeSNI override 需要 TLS 后端允许“发送的 SNI”和“证书校验主机”不同。OpenSSL/GnuTLS 当前源码声明支持；WinTLS/AppleTLS 没声明，遇到 override 会提前失败。普通 SNI 与证书校验主机一致时不属于 FakeSNI override。
 - DoT/DoH 依赖 SSL 构建和可用的数值 DNS server。老系统如果 IPv6 支持不稳，建议显式 `--disable-ipv6=true`，避免 AAAA 查询或 IPv6 server 连接拖慢。
+- 32-bit MinGW 构建中 `OptionHandlerFactory.cc` 默认把 `--disable-ipv6` 设为 `true`，因为 Vista 前后的 IPv6 API 可用性差异容易踩坑；其他构建通常默认 `false`。单一基线里要把这个当作构建差异处理，不要在运行期假设 IPv6 必然可用。
 - 默认最低 TLS 版本是 `TLSv1.2`。为了兼容旧系统降低 TLS 版本只适合受控环境；公网下载优先换带 OpenSSL/GnuTLS 的构建，比关证书校验靠谱得多。
 - 没有异步 DNS 的构建不存在 `--async-dns-mode=doh|dot` 这条路；无 SSL 构建即使有异步 DNS 也只接受 `cares`。旧系统兼容文档里要把这点写死，别让用户以为 DoH/DoT 会自动降级成普通 DNS。
 
