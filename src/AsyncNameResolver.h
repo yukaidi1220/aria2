@@ -61,7 +61,8 @@ private:
   std::string hostname_;
 
 public:
-  AsyncNameResolver(int family, const std::string& servers);
+  AsyncNameResolver(int family, const std::string& servers,
+                    bool useTcp = false);
 
   virtual ~AsyncNameResolver();
 

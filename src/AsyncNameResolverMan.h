@@ -40,6 +40,7 @@
 #include <vector>
 #include <string>
 #include <memory>
+#include <utility>
 
 namespace aria2 {
 
@@ -55,6 +56,7 @@ public:
 #ifdef ENABLE_SSL
     RESOLVER_DOT,
     RESOLVER_DOH,
+    RESOLVER_MULTI,
 #endif // ENABLE_SSL
   };
 
@@ -82,7 +84,7 @@ public:
   // Removes resolvers from DownloadEngine.
   void disableNameResolverCheck(DownloadEngine* e, Command* command);
   // Returns true if any of resolvers are added in DownloadEngine.
-  bool resolverChecked() const { return resolverCheck_; }
+  bool resolverChecked() const;
   // Returns status value: 0 for inprogress, 1 for success and -1 for
   // failure.
   int getStatus() const;
@@ -103,19 +105,29 @@ public:
   virtual std::shared_ptr<AsyncResolver> createResolver(int family) const;
 
 private:
+  struct ResolverSlot {
+    explicit ResolverSlot(std::shared_ptr<AsyncResolver> resolver)
+        : resolver(std::move(resolver)), checked(false)
+    {
+    }
+
+    std::shared_ptr<AsyncResolver> resolver;
+    bool checked;
+  };
+
   void startAsyncFamily(const std::string& hostname, int family,
                         DownloadEngine* e, Command* command);
+  std::vector<std::shared_ptr<AsyncResolver>>
+  createResolvers(int family) const;
   void setNameResolverCheck(size_t resolverIndex, DownloadEngine* e,
                             Command* command);
   void disableNameResolverCheck(size_t index, DownloadEngine* e,
                                 Command* command);
 
-  std::shared_ptr<AsyncResolver> asyncNameResolver_[2];
+  std::vector<ResolverSlot> resolverSlots_;
   std::string servers_;
   ResolverMode resolverMode_;
   bool dohHttp2_;
-  size_t numResolver_;
-  int resolverCheck_;
   bool ipv4_;
   bool ipv6_;
 };

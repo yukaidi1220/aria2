@@ -154,6 +154,7 @@ const std::string V_FTP("ftp");
 const std::string V_CARES("cares");
 const std::string V_DOT("dot");
 const std::string V_DOH("doh");
+const std::string V_MULTI("multi");
 const std::string A2_V_TLS11("TLSv1.1");
 const std::string A2_V_TLS12("TLSv1.2");
 const std::string A2_V_TLS13("TLSv1.3");
@@ -248,7 +249,7 @@ PrefPtr PREF_STOP = makePref("stop");
 PrefPtr PREF_QUIET = makePref("quiet");
 // value: true | false
 PrefPtr PREF_ASYNC_DNS = makePref("async-dns");
-// value: cares
+// value: cares | dot | doh | multi
 PrefPtr PREF_ASYNC_DNS_MODE = makePref("async-dns-mode");
 // value: 1*digit
 PrefPtr PREF_SUMMARY_INTERVAL = makePref("summary-interval");

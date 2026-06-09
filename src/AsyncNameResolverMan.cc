@@ -35,8 +35,12 @@
 #include "AsyncNameResolverMan.h"
 
 #include <cassert>
+#include <cstdint>
+#include <cstring>
+#include <iterator>
 #include <utility>
 
+#include "A2STR.h"
 #include "AsyncNameResolver.h"
 #include "AsyncResolver.h"
 #ifdef ENABLE_SSL
@@ -53,6 +57,7 @@
 #include "SocketCore.h"
 #include "prefs.h"
 #include "a2functional.h"
+#include "util.h"
 
 namespace aria2 {
 
@@ -88,6 +93,8 @@ const char* resolverModeToString(AsyncNameResolverMan::ResolverMode mode)
     return "DoT";
   case AsyncNameResolverMan::RESOLVER_DOH:
     return "DoH";
+  case AsyncNameResolverMan::RESOLVER_MULTI:
+    return "multi";
 #endif // ENABLE_SSL
   }
   abort();
@@ -120,27 +127,174 @@ AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
   if (mode == V_DOH) {
     return AsyncNameResolverMan::RESOLVER_DOH;
   }
+  if (mode == V_MULTI) {
+    return AsyncNameResolverMan::RESOLVER_MULTI;
+  }
 #endif // ENABLE_SSL
   abort();
 }
+
+#ifdef ENABLE_SSL
+struct AsyncDnsMultiServerConfig {
+  std::string udpServers;
+  std::string tcpServers;
+  std::vector<AsyncDnsServerConfig> dotServers;
+  std::vector<AsyncDohServerConfig> dohServers;
+};
+
+bool startsWith(const std::string& s, const char* prefix)
+{
+  auto prefixLen = strlen(prefix);
+  return s.size() >= prefixLen && s.compare(0, prefixLen, prefix) == 0;
+}
+
+void appendCsv(std::string& dst, const std::string& value)
+{
+  if (!dst.empty()) {
+    dst += ",";
+  }
+  dst += value;
+}
+
+bool parsePlainDnsServer(std::string& host, std::string& port,
+                         const std::string& server)
+{
+  if (server.empty()) {
+    return false;
+  }
+
+  if (server[0] == '[') {
+    auto closeBracket = server.find(']');
+    if (closeBracket == std::string::npos || closeBracket == 1) {
+      return false;
+    }
+    auto rest = util::strip(server.substr(closeBracket + 1));
+    if (!rest.empty()) {
+      if (rest[0] != ':') {
+        return false;
+      }
+      port = util::strip(rest.substr(1));
+      if (port.empty()) {
+        return false;
+      }
+    }
+    host = server.substr(1, closeBracket - 1);
+    return true;
+  }
+
+  auto firstColon = server.find(':');
+  if (firstColon != std::string::npos &&
+      server.find(':', firstColon + 1) == std::string::npos) {
+    host = util::strip(server.substr(0, firstColon));
+    port = util::strip(server.substr(firstColon + 1));
+    if (port.empty()) {
+      return false;
+    }
+    return true;
+  }
+
+  host = server;
+  return true;
+}
+
+bool isValidPlainDnsPort(const std::string& port)
+{
+  if (port.empty()) {
+    return false;
+  }
+
+  uint32_t n;
+  return util::parseUIntNoThrow(n, port) && n > 0 && n <= UINT16_MAX;
+}
+
+std::string normalizePlainDnsServer(const std::string& value)
+{
+  auto server = util::strip(value);
+  std::string host;
+  std::string port;
+  if (!parsePlainDnsServer(host, port, server) || host.empty() ||
+      !util::isNumericHost(host) ||
+      (!port.empty() && !isValidPlainDnsPort(port))) {
+    throw DL_ABORT_EX(
+        fmt("Bad async DNS plain server '%s': expected a numeric address "
+            "with optional port",
+            value.c_str()));
+  }
+  return server;
+}
+
+AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
+    const std::string& value)
+{
+  AsyncDnsMultiServerConfig config;
+  if (value.empty()) {
+    return config;
+  }
+
+  std::vector<std::string> entries;
+  util::split(std::begin(value), std::end(value), std::back_inserter(entries),
+              ',', true, true);
+  for (auto entry : entries) {
+    entry = util::strip(entry);
+    if (entry.empty()) {
+      continue;
+    }
+    if (startsWith(entry, "https://")) {
+      config.dohServers.push_back(parseAsyncDnsDohServerConfig(entry));
+    }
+    else if (startsWith(entry, "dot://")) {
+      config.dotServers.push_back(
+          parseAsyncDnsDotServerConfig(entry.substr(strlen("dot://"))));
+    }
+    else if (startsWith(entry, "tcp://")) {
+      appendCsv(config.tcpServers,
+                normalizePlainDnsServer(entry.substr(strlen("tcp://"))));
+    }
+    else if (startsWith(entry, "udp://")) {
+      appendCsv(config.udpServers,
+                normalizePlainDnsServer(entry.substr(strlen("udp://"))));
+    }
+    else if (entry.find("://") != std::string::npos) {
+      throw DL_ABORT_EX(
+          fmt("Bad async DNS multi server '%s': unsupported scheme",
+              entry.c_str()));
+    }
+    else {
+      appendCsv(config.udpServers, normalizePlainDnsServer(entry));
+    }
+  }
+  return config;
+}
+#endif // ENABLE_SSL
 } // namespace
 
 AsyncNameResolverMan::AsyncNameResolverMan()
     : resolverMode_(RESOLVER_CARES),
       dohHttp2_(false),
-      numResolver_(0),
-      resolverCheck_(0),
       ipv4_(true),
       ipv6_(true)
 {
 }
 
-AsyncNameResolverMan::~AsyncNameResolverMan() { assert(!resolverCheck_); }
+AsyncNameResolverMan::~AsyncNameResolverMan()
+{
+  assert(!resolverChecked());
+}
 
 bool AsyncNameResolverMan::started() const
 {
-  for (size_t i = 0; i < numResolver_; ++i) {
-    if (asyncNameResolver_[i]) {
+  for (const auto& slot : resolverSlots_) {
+    if (slot.resolver) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool AsyncNameResolverMan::resolverChecked() const
+{
+  for (const auto& slot : resolverSlots_) {
+    if (slot.checked) {
       return true;
     }
   }
@@ -150,7 +304,8 @@ bool AsyncNameResolverMan::started() const
 void AsyncNameResolverMan::startAsync(const std::string& hostname,
                                       DownloadEngine* e, Command* command)
 {
-  numResolver_ = 0;
+  assert(!resolverChecked());
+  resolverSlots_.clear();
   A2_LOG_NETWORK(
       fmt("DNS: start resolving %s using %s", hostname.c_str(),
           resolverModeToString(resolverMode_)));
@@ -165,11 +320,9 @@ void AsyncNameResolverMan::startAsync(const std::string& hostname,
   // front of IPv6 address in getResolvedAddress().
   if (ipv6_) {
     startAsyncFamily(hostname, AF_INET6, e, command);
-    ++numResolver_;
   }
   if (ipv4_) {
     startAsyncFamily(hostname, AF_INET, e, command);
-    ++numResolver_;
   }
   A2_LOG_INFO(
       fmt(MSG_RESOLVING_HOSTNAME, command->getCuid(), hostname.c_str()));
@@ -196,28 +349,74 @@ std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
         family, std::move(dohServers), AsyncDohTransportFactory(), dohHttp2_,
         AsyncDohBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_));
   }
+  case RESOLVER_MULTI:
+    return std::make_shared<AsyncNameResolver>(family, std::string());
 #endif // ENABLE_SSL
   }
   abort();
+}
+
+std::vector<std::shared_ptr<AsyncResolver>>
+AsyncNameResolverMan::createResolvers(int family) const
+{
+  std::vector<std::shared_ptr<AsyncResolver>> resolvers;
+#ifdef ENABLE_SSL
+  if (resolverMode_ == RESOLVER_MULTI) {
+    auto config = parseAsyncDnsMultiServerConfigList(servers_);
+    if (config.udpServers.empty() && config.tcpServers.empty()) {
+      resolvers.push_back(
+          std::make_shared<AsyncNameResolver>(family, std::string()));
+    }
+    else {
+      if (!config.udpServers.empty()) {
+        resolvers.push_back(
+            std::make_shared<AsyncNameResolver>(family, config.udpServers));
+      }
+      if (!config.tcpServers.empty()) {
+        resolvers.push_back(std::make_shared<AsyncNameResolver>(
+            family, config.tcpServers, true));
+      }
+    }
+    if (!config.dotServers.empty()) {
+      resolvers.push_back(std::make_shared<AsyncDotNameResolver>(
+          family, std::move(config.dotServers), AsyncDotTransportFactory(),
+          AsyncDotBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_)));
+    }
+    if (!config.dohServers.empty()) {
+      resolvers.push_back(std::make_shared<AsyncDohNameResolver>(
+          family, std::move(config.dohServers), AsyncDohTransportFactory(),
+          dohHttp2_, AsyncDohBootstrapResolverFactory(),
+          getBootstrapFamily(ipv4_, ipv6_)));
+    }
+    return resolvers;
+  }
+#endif // ENABLE_SSL
+  resolvers.push_back(createResolver(family));
+  return resolvers;
 }
 
 void AsyncNameResolverMan::startAsyncFamily(const std::string& hostname,
                                             int family, DownloadEngine* e,
                                             Command* command)
 {
-  asyncNameResolver_[numResolver_] = createResolver(family);
-  asyncNameResolver_[numResolver_]->resolve(hostname);
-  if (asyncNameResolver_[numResolver_]->usable() && e && command) {
-    setNameResolverCheck(numResolver_, e, command);
+  auto resolvers = createResolvers(family);
+  for (auto& resolver : resolvers) {
+    resolver->resolve(hostname);
+    resolverSlots_.push_back(ResolverSlot(std::move(resolver)));
+    auto resolverIndex = resolverSlots_.size() - 1;
+    if (resolverSlots_[resolverIndex].resolver->usable() && e && command) {
+      setNameResolverCheck(resolverIndex, e, command);
+    }
   }
 }
 
 void AsyncNameResolverMan::getResolvedAddress(
     std::vector<std::string>& res) const
 {
-  for (size_t i = 0; i < numResolver_; ++i) {
-    if (asyncNameResolver_[i]->getStatus() == AsyncResolver::STATUS_SUCCESS) {
-      auto& addrs = asyncNameResolver_[i]->getResolvedAddresses();
+  for (const auto& slot : resolverSlots_) {
+    if (slot.resolver &&
+        slot.resolver->getStatus() == AsyncResolver::STATUS_SUCCESS) {
+      auto& addrs = slot.resolver->getResolvedAddresses();
       res.insert(std::end(res), std::begin(addrs), std::end(addrs));
     }
   }
@@ -235,8 +434,8 @@ AsyncNameResolverMan::detachPendingResolvers(DownloadEngine* e,
                                              Command* command)
 {
   std::vector<std::shared_ptr<AsyncResolver>> pendingResolvers;
-  for (size_t i = 0; i < numResolver_; ++i) {
-    auto& resolver = asyncNameResolver_[i];
+  for (auto& slot : resolverSlots_) {
+    auto& resolver = slot.resolver;
     if (!resolver ||
         (resolver->getStatus() != AsyncResolver::STATUS_READY &&
          resolver->getStatus() != AsyncResolver::STATUS_QUERYING) ||
@@ -244,9 +443,9 @@ AsyncNameResolverMan::detachPendingResolvers(DownloadEngine* e,
       continue;
     }
 
-    if (e && command && (resolverCheck_ & (1 << i))) {
+    if (e && command && slot.checked) {
       e->deleteNameResolverCheck(resolver, command);
-      resolverCheck_ &= ~(1 << i);
+      slot.checked = false;
     }
     pendingResolvers.push_back(std::move(resolver));
   }
@@ -256,7 +455,7 @@ AsyncNameResolverMan::detachPendingResolvers(DownloadEngine* e,
 void AsyncNameResolverMan::setNameResolverCheck(DownloadEngine* e,
                                                 Command* command)
 {
-  for (size_t i = 0; i < numResolver_; ++i) {
+  for (size_t i = 0; i < resolverSlots_.size(); ++i) {
     setNameResolverCheck(i, e, command);
   }
 }
@@ -264,17 +463,17 @@ void AsyncNameResolverMan::setNameResolverCheck(DownloadEngine* e,
 void AsyncNameResolverMan::setNameResolverCheck(size_t index, DownloadEngine* e,
                                                 Command* command)
 {
-  if (asyncNameResolver_[index]) {
-    assert((resolverCheck_ & (1 << index)) == 0);
-    resolverCheck_ |= 1 << index;
-    e->addNameResolverCheck(asyncNameResolver_[index], command);
+  auto& slot = resolverSlots_[index];
+  if (slot.resolver) {
+    assert(!slot.checked);
+    slot.checked = e->addNameResolverCheck(slot.resolver, command);
   }
 }
 
 void AsyncNameResolverMan::disableNameResolverCheck(DownloadEngine* e,
                                                     Command* command)
 {
-  for (size_t i = 0; i < numResolver_; ++i) {
+  for (size_t i = 0; i < resolverSlots_.size(); ++i) {
     disableNameResolverCheck(i, e, command);
   }
 }
@@ -283,9 +482,10 @@ void AsyncNameResolverMan::disableNameResolverCheck(size_t index,
                                                     DownloadEngine* e,
                                                     Command* command)
 {
-  if (asyncNameResolver_[index] && (resolverCheck_ & (1 << index))) {
-    resolverCheck_ &= ~(1 << index);
-    e->deleteNameResolverCheck(asyncNameResolver_[index], command);
+  auto& slot = resolverSlots_[index];
+  if (slot.resolver && slot.checked) {
+    slot.checked = false;
+    e->deleteNameResolverCheck(slot.resolver, command);
   }
 }
 
@@ -293,8 +493,8 @@ int AsyncNameResolverMan::getStatus() const
 {
   size_t success = 0;
   size_t error = 0;
-  for (size_t i = 0; i < numResolver_; ++i) {
-    switch (asyncNameResolver_[i]->getStatus()) {
+  for (const auto& slot : resolverSlots_) {
+    switch (slot.resolver->getStatus()) {
     case AsyncResolver::STATUS_SUCCESS:
       ++success;
       break;
@@ -308,7 +508,7 @@ int AsyncNameResolverMan::getStatus() const
   if (success) {
     return 1;
   }
-  else if (error == numResolver_) {
+  else if (error == resolverSlots_.size()) {
     return -1;
   }
   else {
@@ -318,10 +518,10 @@ int AsyncNameResolverMan::getStatus() const
 
 const std::string& AsyncNameResolverMan::getLastError() const
 {
-  for (size_t i = 0; i < numResolver_; ++i) {
-    if (asyncNameResolver_[i]->getStatus() == AsyncResolver::STATUS_ERROR) {
+  for (const auto& slot : resolverSlots_) {
+    if (slot.resolver->getStatus() == AsyncResolver::STATUS_ERROR) {
       // TODO This is not last error chronologically.
-      return asyncNameResolver_[i]->getError();
+      return slot.resolver->getError();
     }
   }
   return A2STR::NIL;
@@ -330,8 +530,8 @@ const std::string& AsyncNameResolverMan::getLastError() const
 std::string AsyncNameResolverMan::getQueryStatus() const
 {
   std::vector<std::string> entries;
-  for (size_t i = 0; i < numResolver_; ++i) {
-    const auto& resolver = asyncNameResolver_[i];
+  for (const auto& slot : resolverSlots_) {
+    const auto& resolver = slot.resolver;
     if (!resolver) {
       continue;
     }
@@ -353,11 +553,8 @@ std::string AsyncNameResolverMan::getQueryStatus() const
 void AsyncNameResolverMan::reset(DownloadEngine* e, Command* command)
 {
   disableNameResolverCheck(e, command);
-  assert(resolverCheck_ == 0);
-  for (size_t i = 0; i < numResolver_; ++i) {
-    asyncNameResolver_[i].reset();
-  }
-  numResolver_ = 0;
+  assert(!resolverChecked());
+  resolverSlots_.clear();
 }
 
 void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
@@ -375,6 +572,10 @@ void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
   case AsyncNameResolverMan::RESOLVER_DOH: {
     auto dohServers = parseAsyncDnsDohServerConfigList(servers);
     validateAsyncDnsDohServerConfig(dohServers);
+    break;
+  }
+  case AsyncNameResolverMan::RESOLVER_MULTI: {
+    (void)parseAsyncDnsMultiServerConfigList(servers);
     break;
   }
 #endif // ENABLE_SSL

@@ -1329,11 +1329,14 @@ Advanced Options
   Enable asynchronous DNS.
   Default: ``true``
 
-.. option:: --async-dns-mode=<cares|dot|doh>
+.. option:: --async-dns-mode=<cares|dot|doh|multi>
 
   Select asynchronous DNS resolver backend. ``cares`` uses the c-ares
-  resolver. ``dot`` uses DNS over TLS. ``doh`` uses DNS over HTTPS.
-  ``dot`` and ``doh`` are available only when aria2 is built with SSL/TLS
+  resolver. ``dot`` uses DNS over TLS. ``doh`` uses DNS over HTTPS. ``multi``
+  starts plain c-ares, DoT, and DoH resolvers in parallel and uses the first
+  address family/backend result that succeeds; unfinished resolvers continue in
+  the background to fill aria2's DNS cache for later connections. ``dot``,
+  ``doh``, and ``multi`` are available only when aria2 is built with SSL/TLS
   support. DoT/DoH server hostnames are first resolved through plain c-ares
   using the default resolver configuration and the address families enabled for
   asynchronous DNS, so :option:`--disable-ipv6=true` also disables IPv6
@@ -1363,7 +1366,12 @@ Advanced Options
   server list. ``dot`` and ``doh`` require explicit servers. If a DoT/DoH
   server host is a hostname, aria2 bootstraps it through plain c-ares using the
   default resolver configuration and the address families enabled for
-  asynchronous DNS.
+  asynchronous DNS. With the ``multi`` backend, use ``udp://IP`` or bare ``IP``
+  for plain DNS over UDP, ``tcp://IP`` for plain DNS over TCP,
+  ``dot://HOST[:PORT][#TLS_HOST]`` for DoT, and HTTPS URLs for DoH. If no plain
+  DNS server entry is given, the plain c-ares fallback uses the system resolver
+  configuration. Since ``multi`` queries plain DNS in parallel with secure DNS,
+  use ``dot`` or ``doh`` instead when plain DNS leakage is unacceptable.
 
 .. option:: --auto-file-renaming [true|false]
 

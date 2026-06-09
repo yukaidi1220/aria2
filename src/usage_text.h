@@ -453,11 +453,13 @@
   _(" --async-dns[=true|false]     Enable asynchronous DNS.")
 #ifdef ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
-  _(" --async-dns-mode=cares|dot|doh Select asynchronous DNS resolver backend.\n" \
+  _(" --async-dns-mode=cares|dot|doh|multi\n"                   \
+    "                              Select asynchronous DNS resolver backend.\n" \
     "                              DoT/DoH server names are bootstrapped with\n" \
     "                              plain c-ares using default resolver config\n" \
     "                              and enabled address families. Append\n" \
-    "                              #TLS_HOST to set TLS/HTTP names.")
+    "                              #TLS_HOST to set TLS/HTTP names. multi\n" \
+    "                              queries plain DNS, DoT and DoH in parallel.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
@@ -879,7 +881,10 @@
     "                              that server list. DoT/DoH require explicit\n" \
     "                              servers; server hostnames are bootstrapped through\n" \
     "                              plain c-ares using the default resolver\n" \
-    "                              configuration and enabled address families.")
+    "                              configuration and enabled address families.\n" \
+    "                              With multi, use udp://IP, tcp://IP,\n" \
+    "                              dot://HOST[:PORT][#TLS_HOST], or HTTPS DoH\n" \
+    "                              URLs; bare IP entries mean udp://IP.")
 #define TEXT_ENABLE_RPC                                               \
   _(" --enable-rpc[=true|false]    Enable JSON-RPC/XML-RPC server.\n" \
     "                              It is strongly recommended to set secret\n" \

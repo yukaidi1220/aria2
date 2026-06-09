@@ -43,18 +43,25 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateDohResolverAcceptsDomainServer);
   CPPUNIT_TEST(testCreateDohResolverUsesUnspecBootstrapForDualStack);
   CPPUNIT_TEST(testCreateDohResolverRejectsEmptyServerList);
+  CPPUNIT_TEST(testStartAsyncMultiStartsConfiguredBackends);
+  CPPUNIT_TEST(testStartAsyncMultiAddsSystemPlainFallback);
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
   CPPUNIT_TEST(testValidateConfigAcceptsDotDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
   CPPUNIT_TEST(testValidateConfigAcceptsDohIpServers);
   CPPUNIT_TEST(testValidateConfigAcceptsDohDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDohEmptyServerList);
+  CPPUNIT_TEST(testValidateConfigAcceptsMultiServers);
+  CPPUNIT_TEST(testValidateConfigRejectsMultiPlainDomainServer);
+  CPPUNIT_TEST(testValidateConfigRejectsMultiBadPlainPort);
   CPPUNIT_TEST(testConfigureAcceptsDotIpServers);
   CPPUNIT_TEST(testConfigureAcceptsDotDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDotEmptyServerList);
   CPPUNIT_TEST(testConfigureAcceptsDohIpServers);
   CPPUNIT_TEST(testConfigureAcceptsDohDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDohEmptyServerList);
+  CPPUNIT_TEST(testConfigureAcceptsMultiServers);
+  CPPUNIT_TEST(testConfigureRejectsMultiPlainDomainServer);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
 
@@ -80,18 +87,25 @@ public:
   void testCreateDohResolverAcceptsDomainServer();
   void testCreateDohResolverUsesUnspecBootstrapForDualStack();
   void testCreateDohResolverRejectsEmptyServerList();
+  void testStartAsyncMultiStartsConfiguredBackends();
+  void testStartAsyncMultiAddsSystemPlainFallback();
   void testValidateConfigAcceptsDotIpServers();
   void testValidateConfigAcceptsDotDomainServer();
   void testValidateConfigRejectsDotEmptyServerList();
   void testValidateConfigAcceptsDohIpServers();
   void testValidateConfigAcceptsDohDomainServer();
   void testValidateConfigRejectsDohEmptyServerList();
+  void testValidateConfigAcceptsMultiServers();
+  void testValidateConfigRejectsMultiPlainDomainServer();
+  void testValidateConfigRejectsMultiBadPlainPort();
   void testConfigureAcceptsDotIpServers();
   void testConfigureAcceptsDotDomainServer();
   void testConfigureRejectsDotEmptyServerList();
   void testConfigureAcceptsDohIpServers();
   void testConfigureAcceptsDohDomainServer();
   void testConfigureRejectsDohEmptyServerList();
+  void testConfigureAcceptsMultiServers();
+  void testConfigureRejectsMultiPlainDomainServer();
 #endif // ENABLE_SSL
 };
 
@@ -177,6 +191,21 @@ public:
 
   bool execute() CXX11_OVERRIDE { return true; }
 };
+
+size_t countQueryStatusEntries(const std::string& status)
+{
+  if (status.empty()) {
+    return 0;
+  }
+
+  size_t count = 1;
+  std::string::size_type pos = 0;
+  while ((pos = status.find(", ", pos)) != std::string::npos) {
+    ++count;
+    pos += 2;
+  }
+  return count;
+}
 
 } // namespace
 
@@ -415,6 +444,39 @@ void AsyncNameResolverTest::testCreateDohResolverRejectsEmptyServerList()
   CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
 }
 
+void AsyncNameResolverTest::testStartAsyncMultiStartsConfiguredBackends()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers(
+      "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
+      "https://dns.example.org/dns-query");
+  resolverMan.setIPv6(false);
+  MockCommand command(1);
+
+  resolverMan.startAsync("example.org", nullptr, &command);
+
+  auto status = resolverMan.getQueryStatus();
+  CPPUNIT_ASSERT_EQUAL((size_t)4, countQueryStatusEntries(status));
+  CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiAddsSystemPlainFallback()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("dot://dns.example.org,"
+                         "https://dns.example.org/dns-query");
+  resolverMan.setIPv6(false);
+  MockCommand command(1);
+
+  resolverMan.startAsync("example.org", nullptr, &command);
+
+  auto status = resolverMan.getQueryStatus();
+  CPPUNIT_ASSERT_EQUAL((size_t)3, countQueryStatusEntries(status));
+  CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
+}
+
 void AsyncNameResolverTest::testValidateConfigAcceptsDotIpServers()
 {
   validateAsyncNameResolverConfig(
@@ -454,6 +516,30 @@ void AsyncNameResolverTest::testValidateConfigRejectsDohEmptyServerList()
   CPPUNIT_ASSERT_THROW(
       validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOH, ""),
       Exception);
+}
+
+void AsyncNameResolverTest::testValidateConfigAcceptsMultiServers()
+{
+  validateAsyncNameResolverConfig(
+      AsyncNameResolverMan::RESOLVER_MULTI,
+      "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
+      "https://dns.example.org/dns-query,8.8.8.8");
+}
+
+void AsyncNameResolverTest::testValidateConfigRejectsMultiPlainDomainServer()
+{
+  CPPUNIT_ASSERT_THROW(validateAsyncNameResolverConfig(
+                           AsyncNameResolverMan::RESOLVER_MULTI,
+                           "dns.example.org"),
+                       Exception);
+}
+
+void AsyncNameResolverTest::testValidateConfigRejectsMultiBadPlainPort()
+{
+  CPPUNIT_ASSERT_THROW(validateAsyncNameResolverConfig(
+                           AsyncNameResolverMan::RESOLVER_MULTI,
+                           "udp://1.1.1.1:bad"),
+                       Exception);
 }
 
 void AsyncNameResolverTest::testConfigureAcceptsDotIpServers()
@@ -512,6 +598,29 @@ void AsyncNameResolverTest::testConfigureRejectsDohEmptyServerList()
   Option option;
   option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "");
+  AsyncNameResolverMan resolverMan;
+
+  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
+                       Exception);
+}
+
+void AsyncNameResolverTest::testConfigureAcceptsMultiServers()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
+  option.put(PREF_ASYNC_DNS_SERVER,
+             "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
+             "https://dns.example.org/dns-query");
+  AsyncNameResolverMan resolverMan;
+
+  configureAsyncNameResolverMan(&resolverMan, &option);
+}
+
+void AsyncNameResolverTest::testConfigureRejectsMultiPlainDomainServer()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
+  option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
   AsyncNameResolverMan resolverMan;
 
   CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),

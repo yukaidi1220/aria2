@@ -56,7 +56,7 @@ _aria2c()
             return 0
             ;;
         --async-dns-mode)
-            COMPREPLY=( $( compgen -W 'cares' -- "$cur" ) )
+            COMPREPLY=( $( compgen -W 'cares dot doh multi' -- "$cur" ) )
             return 0
             ;;
         --enable-ech)

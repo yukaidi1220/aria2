@@ -111,6 +111,7 @@ extern const std::string V_FTP;
 extern const std::string V_CARES;
 extern const std::string V_DOT;
 extern const std::string V_DOH;
+extern const std::string V_MULTI;
 extern const std::string A2_V_TLS11;
 extern const std::string A2_V_TLS12;
 extern const std::string A2_V_TLS13;
@@ -201,7 +202,7 @@ extern PrefPtr PREF_STOP;
 extern PrefPtr PREF_QUIET;
 // value: true | false
 extern PrefPtr PREF_ASYNC_DNS;
-// value: cares
+// value: cares | dot | doh | multi
 extern PrefPtr PREF_ASYNC_DNS_MODE;
 // value: 1*digit
 extern PrefPtr PREF_SUMMARY_INTERVAL;

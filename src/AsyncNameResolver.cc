@@ -272,7 +272,8 @@ void AsyncNameResolver::handle_sock_state(ares_socket_t fd, int read, int write)
   (*it).events = events;
 }
 
-AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers)
+AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers,
+                                     bool useTcp)
     : status_(STATUS_READY), family_(family), channel_(nullptr)
 {
   ares_options opts{};
@@ -280,6 +281,19 @@ AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers)
   opts.sock_state_cb_data = this;
 
   auto optmask = configureOptionsForServers(&opts, servers);
+#if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
+  if (useTcp) {
+    opts.flags |= ARES_FLAG_USEVC;
+    optmask |= ARES_OPT_FLAGS;
+  }
+#else  // !(ARES_FLAG_USEVC && ARES_OPT_FLAGS)
+  if (useTcp) {
+    error_ = "c-ares TCP transport is not supported by this build";
+    status_ = STATUS_ERROR;
+    A2_LOG_NETWORK(fmt("DNS: %s", error_.c_str()));
+    return;
+  }
+#endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
   auto rv = ares_init_options(&channel_, &opts, optmask);
   if (rv != ARES_SUCCESS) {
     error_ = ares_strerror(rv);
@@ -301,6 +315,9 @@ AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers)
 #else  // !ARES_OPT_TIMEOUTMS
     A2_LOG_NETWORK("DNS: c-ares multi-server policy: timeout=2s, tries=2");
 #endif // !ARES_OPT_TIMEOUTMS
+  }
+  if (useTcp) {
+    A2_LOG_NETWORK("DNS: c-ares plain resolver forcing TCP transport");
   }
 
   if (!servers.empty()) {

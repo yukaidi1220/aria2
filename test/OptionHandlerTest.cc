@@ -302,7 +302,7 @@ void OptionHandlerTest::testAsyncDnsModeOptionHandler()
 {
   ParameterOptionHandler handler(PREF_ASYNC_DNS_MODE, "", V_CARES,
 #ifdef ENABLE_SSL
-                                 {V_CARES, V_DOT, V_DOH});
+                                 {V_CARES, V_DOT, V_DOH, V_MULTI});
 #else  // !ENABLE_SSL
                                  {V_CARES});
 #endif // !ENABLE_SSL
@@ -314,6 +314,8 @@ void OptionHandlerTest::testAsyncDnsModeOptionHandler()
   CPPUNIT_ASSERT_EQUAL(std::string(V_DOT), option.get(PREF_ASYNC_DNS_MODE));
   handler.parse(option, V_DOH);
   CPPUNIT_ASSERT_EQUAL(std::string(V_DOH), option.get(PREF_ASYNC_DNS_MODE));
+  handler.parse(option, V_MULTI);
+  CPPUNIT_ASSERT_EQUAL(std::string(V_MULTI), option.get(PREF_ASYNC_DNS_MODE));
 #else  // !ENABLE_SSL
   try {
     handler.parse(option, "dot");
@@ -327,9 +329,16 @@ void OptionHandlerTest::testAsyncDnsModeOptionHandler()
   }
   catch (Exception& e) {
   }
+  try {
+    handler.parse(option, "multi");
+    CPPUNIT_FAIL("exception must be thrown.");
+  }
+  catch (Exception& e) {
+  }
 #endif // !ENABLE_SSL
 #ifdef ENABLE_SSL
-  CPPUNIT_ASSERT_EQUAL(std::string(V_CARES + ", " + V_DOT + ", " + V_DOH),
+  CPPUNIT_ASSERT_EQUAL(
+      std::string(V_CARES + ", " + V_DOT + ", " + V_DOH + ", " + V_MULTI),
                        handler.createPossibleValuesString());
 #else  // !ENABLE_SSL
   CPPUNIT_ASSERT_EQUAL(std::string(V_CARES),
