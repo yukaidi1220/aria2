@@ -16,6 +16,7 @@ class RequestGroupTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetFirstFilePath);
   CPPUNIT_TEST(testTryAutoFileRenaming);
   CPPUNIT_TEST(testCreateDownloadResult);
+  CPPUNIT_TEST(testHttp2OriginCoalescingPeerBlock);
   CPPUNIT_TEST_SUITE_END();
 
 private:
@@ -27,6 +28,7 @@ public:
   void testGetFirstFilePath();
   void testTryAutoFileRenaming();
   void testCreateDownloadResult();
+  void testHttp2OriginCoalescingPeerBlock();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(RequestGroupTest);
@@ -145,6 +147,31 @@ void RequestGroupTest::testCreateDownloadResult()
 
     CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, result->result);
   }
+}
+
+void RequestGroupTest::testHttp2OriginCoalescingPeerBlock()
+{
+  RequestGroup group(GroupId::create(), option_);
+  group.blockHttp2OriginCoalescingPeer("HTTPS", "CDN.Example", 443,
+                                       "Verify.Example", "2001:DB8::1", 443);
+
+  CPPUNIT_ASSERT(group.http2OriginCoalescingPeerBlocked(
+      "https", "cdn.example", 443, "verify.example", "2001:db8::1", 443));
+  CPPUNIT_ASSERT(!group.http2OriginCoalescingPeerBlocked(
+      "http", "cdn.example", 443, "verify.example", "2001:db8::1", 443));
+  CPPUNIT_ASSERT(!group.http2OriginCoalescingPeerBlocked(
+      "https", "origin.example", 443, "verify.example", "2001:db8::1",
+      443));
+  CPPUNIT_ASSERT(!group.http2OriginCoalescingPeerBlocked(
+      "https", "cdn.example", 8443, "verify.example", "2001:db8::1", 443));
+  CPPUNIT_ASSERT(!group.http2OriginCoalescingPeerBlocked(
+      "https", "cdn.example", 443, "other.example", "2001:db8::1", 443));
+  CPPUNIT_ASSERT(!group.http2OriginCoalescingPeerBlocked(
+      "https", "cdn.example", 443, "verify.example", "2001:db8::2", 443));
+
+  RequestGroup otherGroup(GroupId::create(), option_);
+  CPPUNIT_ASSERT(!otherGroup.http2OriginCoalescingPeerBlocked(
+      "https", "cdn.example", 443, "verify.example", "2001:db8::1", 443));
 }
 
 } // namespace aria2

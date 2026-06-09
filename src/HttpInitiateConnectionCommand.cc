@@ -37,6 +37,7 @@
 #include <functional>
 
 #include "Request.h"
+#include "RequestGroup.h"
 #include "DownloadEngine.h"
 #include "HttpConnection.h"
 #include "HttpRequest.h"
@@ -55,6 +56,7 @@
 #include "LogFactory.h"
 #include "SocketCore.h"
 #include "HttpTLSHandshakeParams.h"
+#include "RecoverableException.h"
 #include "message.h"
 #include "prefs.h"
 #include "A2STR.h"
@@ -87,6 +89,7 @@ createTLSSocketReusePredicate(const Request* request, const Option* option)
 #if defined(ENABLE_SSL) && defined(HAVE_LIBNGHTTP2)
 std::function<bool(const std::shared_ptr<SocketCore>&)>
 createTLSHttp2OriginCoalescingPredicate(const Request* request,
+                                        RequestGroup* requestGroup,
                                         const Option* option)
 {
   if (request->getProtocol() != "https" ||
@@ -98,10 +101,35 @@ createTLSHttp2OriginCoalescingPredicate(const Request* request,
   if (tlsParams.verifyHost.empty() || tlsParams.sniHostOverridden) {
     return std::function<bool(const std::shared_ptr<SocketCore>&)>();
   }
+  auto protocol = request->getProtocol();
+  auto host = request->getHost();
+  auto port = request->getPort();
 
-  return [tlsParams](const std::shared_ptr<SocketCore>& socket) {
-    return socket->getSelectedAlpnProtocol() == HTTP_ALPN_H2 &&
-           socket->peerCertificateMatchesHostname(tlsParams.verifyHost);
+  return [requestGroup, protocol, host, port,
+          tlsParams](const std::shared_ptr<SocketCore>& socket) {
+    if (socket->getSelectedAlpnProtocol() != HTTP_ALPN_H2 ||
+        !socket->peerCertificateMatchesHostname(tlsParams.verifyHost)) {
+      return false;
+    }
+    try {
+      auto peerInfo = socket->getPeerInfo();
+      if (requestGroup &&
+          requestGroup->http2OriginCoalescingPeerBlocked(
+              protocol, host, port, tlsParams.verifyHost, peerInfo.addr,
+              peerInfo.port)) {
+        A2_LOG_NETWORK(
+            fmt("Skipping blocked HTTP/2 origin coalescing for %s:%u via "
+                "%s:%u",
+                host.c_str(), port, peerInfo.addr.c_str(), peerInfo.port));
+        return false;
+      }
+      return true;
+    }
+    catch (RecoverableException& e) {
+      A2_LOG_INFO_EX(
+          "Getting peer info failed. HTTP/2 coalescing canceled.", e);
+      return false;
+    }
   };
 }
 #endif // ENABLE_SSL && HAVE_LIBNGHTTP2
@@ -183,7 +211,7 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
     auto predicate =
         createTLSSocketReusePredicate(getRequest().get(), getOption().get());
     auto coalescingPredicate = createTLSHttp2OriginCoalescingPredicate(
-        getRequest().get(), getOption().get());
+        getRequest().get(), getRequestGroup(), getOption().get());
 #  else  // !ENABLE_SSL
     std::function<bool(const std::shared_ptr<SocketCore>&)> predicate;
     std::function<bool(const std::shared_ptr<SocketCore>&)>

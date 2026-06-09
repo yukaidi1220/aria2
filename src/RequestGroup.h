@@ -42,6 +42,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <set>
 
 #include "TransferStat.h"
 #include "TimeA2.h"
@@ -116,6 +117,24 @@ private:
   std::shared_ptr<MetadataInfo> metadataInfo_;
 
   RequestGroupMan* requestGroupMan_;
+
+  struct Http2OriginCoalescingBlockKey {
+    std::string protocol;
+    std::string host;
+    uint16_t port;
+    std::string verifyHost;
+    std::string peerAddr;
+    uint16_t peerPort;
+
+    bool operator<(const Http2OriginCoalescingBlockKey& other) const;
+  };
+
+  std::set<Http2OriginCoalescingBlockKey> http2OriginCoalescingBlockKeys_;
+
+  static Http2OriginCoalescingBlockKey createHttp2OriginCoalescingBlockKey(
+      const std::string& protocol, const std::string& host, uint16_t port,
+      const std::string& verifyHost, const std::string& peerAddr,
+      uint16_t peerPort);
 
 #ifdef ENABLE_BITTORRENT
   BtRuntime* btRuntime_;
@@ -518,6 +537,19 @@ public:
   {
     return pendingOption_;
   }
+
+  void blockHttp2OriginCoalescingPeer(const std::string& protocol,
+                                      const std::string& host, uint16_t port,
+                                      const std::string& verifyHost,
+                                      const std::string& peerAddr,
+                                      uint16_t peerPort);
+
+  bool http2OriginCoalescingPeerBlocked(const std::string& protocol,
+                                        const std::string& host,
+                                        uint16_t port,
+                                        const std::string& verifyHost,
+                                        const std::string& peerAddr,
+                                        uint16_t peerPort) const;
 };
 
 } // namespace aria2

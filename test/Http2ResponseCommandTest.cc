@@ -26,6 +26,7 @@
 #  include "RequestGroup.h"
 #  include "RequestGroupMan.h"
 #  include "SelectEventPoll.h"
+#  include "SocketCore.h"
 #  include "StreamFilter.h"
 #  include "TestUtil.h"
 #  include "prefs.h"
@@ -148,6 +149,26 @@ protected:
   void requeueSelf() CXX11_OVERRIDE { requeued_ = true; }
 };
 
+std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>
+createSocketPair()
+{
+  SocketCore server;
+  server.bind(0);
+  server.beginListen();
+  server.setBlockingMode();
+
+  auto endpoint = server.getAddrInfo();
+  auto client = std::make_shared<SocketCore>();
+  client->establishConnection("localhost", endpoint.port);
+  CPPUNIT_ASSERT(client->isWritable(5));
+
+  auto inbound = server.acceptConnection();
+  inbound->setBlockingMode();
+
+  return std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>(
+      client, inbound);
+}
+
 struct CommandFixture {
   std::shared_ptr<Option> option;
   std::shared_ptr<RequestGroup> requestGroup;
@@ -245,6 +266,14 @@ struct CommandFixture {
     return make_unique<TestHttp2ResponseCommand>(
         1, request, fileEntry, requestGroup.get(), exchange, streamId,
         makeHttpRequest(), &engine, nullptr);
+  }
+
+  std::unique_ptr<TestHttp2ResponseCommand>
+  makeCommandWithSocket(const std::shared_ptr<SocketCore>& socket)
+  {
+    return make_unique<TestHttp2ResponseCommand>(
+        1, request, fileEntry, requestGroup.get(), exchange, streamId,
+        makeHttpRequest(), &engine, socket);
   }
 
   std::unique_ptr<TestHttp2ResponseCommand>
@@ -555,8 +584,12 @@ void Http2ResponseCommandTest::testSkipBodyAborts404WhenBodyShorterThanContentLe
 void Http2ResponseCommandTest::testSkipCoalesced421RetriesAfterEndStream()
 {
   CommandFixture fixture;
+  auto sockets = createSocketPair();
+  auto peer = sockets.first->getPeerInfo();
+  fixture.request->setConnectedAddrInfo("origin.example", peer.addr,
+                                        peer.port);
   fixture.request->setHttp2OriginCoalesced(true);
-  auto command = fixture.makeCommand();
+  auto command = fixture.makeCommandWithSocket(sockets.first);
   fixture.submitResponseHeaders(createHeaders(421, 4));
   fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
   fixture.transport.appendInboundData(fixture.server.drainOutboundData());
@@ -575,6 +608,11 @@ void Http2ResponseCommandTest::testSkipCoalesced421RetriesAfterEndStream()
   CPPUNIT_ASSERT_EQUAL((time_t)0, command->retryWait());
   CPPUNIT_ASSERT(!fixture.request->isHttp2OriginCoalesced());
   CPPUNIT_ASSERT(fixture.request->http2OriginCoalescingBlocked());
+#  ifdef ENABLE_SSL
+  CPPUNIT_ASSERT(fixture.requestGroup->http2OriginCoalescingPeerBlocked(
+      "https", "origin.example", 443, "origin.example", peer.addr,
+      peer.port));
+#  endif // ENABLE_SSL
 }
 
 void Http2ResponseCommandTest::testSkipBodyAbortsOnStreamError()

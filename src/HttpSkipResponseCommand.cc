@@ -39,6 +39,7 @@
 #include "SocketCore.h"
 #include "DlRetryEx.h"
 #include "Request.h"
+#include "RequestGroup.h"
 #include "DownloadEngine.h"
 #include "Logger.h"
 #include "LogFactory.h"
@@ -60,8 +61,50 @@
 #include "SinkStreamFilter.h"
 #include "error_code.h"
 #include "SocketRecvBuffer.h"
+#include "RecoverableException.h"
+#ifdef ENABLE_SSL
+#  include "HttpTLSHandshakeParams.h"
+#endif // ENABLE_SSL
 
 namespace aria2 {
+
+namespace {
+#ifdef ENABLE_SSL
+void blockHttp2OriginCoalescingPeer(AbstractCommand* command)
+{
+  auto request = command->getRequest();
+  auto requestGroup = command->getRequestGroup();
+  auto socket = command->getSocket();
+  if (!request || !requestGroup || !socket) {
+    return;
+  }
+
+  try {
+    auto tlsParams =
+        createHttpTLSHandshakeParams(request.get(), command->getOption().get());
+    if (tlsParams.verifyHost.empty()) {
+      return;
+    }
+    auto peerInfo = socket->getPeerInfo();
+    requestGroup->blockHttp2OriginCoalescingPeer(
+        request->getProtocol(), request->getHost(), request->getPort(),
+        tlsParams.verifyHost, peerInfo.addr, peerInfo.port);
+    A2_LOG_NETWORK(
+        fmt("Blocked HTTP/2 origin coalescing for %s:%u "
+            "(verify host %s) via %s:%u",
+            request->getHost().c_str(), request->getPort(),
+            tlsParams.verifyHost.c_str(), peerInfo.addr.c_str(),
+            peerInfo.port));
+  }
+  catch (RecoverableException& e) {
+    A2_LOG_INFO_EX(
+        "Getting peer info failed. HTTP/2 coalescing block not recorded.", e);
+  }
+}
+#else  // !ENABLE_SSL
+void blockHttp2OriginCoalescingPeer(AbstractCommand*) {}
+#endif // !ENABLE_SSL
+} // namespace
 
 bool shouldRetryHttpStatusByDefault(int statusCode)
 {
@@ -151,6 +194,7 @@ bool processSkippedHttpResponse(
                 " - HTTP 421 for coalesced HTTP/2 request %s, retrying",
                 command->getCuid(),
                 command->getRequest()->getCurrentUri().c_str()));
+        blockHttp2OriginCoalescingPeer(command);
         command->getRequest()->blockHttp2OriginCoalescing();
         return prepareForRetry();
       }

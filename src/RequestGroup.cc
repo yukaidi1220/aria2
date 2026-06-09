@@ -119,6 +119,43 @@
 
 namespace aria2 {
 
+bool RequestGroup::Http2OriginCoalescingBlockKey::operator<(
+    const Http2OriginCoalescingBlockKey& other) const
+{
+  if (protocol != other.protocol) {
+    return protocol < other.protocol;
+  }
+  if (host != other.host) {
+    return host < other.host;
+  }
+  if (port != other.port) {
+    return port < other.port;
+  }
+  if (verifyHost != other.verifyHost) {
+    return verifyHost < other.verifyHost;
+  }
+  if (peerAddr != other.peerAddr) {
+    return peerAddr < other.peerAddr;
+  }
+  return peerPort < other.peerPort;
+}
+
+RequestGroup::Http2OriginCoalescingBlockKey
+RequestGroup::createHttp2OriginCoalescingBlockKey(
+    const std::string& protocol, const std::string& host, uint16_t port,
+    const std::string& verifyHost, const std::string& peerAddr,
+    uint16_t peerPort)
+{
+  Http2OriginCoalescingBlockKey key;
+  key.protocol = util::toLower(protocol);
+  key.host = util::toLower(host);
+  key.port = port;
+  key.verifyHost = util::toLower(verifyHost);
+  key.peerAddr = util::toLower(peerAddr);
+  key.peerPort = peerPort;
+  return key;
+}
+
 RequestGroup::RequestGroup(const std::shared_ptr<GroupId>& gid,
                            const std::shared_ptr<Option>& option)
     : belongsToGID_(0),
@@ -162,6 +199,26 @@ RequestGroup::RequestGroup(const std::shared_ptr<GroupId>& gid,
 }
 
 RequestGroup::~RequestGroup() = default;
+
+void RequestGroup::blockHttp2OriginCoalescingPeer(
+    const std::string& protocol, const std::string& host, uint16_t port,
+    const std::string& verifyHost, const std::string& peerAddr,
+    uint16_t peerPort)
+{
+  http2OriginCoalescingBlockKeys_.insert(createHttp2OriginCoalescingBlockKey(
+      protocol, host, port, verifyHost, peerAddr, peerPort));
+}
+
+bool RequestGroup::http2OriginCoalescingPeerBlocked(
+    const std::string& protocol, const std::string& host, uint16_t port,
+    const std::string& verifyHost, const std::string& peerAddr,
+    uint16_t peerPort) const
+{
+  auto key = createHttp2OriginCoalescingBlockKey(
+      protocol, host, port, verifyHost, peerAddr, peerPort);
+  return http2OriginCoalescingBlockKeys_.find(key) !=
+         http2OriginCoalescingBlockKeys_.end();
+}
 
 bool RequestGroup::isCheckIntegrityReady()
 {
