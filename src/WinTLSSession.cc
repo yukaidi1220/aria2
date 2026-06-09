@@ -804,8 +804,9 @@ restart:
     default:
       status_ = SEC_E_INTERNAL_ERROR;
       state_ = st_error;
-      A2_LOG_ERROR(fmt("WinTLS: unsupported negotiated protocol 0x%x",
-                       protocolVersion));
+      handshakeErr =
+          fmt("WinTLS: unsupported negotiated protocol 0x%x", protocolVersion);
+      A2_LOG_ERROR(handshakeErr);
       return TLS_ERR_ERROR;
     }
     return TLS_ERR_OK;
