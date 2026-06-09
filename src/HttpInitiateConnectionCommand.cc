@@ -34,7 +34,9 @@
 /* copyright --> */
 #include "HttpInitiateConnectionCommand.h"
 
+#include <algorithm>
 #include <functional>
+#include <iterator>
 
 #include "Request.h"
 #include "RequestGroup.h"
@@ -130,8 +132,15 @@ std::vector<dns::ServiceBindingEndpoint> getCachedHttpsServiceBindingEndpoints(
     return endpoints;
   }
 
-  return getHttpsServiceBindingEndpoints(*records, request->getHost(),
-                                         request->getPort(), option);
+  auto endpoints = getHttpsServiceBindingEndpoints(
+      *records, request->getHost(), request->getPort(), option);
+  endpoints.erase(
+      std::remove_if(std::begin(endpoints), std::end(endpoints),
+                     [e](const dns::ServiceBindingEndpoint& endpoint) {
+                       return e->isHttpsServiceBindingEndpointFailed(endpoint);
+                     }),
+      std::end(endpoints));
+  return endpoints;
 }
 
 #ifdef ENABLE_SSL

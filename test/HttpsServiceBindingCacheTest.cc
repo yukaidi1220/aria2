@@ -4,6 +4,7 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "ServiceBindingSelector.h"
 #include "wallclock.h"
 
 namespace aria2 {
@@ -19,6 +20,8 @@ class HttpsServiceBindingCacheTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testZeroTtlDoesNotCache);
   CPPUNIT_TEST(testRemove);
   CPPUNIT_TEST(testResolvingState);
+  CPPUNIT_TEST(testEndpointFailureExpires);
+  CPPUNIT_TEST(testEndpointFailureKeyIncludesOriginConnectAndAlpn);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -32,6 +35,8 @@ public:
   void testZeroTtlDoesNotCache();
   void testRemove();
   void testResolvingState();
+  void testEndpointFailureExpires();
+  void testEndpointFailureKeyIncludesOriginConnectAndAlpn();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpsServiceBindingCacheTest);
@@ -51,6 +56,20 @@ std::vector<dns::ServiceBindingRecord> createRecords(
   std::vector<dns::ServiceBindingRecord> records;
   records.push_back(record);
   return records;
+}
+
+dns::ServiceBindingEndpoint createEndpoint(
+    const std::string& originHost, uint16_t originPort,
+    const std::string& connectHost, uint16_t connectPort,
+    const std::string& alpn)
+{
+  dns::ServiceBindingEndpoint endpoint;
+  endpoint.originHost = originHost;
+  endpoint.originPort = originPort;
+  endpoint.connectHost = connectHost;
+  endpoint.connectPort = connectPort;
+  endpoint.alpn = alpn;
+  return endpoint;
 }
 
 } // namespace
@@ -176,6 +195,55 @@ void HttpsServiceBindingCacheTest::testResolvingState()
 
   CPPUNIT_ASSERT(!cache.isResolving("www.example.com", 443));
   CPPUNIT_ASSERT(cache.markResolving("www.example.com", 443));
+}
+
+void HttpsServiceBindingCacheTest::testEndpointFailureExpires()
+{
+  HttpsServiceBindingCache cache;
+  auto endpoint =
+      createEndpoint("origin.example", 443, "svc.example", 8443, "h2");
+
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(endpoint));
+  cache.markEndpointFailed(endpoint, 1);
+  CPPUNIT_ASSERT(cache.isEndpointFailed(endpoint));
+
+  global::wallclock().advance(std::chrono::seconds(1));
+
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(endpoint));
+}
+
+void HttpsServiceBindingCacheTest::
+    testEndpointFailureKeyIncludesOriginConnectAndAlpn()
+{
+  HttpsServiceBindingCache cache;
+  auto endpoint =
+      createEndpoint("origin.example", 443, "svc.example", 8443, "h2");
+  auto otherOrigin =
+      createEndpoint("other.example", 443, "svc.example", 8443, "h2");
+  auto otherPort =
+      createEndpoint("origin.example", 8443, "svc.example", 8443, "h2");
+  auto otherConnect =
+      createEndpoint("origin.example", 443, "svc2.example", 8443, "h2");
+  auto otherConnectPort =
+      createEndpoint("origin.example", 443, "svc.example", 9443, "h2");
+  auto otherAlpn = createEndpoint("origin.example", 443, "svc.example", 8443,
+                                  "http/1.1");
+
+  cache.markEndpointFailed(endpoint, 60);
+
+  CPPUNIT_ASSERT(cache.isEndpointFailed(endpoint));
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(otherOrigin));
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(otherPort));
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(otherConnect));
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(otherConnectPort));
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(otherAlpn));
+
+  cache.clearEndpointFailure(endpoint);
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(endpoint));
+
+  cache.markEndpointFailed(endpoint, 60);
+  cache.markEndpointFailed(endpoint, 0);
+  CPPUNIT_ASSERT(!cache.isEndpointFailed(endpoint));
 }
 
 } // namespace aria2

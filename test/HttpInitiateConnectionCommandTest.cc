@@ -30,6 +30,8 @@ class HttpInitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityIgnoresHttpEndpoint);
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityIgnoresMismatchedEndpoint);
   CPPUNIT_TEST(testSelectConnectionAuthorityUsesCachedSvcbEndpoint);
+  CPPUNIT_TEST(testSelectConnectionAuthoritySkipsFailedSvcbEndpoint);
+  CPPUNIT_TEST(testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed);
   CPPUNIT_TEST(testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint);
   CPPUNIT_TEST(testCreateNextCommandReusesSvcbConnectPortPooledSocket);
   CPPUNIT_TEST_SUITE_END();
@@ -41,6 +43,8 @@ public:
   void testSelectHttpConnectionAuthorityIgnoresHttpEndpoint();
   void testSelectHttpConnectionAuthorityIgnoresMismatchedEndpoint();
   void testSelectConnectionAuthorityUsesCachedSvcbEndpoint();
+  void testSelectConnectionAuthoritySkipsFailedSvcbEndpoint();
+  void testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed();
   void testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint();
   void testCreateNextCommandReusesSvcbConnectPortPooledSocket();
 };
@@ -77,6 +81,21 @@ dns::ServiceBindingRecord makeSvcbRecord()
   record.port = 8443;
   record.alpn.push_back("http/1.1");
   record.ipv4hint.push_back("192.0.2.10");
+  return record;
+}
+
+dns::ServiceBindingRecord makeSvcbRecord(const std::string& targetName,
+                                         uint16_t port, uint16_t priority,
+                                         const std::string& hint)
+{
+  dns::ServiceBindingRecord record;
+  record.ownerName = "origin.example";
+  record.priority = priority;
+  record.targetName = targetName;
+  record.hasPort = true;
+  record.port = port;
+  record.alpn.push_back("http/1.1");
+  record.ipv4hint.push_back(hint);
   return record;
 }
 
@@ -214,6 +233,65 @@ void HttpInitiateConnectionCommandTest::
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.10"),
                        e.findCachedIPAddress("svc.example", 8443));
   CPPUNIT_ASSERT(e.findCachedIPAddress("origin.example", 443).empty());
+}
+
+void HttpInitiateConnectionCommandTest::
+    testSelectConnectionAuthoritySkipsFailedSvcbEndpoint()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(makeSvcbRecord("svc1.example", 8443, 1, "192.0.2.10"));
+  records.push_back(makeSvcbRecord("svc2.example", 9443, 2, "192.0.2.11"));
+  e.cacheHttpsServiceBindingRecords("origin.example", 443, records, 60);
+
+  auto failed = makeEndpoint("origin.example", 443, "svc1.example", 8443);
+  failed.alpn = "http/1.1";
+  e.markHttpsServiceBindingEndpointFailed(failed, 60);
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto authority = command.selectConnectionAuthority(nullptr);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("svc2.example"), authority.hostname);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)9443, authority.port);
+  CPPUNIT_ASSERT(!authority.directOrigin);
+  CPPUNIT_ASSERT(e.findCachedIPAddress("svc1.example", 8443).empty());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.11"),
+                       e.findCachedIPAddress("svc2.example", 9443));
+}
+
+void HttpInitiateConnectionCommandTest::
+    testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(makeSvcbRecord());
+  e.cacheHttpsServiceBindingRecords("origin.example", 443, records, 60);
+
+  auto failed = makeEndpoint("origin.example", 443, "svc.example", 8443);
+  failed.alpn = "http/1.1";
+  e.markHttpsServiceBindingEndpointFailed(failed, 60);
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto authority = command.selectConnectionAuthority(nullptr);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), authority.hostname);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, authority.port);
+  CPPUNIT_ASSERT(authority.directOrigin);
+  CPPUNIT_ASSERT(e.findCachedIPAddress("svc.example", 8443).empty());
 }
 
 void HttpInitiateConnectionCommandTest::

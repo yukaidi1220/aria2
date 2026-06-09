@@ -35,7 +35,9 @@
 #include "HttpsServiceBindingCache.h"
 
 #include <chrono>
+#include <iterator>
 
+#include "ServiceBindingSelector.h"
 #include "wallclock.h"
 
 namespace aria2 {
@@ -44,6 +46,15 @@ HttpsServiceBindingCache::Key
 HttpsServiceBindingCache::makeKey(const std::string& hostname, uint16_t port)
 {
   return std::make_pair(hostname, port);
+}
+
+HttpsServiceBindingCache::EndpointKey
+HttpsServiceBindingCache::makeEndpointKey(
+    const dns::ServiceBindingEndpoint& endpoint)
+{
+  return std::make_tuple(endpoint.originHost, endpoint.originPort,
+                         endpoint.connectHost, endpoint.connectPort,
+                         endpoint.alpn);
 }
 
 bool HttpsServiceBindingCache::expired(const CacheEntry& entry)
@@ -64,6 +75,7 @@ HttpsServiceBindingCache& HttpsServiceBindingCache::operator=(
   if (this != &c) {
     entries_ = c.entries_;
     resolving_ = c.resolving_;
+    endpointFailures_ = c.endpointFailures_;
   }
   return *this;
 }
@@ -122,6 +134,41 @@ void HttpsServiceBindingCache::finishResolving(const std::string& hostname,
                                                uint16_t port)
 {
   resolving_.erase(makeKey(hostname, port));
+}
+
+void HttpsServiceBindingCache::markEndpointFailed(
+    const dns::ServiceBindingEndpoint& endpoint, uint32_t ttl)
+{
+  auto key = makeEndpointKey(endpoint);
+  if (ttl == 0) {
+    endpointFailures_.erase(key);
+    return;
+  }
+
+  Timer expiry = global::wallclock();
+  expiry.advance(std::chrono::seconds(ttl));
+  endpointFailures_[key] = expiry;
+}
+
+bool HttpsServiceBindingCache::isEndpointFailed(
+    const dns::ServiceBindingEndpoint& endpoint)
+{
+  auto key = makeEndpointKey(endpoint);
+  auto i = endpointFailures_.find(key);
+  if (i == std::end(endpointFailures_)) {
+    return false;
+  }
+  if ((*i).second <= global::wallclock()) {
+    endpointFailures_.erase(i);
+    return false;
+  }
+  return true;
+}
+
+void HttpsServiceBindingCache::clearEndpointFailure(
+    const dns::ServiceBindingEndpoint& endpoint)
+{
+  endpointFailures_.erase(makeEndpointKey(endpoint));
 }
 
 } // namespace aria2

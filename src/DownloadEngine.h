@@ -69,6 +69,7 @@ class EventPoll;
 class Command;
 class HttpsServiceBindingCache;
 namespace dns {
+struct ServiceBindingEndpoint;
 struct ServiceBindingRecord;
 } // namespace dns
 #ifdef HAVE_LIBNGHTTP2
@@ -444,6 +445,15 @@ public:
 
   void finishHttpsServiceBindingResolving(const std::string& hostname,
                                           uint16_t port);
+
+  void markHttpsServiceBindingEndpointFailed(
+      const dns::ServiceBindingEndpoint& endpoint, uint32_t ttl);
+
+  bool isHttpsServiceBindingEndpointFailed(
+      const dns::ServiceBindingEndpoint& endpoint);
+
+  void clearHttpsServiceBindingEndpointFailure(
+      const dns::ServiceBindingEndpoint& endpoint);
 
   void setAuthConfigFactory(std::unique_ptr<AuthConfigFactory> factory);
 

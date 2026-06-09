@@ -42,6 +42,7 @@
 #include <map>
 #include <set>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -50,9 +51,15 @@
 
 namespace aria2 {
 
+namespace dns {
+struct ServiceBindingEndpoint;
+} // namespace dns
+
 class HttpsServiceBindingCache {
 private:
   typedef std::pair<std::string, uint16_t> Key;
+  typedef std::tuple<std::string, uint16_t, std::string, uint16_t, std::string>
+      EndpointKey;
 
   struct CacheEntry {
     std::vector<dns::ServiceBindingRecord> records;
@@ -60,11 +67,16 @@ private:
   };
 
   typedef std::map<Key, CacheEntry> CacheEntryMap;
+  typedef std::map<EndpointKey, Timer> EndpointFailureMap;
 
   CacheEntryMap entries_;
   std::set<Key> resolving_;
+  EndpointFailureMap endpointFailures_;
 
   static Key makeKey(const std::string& hostname, uint16_t port);
+
+  static EndpointKey makeEndpointKey(
+      const dns::ServiceBindingEndpoint& endpoint);
 
   static bool expired(const CacheEntry& entry);
 
@@ -89,6 +101,13 @@ public:
   bool isResolving(const std::string& hostname, uint16_t port) const;
 
   void finishResolving(const std::string& hostname, uint16_t port);
+
+  void markEndpointFailed(const dns::ServiceBindingEndpoint& endpoint,
+                          uint32_t ttl);
+
+  bool isEndpointFailed(const dns::ServiceBindingEndpoint& endpoint);
+
+  void clearEndpointFailure(const dns::ServiceBindingEndpoint& endpoint);
 };
 
 } // namespace aria2

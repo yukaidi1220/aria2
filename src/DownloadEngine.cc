@@ -960,6 +960,24 @@ void DownloadEngine::finishHttpsServiceBindingResolving(
   httpsServiceBindingCache_->finishResolving(hostname, port);
 }
 
+void DownloadEngine::markHttpsServiceBindingEndpointFailed(
+    const dns::ServiceBindingEndpoint& endpoint, uint32_t ttl)
+{
+  httpsServiceBindingCache_->markEndpointFailed(endpoint, ttl);
+}
+
+bool DownloadEngine::isHttpsServiceBindingEndpointFailed(
+    const dns::ServiceBindingEndpoint& endpoint)
+{
+  return httpsServiceBindingCache_->isEndpointFailed(endpoint);
+}
+
+void DownloadEngine::clearHttpsServiceBindingEndpointFailure(
+    const dns::ServiceBindingEndpoint& endpoint)
+{
+  httpsServiceBindingCache_->clearEndpointFailure(endpoint);
+}
+
 void DownloadEngine::setAuthConfigFactory(
     std::unique_ptr<AuthConfigFactory> factory)
 {
