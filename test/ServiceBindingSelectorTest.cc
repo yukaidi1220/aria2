@@ -9,6 +9,7 @@ class ServiceBindingSelectorTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(ServiceBindingSelectorTest);
   CPPUNIT_TEST(testSelectSortsByPriorityAndAlpnPreference);
   CPPUNIT_TEST(testSelectUsesDefaultAlpn);
+  CPPUNIT_TEST(testSelectRejectsAliasModeRecord);
   CPPUNIT_TEST(testSelectRejectsUnavailableRecords);
   CPPUNIT_TEST(testSelectHonorsMandatoryEch);
   CPPUNIT_TEST(testSelectCarriesOptionalEchWhenEnabled);
@@ -21,6 +22,7 @@ class ServiceBindingSelectorTest : public CppUnit::TestFixture {
 public:
   void testSelectSortsByPriorityAndAlpnPreference();
   void testSelectUsesDefaultAlpn();
+  void testSelectRejectsAliasModeRecord();
   void testSelectRejectsUnavailableRecords();
   void testSelectHonorsMandatoryEch();
   void testSelectCarriesOptionalEchWhenEnabled();
@@ -99,6 +101,22 @@ void ServiceBindingSelectorTest::testSelectUsesDefaultAlpn()
   CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"), result[0].targetName);
   CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), result[0].alpn);
   CPPUNIT_ASSERT(result[0].defaultAlpnUsed);
+}
+
+void ServiceBindingSelectorTest::testSelectRejectsAliasModeRecord()
+{
+  auto alias = createRecord(0, "alias.example.com");
+  alias.alpn.push_back("h2");
+  alias.hasPort = true;
+  alias.port = 8443;
+  alias.ipv4hint.push_back("192.0.2.1");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(alias);
+
+  auto result = dns::selectServiceBindings(records, createConfig());
+
+  CPPUNIT_ASSERT(result.empty());
 }
 
 void ServiceBindingSelectorTest::testSelectRejectsUnavailableRecords()
