@@ -13,10 +13,12 @@ class DnsMessageTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(DnsMessageTest);
   CPPUNIT_TEST(testCreateAQuery);
   CPPUNIT_TEST(testCreateAAAAQueryWithTrailingDot);
+  CPPUNIT_TEST(testCreateSVCBQuery);
   CPPUNIT_TEST(testCreateHTTPSQuery);
   CPPUNIT_TEST(testCreateQueryRejectsBadName);
   CPPUNIT_TEST(testParseAResponse);
   CPPUNIT_TEST(testParseAAAAResponse);
+  CPPUNIT_TEST(testParseBasicSVCBResponse);
   CPPUNIT_TEST(testParseBasicHTTPSResponse);
   CPPUNIT_TEST(testParseHTTPSResponseParams);
   CPPUNIT_TEST(testParseHTTPSResponseUnknownParam);
@@ -43,10 +45,12 @@ class DnsMessageTest : public CppUnit::TestFixture {
 public:
   void testCreateAQuery();
   void testCreateAAAAQueryWithTrailingDot();
+  void testCreateSVCBQuery();
   void testCreateHTTPSQuery();
   void testCreateQueryRejectsBadName();
   void testParseAResponse();
   void testParseAAAAResponse();
+  void testParseBasicSVCBResponse();
   void testParseBasicHTTPSResponse();
   void testParseHTTPSResponseParams();
   void testParseHTTPSResponseUnknownParam();
@@ -313,6 +317,17 @@ void DnsMessageTest::testCreateAAAAQueryWithTrailingDot()
                                         dns::TYPE_AAAA));
 }
 
+void DnsMessageTest::testCreateSVCBQuery()
+{
+  std::string expected;
+  appendHeader(expected, 0x3455, 0x0100, 1, 0);
+  appendQuestion(expected, "www.example.com", dns::TYPE_SVCB);
+
+  CPPUNIT_ASSERT_EQUAL(expected,
+                       dns::createQuery(0x3455, "www.example.com",
+                                        dns::TYPE_SVCB));
+}
+
 void DnsMessageTest::testCreateHTTPSQuery()
 {
   std::string expected;
@@ -366,6 +381,20 @@ void DnsMessageTest::testParseAAAAResponse()
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), result[0]);
 }
 
+void DnsMessageTest::testParseBasicSVCBResponse()
+{
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_SVCB, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_SVCB, 12, 60, 1,
+                             "svc.example.com", std::string());
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_SVCB);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"), result[0].ownerName);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)60, result[0].ttl);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)1, result[0].priority);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example.com"), result[0].targetName);
+}
+
 void DnsMessageTest::testParseBasicHTTPSResponse()
 {
   auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
@@ -375,6 +404,7 @@ void DnsMessageTest::testParseBasicHTTPSResponse()
   auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
   CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
   CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"), result[0].ownerName);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)60, result[0].ttl);
   CPPUNIT_ASSERT_EQUAL((uint16_t)1, result[0].priority);
   CPPUNIT_ASSERT_EQUAL(std::string("svc.example.com"), result[0].targetName);
   CPPUNIT_ASSERT(result[0].alpn.empty());

@@ -249,6 +249,7 @@ struct Answer {
   std::string ownerName;
   uint16_t type = 0;
   uint16_t klass = 0;
+  uint32_t ttl = 0;
   size_t rdataPos = 0;
   uint16_t rdlength = 0;
   std::string cname;
@@ -353,7 +354,7 @@ ParsedResponse readResponse(const unsigned char* data, size_t len,
     }
     answer.type = readUint16(data, len, pos);
     answer.klass = readUint16(data, len, pos + 2);
-    (void)readUint32(data, len, pos + 4); // TTL
+    answer.ttl = readUint32(data, len, pos + 4);
     answer.rdlength = readUint16(data, len, pos + 8);
     pos += 10;
     if (pos + answer.rdlength > len) {
@@ -422,6 +423,7 @@ std::vector<uint16_t> parseMandatoryParam(const unsigned char* data, size_t len)
 ServiceBindingRecord parseServiceBindingRecord(const unsigned char* data,
                                                 size_t len,
                                                 const std::string& ownerName,
+                                                uint32_t ttl,
                                                 size_t pos, uint16_t rdlength)
 {
   if (pos + rdlength > len || rdlength < 3) {
@@ -431,6 +433,7 @@ ServiceBindingRecord parseServiceBindingRecord(const unsigned char* data,
   auto rdataEnd = pos + rdlength;
   ServiceBindingRecord record;
   record.ownerName = ownerName;
+  record.ttl = ttl;
   record.priority = readUint16(data, rdataEnd, pos);
   pos += 2;
   bool targetNameRoot = false;
@@ -596,8 +599,8 @@ parseServiceBindingResponse(const unsigned char* data, size_t len,
                             const std::string& expectedHostname,
                             QueryType qtype)
 {
-  if (qtype != TYPE_HTTPS) {
-    throw DL_ABORT_EX("Unexpected DNS SVCB query type");
+  if (qtype != TYPE_SVCB && qtype != TYPE_HTTPS) {
+    throw DL_ABORT_EX("Unexpected DNS service binding query type");
   }
 
   auto response =
@@ -610,7 +613,8 @@ parseServiceBindingResponse(const unsigned char* data, size_t len,
         response.acceptedNames.find(answer.ownerName) !=
             response.acceptedNames.end()) {
       auto record = parseServiceBindingRecord(
-          data, len, answer.ownerName, answer.rdataPos, answer.rdlength);
+          data, len, answer.ownerName, answer.ttl, answer.rdataPos,
+          answer.rdlength);
       if (!record.hasUnknownMandatoryKey) {
         result.push_back(std::move(record));
       }

@@ -47,6 +47,7 @@ namespace dns {
 enum QueryType {
   TYPE_A = 1,
   TYPE_AAAA = 28,
+  TYPE_SVCB = 64,
   TYPE_HTTPS = 65,
 };
 
@@ -57,6 +58,7 @@ struct SvcParam {
 
 struct ServiceBindingRecord {
   std::string ownerName;
+  uint32_t ttl = 0;
   uint16_t priority = 0;
   std::string targetName;
   std::vector<uint16_t> mandatoryKeys;
