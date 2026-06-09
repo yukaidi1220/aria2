@@ -33,7 +33,8 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | --- | --- | --- | --- |
 | FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
-| DoT / DoH | 已接入异步 DNS 后端 | 当前直连模式要求 DNS server 连接目标是数值 IP；DoT/DoH 必须显式配置 server；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint，不是 DNS 查询名 | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
+| DoT / DoH | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot`；当前直连模式要求 DNS server 连接目标是数值 IP；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
+| IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsCacheCommand.cc`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
 | DoH over H2 | 未实现 | DoH resolver 固定发送 HTTP/1.1 `POST application/dns-message`，不会因为 `--enable-http2=true` 变成 H2 | `src/AsyncDohNameResolver.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存 | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
 | HTTP/3 / H3 / QUIC | 只有禁用占位参数 | `--enable-http3=true` 会被 `UnsupportedFeatureOptionHandler` 拒绝；源码没有 QUIC 传输、H3 command、`h3` ALPN 分发或依赖探测 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
@@ -131,6 +132,13 @@ aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://[2606:47
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com
 ```
 
+没有这些独立参数：
+
+- 当前源码没有 `--async-dns-over-https` 或 `--async-dns-over-tls` 这两个字面命令行选项。
+- DoH 使用 `--async-dns=true --async-dns-mode=doh --async-dns-server=...`。
+- DoT 使用 `--async-dns=true --async-dns-mode=dot --async-dns-server=...`。
+- 如果后续要增加别名，也应在 `OptionHandlerFactory.cc` 注册并同步 `usage_text.h`，不能只在文档里写。
+
 `#TLS_HOST` hint：
 
 - DoT/DoH 的 `#TLS_HOST` 是 aria2 自己解析出来的 hint，不会进入 DNS wire query，也不会改变要解析的下载目标域名。
@@ -163,7 +171,9 @@ DoH 规则：
 - `AsyncNameResolverMan::getStatus()` 只要任一地址族成功就返回成功；只有已启动的地址族全失败才返回失败。`AbstractCommand::resolveHostname()` 会立即使用已成功的地址，不等待仍在查询的另一族。
 - `continueAsyncDnsCacheFill()` 会把仍在查询的 resolver 交给后台 `AsyncDnsCacheCommand`；后台后续拿到地址后写入 DNS cache，只有确实新增地址时才尝试唤醒同一下载组创建后续连接。
 - `AbstractCommand::resolveHostname()` 拿到解析结果后写入 DNS cache，再由 `selectIPAddress()` / `getLeastUsedActiveAddressFamily()` 在 IPv4/IPv6 间选择。
-- 这不是完整 RFC 8305 Happy Eyeballs 并发连接实现；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果，后续连接优先选择 active in-flight 较少的地址族；打平时由 `FileEntry` 按 host/port 保存的轮转游标在 IPv4/IPv6 间分散选择地址”。
+- `InitiateConnectionCommand::createBackupConnectCommand()` 会从 DNS cache 里找 opposite-family 地址，创建 `BackupIPv4ConnectCommand`。异步 DNS 开启且 IPv6 未禁用时，`getBackupConnectionDelay()` 返回 `0ms`，备份连接的延迟阈值降为 0，实际启动仍按 `DownloadEngine` 事件循环调度；否则保持传统 `300ms` 延迟。
+- 备份连接胜出时，`ConnectCommand` 会切换到备份 socket。它只在原主 socket 已经通过 `getSocketError()` 报出明确错误时才把原地址标为 bad；如果原地址只是慢，不会因为备份更快就污染 DNS cache。
+- 这仍不是完整 RFC 8305 地址排序队列；更准确说是“同时支持 A/AAAA 解析、当前线程用最快可用结果，后台补齐地址给后续线程复用；当两个地址族已在 cache 中时，连接层用现有主/备份 socket 机制做双栈竞速”。
 
 XP/Win7 注意：
 
@@ -455,7 +465,7 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 | `--always-resume [true\|false]` | `true` | 总是尝试断点续传；失败次数受 `--max-resume-failure-tries` 影响。 |
 | `--async-dns [true\|false]` | 非 Android 默认 `true`，Android 默认 `false` | 启用异步 DNS。 |
 | `--async-dns-mode=<cares\|dot\|doh>` | `cares` | 异步 DNS 后端，详见 2.3。 |
-| `--async-dns-server=<SERVER>[,...]` | cares 读系统配置；DoT/DoH 必填 | 指定异步 DNS server，格式随 mode 变化。 |
+| `--async-dns-server=<SERVER>[,...]` | cares 读系统配置；DoT/DoH 必填 | 指定异步 DNS server，格式随 mode 变化；DoT/DoH 的数值地址可加 `#TLS_HOST`。 |
 | `--enable-async-dns6 [true\|false]` | 已废弃 | 旧 IPv6 异步 DNS 开关；当前使用 `--disable-ipv6` 控制。 |
 | `--auto-file-renaming [true\|false]` | `true` | 同名文件自动追加 `.1` 到 `.9999`。 |
 | `--auto-save-interval=<SEC>` | `60` | 定期保存 `.aria2` 控制文件。 |
@@ -570,7 +580,17 @@ aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=1.1.1.1#cloudfla
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com https://example.com/file
 ```
 
-### 5.5 网络调试日志
+没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立开关，别在配置文件里写这两个名字。
+
+### 5.5 双栈 DNS 和连接竞速
+
+```console
+aria2c --async-dns=true --disable-ipv6=false --console-log-level=network https://example.com/file
+```
+
+这会在双栈可用时并发启动 A/AAAA 查询，任一地址族先成功就先建连；后台拿到另一族新地址后会写入 DNS cache 并唤醒后续连接。已有 IPv4/IPv6 两族地址时，异步 DNS 路径会把 opposite-family 备份连接延迟阈值降为 `0ms`，方便主/备份连接尽早竞速；`--disable-ipv6=true` 或无异步 DNS 构建仍保持保守路径。
+
+### 5.6 网络调试日志
 
 ```console
 aria2c --log=- --log-level=network --console-log-level=network https://example.com/file
@@ -579,6 +599,7 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 ## 6. 待补齐/确认
 
 - HTTP/2 目前已有同 origin active/idle 复用、保守 origin coalescing 和 421 负缓存；后续阶段还要补真实网络端到端测试，以及继续完善错误恢复、Range/redirect 行为。
+- IPv4/IPv6 目前已有第一阶段双栈竞速：A/AAAA 并发解析、后台 DNS cache 补齐唤醒、异步 DNS 下 `0ms` opposite-family 备份连接。后续若要更完整贴近 RFC 8305，还应实现按地址列表交错排序、连接尝试取消/统计更细粒度、DNS cache TTL 和坏地址恢复策略。
 - H3/QUIC 当前只有 `--enable-http3[=false]` 禁用壳和文档边界；后续应先做依赖探测与能力矩阵，不能直接把 `h3` ALPN 写进下载链路。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
