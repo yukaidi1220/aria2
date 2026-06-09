@@ -20,6 +20,7 @@ SRCS =  \
 	AbstractSingleDiskAdaptor.cc AbstractSingleDiskAdaptor.h\
 	AdaptiveFileAllocationIterator.cc AdaptiveFileAllocationIterator.h\
 	AdaptiveURISelector.cc AdaptiveURISelector.h\
+	AltSvcParser.cc AltSvcParser.h\
 	AnonDiskWriterFactory.h\
 	array_fun.h\
 	AuthConfig.cc AuthConfig.h\
