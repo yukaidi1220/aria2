@@ -26,6 +26,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(AsyncNameResolverTest);
   CPPUNIT_TEST(testGetQueryStatusBeforeStart);
+  CPPUNIT_TEST(testStartAsyncStartsIPv4AndIPv6);
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails);
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv6SucceedsAndIPv4IsPending);
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPending);
@@ -58,6 +59,7 @@ public:
   void tearDown() {}
 
   void testGetQueryStatusBeforeStart();
+  void testStartAsyncStartsIPv4AndIPv6();
   void testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails();
   void testGetStatusSucceedsWhenIPv6SucceedsAndIPv4IsPending();
   void testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPending();
@@ -174,6 +176,26 @@ void AsyncNameResolverTest::testGetQueryStatusBeforeStart()
   AsyncNameResolverMan resolverMan;
 
   CPPUNIT_ASSERT_EQUAL(std::string(), resolverMan.getQueryStatus());
+}
+
+void AsyncNameResolverTest::testStartAsyncStartsIPv4AndIPv6()
+{
+  std::vector<std::string> ipv6Addrs;
+  auto ipv6Resolver = std::make_shared<MockAsyncResolver>(
+      AF_INET6, AsyncResolver::STATUS_QUERYING, ipv6Addrs);
+  std::vector<std::string> ipv4Addrs;
+  auto ipv4Resolver = std::make_shared<MockAsyncResolver>(
+      AF_INET, AsyncResolver::STATUS_QUERYING, ipv4Addrs);
+  MockAsyncNameResolverMan resolverMan(ipv6Resolver, ipv4Resolver);
+  MockCommand command(1);
+
+  resolverMan.startAsync("dual.example", nullptr, &command);
+
+  CPPUNIT_ASSERT(resolverMan.started());
+  CPPUNIT_ASSERT_EQUAL(std::string("dual.example"),
+                       ipv6Resolver->getHostname());
+  CPPUNIT_ASSERT_EQUAL(std::string("dual.example"),
+                       ipv4Resolver->getHostname());
 }
 
 void AsyncNameResolverTest::testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails()
