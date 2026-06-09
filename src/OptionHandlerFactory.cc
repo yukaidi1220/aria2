@@ -169,6 +169,13 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+    OptionHandler* op(new ParameterOptionHandler(
+        PREF_CONF_PRECEDENCE, TEXT_CONF_PRECEDENCE, "command",
+        {"command", "conf"}));
+    op->addTag(TAG_ADVANCED);
+    handlers.push_back(op);
+  }
+  {
     OptionHandler* op(new BooleanOptionHandler(
         PREF_CONTINUE, TEXT_CONTINUE, A2_V_FALSE, OptionHandler::OPT_ARG, 'c'));
     op->addTag(TAG_BASIC);

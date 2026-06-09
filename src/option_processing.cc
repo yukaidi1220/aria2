@@ -37,6 +37,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
+#include <vector>
 
 #include <aria2/aria2.h>
 #include "Option.h"
@@ -88,6 +89,78 @@ void overrideWithEnv(Option& op,
       global::cerr()->printf("\n%s\n", e.stackTrace().c_str());
     }
   }
+}
+
+void appendUnique(std::vector<std::string>& values, const std::string& value)
+{
+  if (!value.empty() &&
+      std::find(values.begin(), values.end(), value) == values.end()) {
+    values.push_back(value);
+  }
+}
+
+std::string getProgramDir(int argc, char** argv)
+{
+#ifdef __MINGW32__
+  std::vector<wchar_t> buf(32768);
+  DWORD len = GetModuleFileNameW(nullptr, buf.data(), (DWORD)buf.size());
+  if (len > 0 && len < buf.size()) {
+    return File(wCharToUtf8(std::wstring(buf.data(), len))).getDirname();
+  }
+#endif // __MINGW32__
+
+  if (argc > 0 && argv && argv[0] && argv[0][0]) {
+    std::string path = argv[0];
+    if (path.find_first_of(File::getPathSeparators()) != std::string::npos) {
+      return File(path).getDirname();
+    }
+#ifndef __MINGW32__
+    const char* pathEnv = getenv("PATH");
+    if (pathEnv) {
+      std::string paths = pathEnv;
+      std::string::size_type first = 0;
+      while (first <= paths.size()) {
+        auto last = paths.find(':', first);
+        auto dir = paths.substr(first, last - first);
+        if (!dir.empty() && File(util::applyDir(dir, path)).isFile()) {
+          return dir;
+        }
+        if (last == std::string::npos) {
+          break;
+        }
+        first = last + 1;
+      }
+    }
+#endif // !__MINGW32__
+  }
+  return std::string();
+}
+
+std::vector<std::string> getDefaultConfigFileCandidates(int argc, char** argv)
+{
+  std::vector<std::string> candidates;
+  appendUnique(candidates, util::applyDir(File::getCurrentDir(), "aria2.conf"));
+  auto programDir = getProgramDir(argc, argv);
+  if (!programDir.empty()) {
+    appendUnique(candidates, util::applyDir(programDir, "aria2.conf"));
+  }
+  appendUnique(candidates, util::getConfigFile());
+  return candidates;
+}
+
+std::string selectConfigFile(bool explicitConfPath,
+                             const std::string& explicitPath, int argc,
+                             char** argv)
+{
+  if (explicitConfPath) {
+    return explicitPath;
+  }
+  for (const auto& candidate : getDefaultConfigFileCandidates(argc, argv)) {
+    if (File(candidate).isFile()) {
+      return candidate;
+    }
+  }
+  return std::string();
 }
 } // namespace
 
@@ -178,32 +251,34 @@ error_code::Value option_processing(Option& op, bool standalone,
   const std::shared_ptr<OptionParser>& oparser = OptionParser::getInstance();
   try {
     bool noConf = false;
+    bool explicitConfPath = false;
     std::string ucfname;
     std::stringstream cmdstream;
+    Option commandControlOption;
     {
-      // first evaluate --no-conf and --conf-path options.
-      Option op;
+      // first evaluate startup control options.
       if (argc == 0) {
-        oparser->parse(op, options);
+        oparser->parse(commandControlOption, options);
       }
       else {
         oparser->parseArg(cmdstream, uris, argc, argv);
-        oparser->parse(op, cmdstream);
+        oparser->parse(commandControlOption, cmdstream);
       }
-      noConf = op.getAsBool(PREF_NO_CONF);
-      ucfname = op.get(PREF_CONF_PATH);
+      noConf = commandControlOption.getAsBool(PREF_NO_CONF);
+      explicitConfPath = commandControlOption.definedLocal(PREF_CONF_PATH);
+      ucfname = commandControlOption.get(PREF_CONF_PATH);
       if (standalone) {
-        if (op.defined(PREF_VERSION)) {
+        if (commandControlOption.defined(PREF_VERSION)) {
           showVersion();
           exit(error_code::FINISHED);
         }
-        if (op.defined(PREF_HELP)) {
+        if (commandControlOption.defined(PREF_HELP)) {
           std::string keyword;
-          if (op.get(PREF_HELP).empty()) {
+          if (commandControlOption.get(PREF_HELP).empty()) {
             keyword = strHelpTag(TAG_BASIC);
           }
           else {
-            keyword = op.get(PREF_HELP);
+            keyword = commandControlOption.get(PREF_HELP);
             if (util::startsWith(keyword, "--")) {
               keyword.erase(keyword.begin(), keyword.begin() + 2);
             }
@@ -217,14 +292,23 @@ error_code::Value option_processing(Option& op, bool standalone,
         }
       }
     }
+    auto defaultOption = std::make_shared<Option>();
+    oparser->parseDefaultValues(*defaultOption);
+
+    auto commandOption = std::make_shared<Option>(commandControlOption);
+    commandOption->setParent(defaultOption);
+    if (argc != 0) {
+      oparser->parse(*commandOption, options);
+    }
+
     auto confOption = std::make_shared<Option>();
-    oparser->parseDefaultValues(*confOption);
+    confOption->setParent(defaultOption);
     if (!noConf) {
       std::string cfname =
-          ucfname.empty() ? oparser->find(PREF_CONF_PATH)->getDefaultValue()
-                          : ucfname;
+          selectConfigFile(explicitConfPath, ucfname, argc, argv);
+      bool configFileLoaded = false;
 
-      if (File(cfname).isFile()) {
+      if (!cfname.empty() && File(cfname).isFile()) {
         std::stringstream ss;
         {
           BufferedFile fp(cfname.c_str(), BufferedFile::READ);
@@ -232,6 +316,7 @@ error_code::Value option_processing(Option& op, bool standalone,
             fp.transfer(ss);
           }
         }
+        configFileLoaded = true;
         try {
           oparser->parse(*confOption, ss);
         }
@@ -251,7 +336,12 @@ error_code::Value option_processing(Option& op, bool standalone,
           return e.getErrorCode();
         }
       }
-      else if (!ucfname.empty()) {
+      confOption->removeLocal(PREF_CONF_PATH);
+      confOption->removeLocal(PREF_NO_CONF);
+      if (!cfname.empty() && !explicitConfPath) {
+        defaultOption->put(PREF_CONF_PATH, cfname);
+      }
+      else if (explicitConfPath && !configFileLoaded) {
         global::cerr()->printf(_("Configuration file %s is not found."),
                                cfname.c_str());
         global::cerr()->printf("\n");
@@ -265,20 +355,31 @@ error_code::Value option_processing(Option& op, bool standalone,
     overrideWithEnv(*confOption, oparser, PREF_FTP_PROXY, "ftp_proxy");
     overrideWithEnv(*confOption, oparser, PREF_ALL_PROXY, "all_proxy");
     overrideWithEnv(*confOption, oparser, PREF_NO_PROXY, "no_proxy");
-    if (!standalone) {
-      // For non-standalone mode, set PREF_QUIET to true to suppress
-      // output. The caller can override this by including PREF_QUIET
-      // in options argument.
-      confOption->put(PREF_QUIET, A2_V_TRUE);
+
+    auto confPrecedence =
+        commandOption->definedLocal(PREF_CONF_PRECEDENCE)
+            ? commandOption->get(PREF_CONF_PRECEDENCE)
+            : confOption->definedLocal(PREF_CONF_PRECEDENCE)
+                  ? confOption->get(PREF_CONF_PRECEDENCE)
+                  : defaultOption->get(PREF_CONF_PRECEDENCE);
+    if (commandOption->definedLocal(PREF_CONF_PRECEDENCE)) {
+      confOption->removeLocal(PREF_CONF_PRECEDENCE);
     }
 
-    // we must clear eof bit and seek to the beginning of the buffer.
-    cmdstream.clear();
-    cmdstream.seekg(0, std::ios::beg);
-    // finally let's parse and store command-line options.
-    op.setParent(confOption);
-    oparser->parse(op, cmdstream);
-    oparser->parse(op, options);
+    op = Option();
+    if (confPrecedence == "conf") {
+      op.setParent(commandOption);
+      op.merge(*confOption);
+    }
+    else {
+      op.setParent(confOption);
+      op.merge(*commandOption);
+    }
+    if (!standalone && !commandOption->definedLocal(PREF_QUIET)) {
+      // Preserve API embedding behavior: suppress output unless caller
+      // explicitly overrides it.
+      op.put(PREF_QUIET, A2_V_TRUE);
+    }
   }
   catch (OptionHandlerException& e) {
     global::cerr()->printf("%s", e.stackTrace().c_str());

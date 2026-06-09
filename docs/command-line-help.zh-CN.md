@@ -652,8 +652,9 @@ Alt-Svc 源码状态：
 | `--auto-file-renaming [true\|false]` | `true` | 同名文件自动追加 `.1` 到 `.9999`。 |
 | `--auto-save-interval=<SEC>` | `60` | 定期保存 `.aria2` 控制文件。 |
 | `--conditional-get [true\|false]` | `false` | 本地文件较旧时才下载。 |
-| `--conf-path=<PATH>` | 平台默认 | 指定配置文件路径。 |
-| `--no-conf [true\|false]` | `false` | 不读取配置文件。 |
+| `--conf-path=<PATH>` | 自动发现：当前工作目录 `aria2.conf` -> 程序目录 `aria2.conf` -> 用户默认配置 | 指定配置文件路径；显式写 `--conf-path=aria2.conf` 时按当前工作目录解析相对路径。 |
+| `--conf-precedence=<command\|conf>` | `command` | 命令行和配置文件重复设置同一选项时谁优先；默认保持命令行优先，设为 `conf` 时配置文件优先。 |
+| `--no-conf [true\|false]` | `false` | 不读取任何配置文件；仍保留命令行和 API 传入选项。 |
 | `--console-log-level=<LEVEL>` | `notice` | 控制台日志级别：`debug`、`info`、`notice`、`warn`、`error`、`network`。 |
 | `--log-level=<LEVEL>` | `debug` | 文件日志级别，支持 `network`。 |
 | `-D, --daemon [true\|false]` | `false` | 以 daemon 运行。 |

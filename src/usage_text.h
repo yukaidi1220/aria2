@@ -438,6 +438,11 @@
   _(" --no-conf[=true|false]       Disable loading aria2.conf file.")
 #define TEXT_CONF_PATH                                                  \
   _(" --conf-path=PATH             Change the configuration file path to PATH.")
+#define TEXT_CONF_PRECEDENCE                                            \
+  _(" --conf-precedence=command|conf\n"                                 \
+    "                              Set whether command-line options or\n" \
+    "                              aria2.conf entries win when both define\n" \
+    "                              the same option.")
 #define TEXT_STOP                                                       \
   _(" --stop=SEC                   Stop application after SEC seconds has passed.\n" \
     "                              If 0 is given, this feature is disabled.")

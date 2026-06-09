@@ -196,6 +196,8 @@ extern PrefPtr PREF_ALLOW_PIECE_LENGTH_CHANGE;
 extern PrefPtr PREF_NO_CONF;
 // value: string
 extern PrefPtr PREF_CONF_PATH;
+// value: command | conf
+extern PrefPtr PREF_CONF_PRECEDENCE;
 // value: 1*digit
 extern PrefPtr PREF_STOP;
 // value: true | false

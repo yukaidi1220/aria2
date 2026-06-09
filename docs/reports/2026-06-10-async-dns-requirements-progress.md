@@ -29,6 +29,12 @@
    - `docs/command-line-help.zh-CN.md` 记录 async DNS disabled 行为、DoT/DoH bootstrap、IPv6 默认值、`-x` 范围、SVCB endpoint ALPN 与失败短期避让。
    - `doc/manual-src/en/aria2c.rst` 同步 `-x` 范围，并修正 HTTPS/SVCB 已可改变 TCP connect target/port 和收窄 ALPN 的说明。
 
+6. 配置加载第二阶段基础能力。
+   - 落点：`src/option_processing.cc`、`src/OptionHandlerFactory.cc`、`src/Context.cc`
+   - 行为：未显式 `--conf-path` 且未启用 `--no-conf=true` 时，按当前工作目录 `aria2.conf`、程序所在目录 `aria2.conf`、用户目录默认配置的顺序查找。
+   - 行为：新增 `--conf-precedence=command|conf`，默认 `command` 保持命令行优先；显式或配置为 `conf` 时，配置文件可覆盖重复的命令行选项。
+   - 行为：启动日志打印 DNS、IPv6、H2/H3、分片/连接数和配置加载相关关键参数的最终值及来源。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
@@ -55,7 +61,7 @@
 
 ### 配置加载（1-5）
 
-未完成。当前第一刀没有改变 conf 自动发现顺序、`--conf-path=aria2.conf` 相对路径、`--no-conf=true`、命令行/conf 冲突优先级或 option 来源追踪。下一阶段需要单独设计 option source 模型，启动日志才能打印“默认值 / conf / 命令行 / 运行期修改”。
+部分完成。第 1 条自动发现顺序已改为当前工作目录 `aria2.conf` -> 程序所在目录 `aria2.conf` -> 用户目录默认配置；第 2 条显式 `--conf-path=aria2.conf` 继续按当前工作目录解析相对路径；第 3 条 `--no-conf=true` 会跳过所有配置文件；第 4 条新增 `--conf-precedence=command|conf`，默认命令行优先，也可显式配置为 conf 优先。第 5 条已先覆盖关键参数启动日志和来源，尚未做全量 option 来源追踪或运行期修改日志。
 
 ### DNS 模式（6-9）
 
@@ -95,7 +101,7 @@
 
 ## 下一阶段计划
 
-1. 配置加载与来源追踪：实现 `cwd aria2.conf -> exe dir aria2.conf -> user default config`，支持 `--conf-path=aria2.conf` 按当前工作目录解析，支持 `--no-conf=true` 完全禁读，并加入命令行/conf 优先级选项。
+1. 配置加载与来源追踪：继续补全量 option 来源追踪、运行期修改日志和更多启动日志断言；当前已完成基础配置查找顺序、`--no-conf=true`、`--conf-precedence=command|conf` 和关键参数来源日志。
 
 2. secure-first multi：把下载域名解析拆成 secure resolver 并发优先，plain resolver 默认只用于 DoT/DoH server bootstrap；仅在显式 fallback 阶段进入 plain c-ares/system DNS/getaddrinfo，并打出 network 日志。
 

@@ -1419,9 +1419,18 @@ Advanced Options
 
 .. option:: --conf-path=<PATH>
 
-  Change the configuration file path to PATH.
-  Default: ``$HOME/.aria2/aria2.conf`` if present, otherwise
-  ``$XDG_CONFIG_HOME/aria2/aria2.conf``.
+  Change the configuration file path to PATH.  If PATH is relative, it is
+  resolved against the current working directory.
+
+  When this option is not specified, aria2 looks for ``aria2.conf`` in the
+  current working directory, then next to the aria2 executable, and then in the
+  user configuration location.
+
+.. option:: --conf-precedence=<command|conf>
+
+  Set whether command-line options or configuration file entries win when both
+  define the same option.  The default is ``command``.  Use ``conf`` to let
+  ``aria2.conf`` override repeated command-line options.
 
 .. option:: --console-log-level=<LEVEL>
 
@@ -1793,7 +1802,7 @@ Advanced Options
 
 .. option:: --no-conf [true|false]
 
-  Disable loading aria2.conf file.
+  Disable loading any aria2.conf file.
 
 .. option:: --no-file-allocation-limit=<SIZE>
 
@@ -2160,12 +2169,15 @@ FILES
 aria2.conf
 ~~~~~~~~~~
 
-By default, aria2 checks whether the legacy path
-``$HOME/.aria2/aria2.conf`` is present, otherwise it parses
-``$XDG_CONFIG_HOME/aria2/aria2.conf`` as its configuration file.  You
-can specify the path to configuration file using :option:`--conf-path`
-option.  If you don't want to use the configuration file, use
-:option:`--no-conf` option.
+By default, aria2 looks for ``aria2.conf`` in the current working directory,
+then next to the aria2 executable, and then in the user configuration location
+(``$HOME/.aria2/aria2.conf`` if present, otherwise
+``$XDG_CONFIG_HOME/aria2/aria2.conf``). You can specify the path to
+configuration file using :option:`--conf-path` option.  Relative
+``--conf-path`` values are resolved against the current working directory.  If
+you don't want to use any configuration file, use :option:`--no-conf` option.
+Command-line options override configuration entries by default; use
+:option:`--conf-precedence` to let configuration entries win repeated options.
 
 The configuration file is a text file and has 1 option per each
 line. In each line, you can specify name-value pair in the format:

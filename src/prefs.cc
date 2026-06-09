@@ -243,6 +243,8 @@ PrefPtr PREF_ALLOW_PIECE_LENGTH_CHANGE = makePref("allow-piece-length-change");
 PrefPtr PREF_NO_CONF = makePref("no-conf");
 // value: string
 PrefPtr PREF_CONF_PATH = makePref("conf-path");
+// value: command | conf
+PrefPtr PREF_CONF_PRECEDENCE = makePref("conf-precedence");
 // value: 1*digit
 PrefPtr PREF_STOP = makePref("stop");
 // value: true | false

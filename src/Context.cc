@@ -44,6 +44,7 @@
 #include <numeric>
 #include <vector>
 #include <iostream>
+#include <cstring>
 
 #include "LogFactory.h"
 #include "Logger.h"
@@ -55,6 +56,8 @@
 #include "message.h"
 #include "prefs.h"
 #include "Option.h"
+#include "OptionHandler.h"
+#include "OptionParser.h"
 #include "a2algo.h"
 #include "a2io.h"
 #include "a2time.h"
@@ -83,6 +86,65 @@ extern char* optarg;
 extern int optind, opterr, optopt;
 
 namespace aria2 {
+
+namespace {
+
+const char* optionSourceName(size_t depth, bool confPrecedence)
+{
+  if (depth == 0) {
+    return confPrecedence ? "conf" : "command";
+  }
+  if (depth == 1) {
+    return confPrecedence ? "command" : "conf";
+  }
+  return "default";
+}
+
+std::string getOptionSource(const Option* option, PrefPtr pref,
+                            const OptionParser* parser)
+{
+  auto confPrecedence = option->get(PREF_CONF_PRECEDENCE) == "conf";
+  for (size_t depth = 0; option; ++depth, option = option->getParent().get()) {
+    if (!option->definedLocal(pref)) {
+      continue;
+    }
+    auto source = optionSourceName(depth, confPrecedence);
+    auto handler = parser->find(pref);
+    if (strcmp(source, "default") == 0 && handler &&
+        option->get(pref) != handler->getDefaultValue()) {
+      return "runtime";
+    }
+    return source;
+  }
+  return "unset";
+}
+
+void logStartupOption(const Option* option, PrefPtr pref,
+                      const OptionParser* parser)
+{
+  A2_LOG_INFO(fmt("Option: %s=%s (source=%s)", pref->k,
+                  option->get(pref).c_str(),
+                  getOptionSource(option, pref, parser).c_str()));
+}
+
+void logStartupOptions(const Option* option)
+{
+  auto& parser = OptionParser::getInstance();
+  logStartupOption(option, PREF_NO_CONF, parser.get());
+  logStartupOption(option, PREF_CONF_PATH, parser.get());
+  logStartupOption(option, PREF_CONF_PRECEDENCE, parser.get());
+  logStartupOption(option, PREF_ASYNC_DNS, parser.get());
+  logStartupOption(option, PREF_ASYNC_DNS_MODE, parser.get());
+  logStartupOption(option, PREF_ASYNC_DNS_SERVER, parser.get());
+  logStartupOption(option, PREF_DISABLE_IPV6, parser.get());
+  logStartupOption(option, PREF_ENABLE_HTTP2, parser.get());
+  logStartupOption(option, PREF_ENABLE_HTTP3, parser.get());
+  logStartupOption(option, PREF_SPLIT, parser.get());
+  logStartupOption(option, PREF_MAX_CONNECTION_PER_SERVER, parser.get());
+  logStartupOption(option, PREF_MIN_SPLIT_SIZE, parser.get());
+}
+
+} // namespace
 
 #ifdef ENABLE_BITTORRENT
 namespace {
@@ -184,6 +246,7 @@ Context::Context(bool standalone, int argc, char** argv, const KeyVals& options)
   A2_LOG_INFO(getOperatingSystemInfo());
   A2_LOG_INFO(usedLibs());
   A2_LOG_INFO(MSG_LOGGING_STARTED);
+  logStartupOptions(op.get());
 
 #if defined(HAVE_SYS_RESOURCE_H) && defined(RLIMIT_NOFILE)
   rlimit r = {0, 0};
