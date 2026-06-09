@@ -37,7 +37,9 @@
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <iterator>
+#include <memory>
 #include <utility>
 
 #include "A2STR.h"
@@ -54,6 +56,7 @@
 #include "fmt.h"
 #include "LogFactory.h"
 #include "Option.h"
+#include "PlainBootstrapResolver.h"
 #include "SocketCore.h"
 #include "prefs.h"
 #include "a2functional.h"
@@ -216,6 +219,30 @@ std::string normalizePlainDnsServer(const std::string& value)
   return server;
 }
 
+std::function<std::unique_ptr<AsyncResolver>(int)>
+createPlainBootstrapResolverFactory(const AsyncDnsMultiServerConfig& config)
+{
+  const auto udpServers = config.udpServers;
+  const auto tcpServers = config.tcpServers;
+  if (udpServers.empty() && tcpServers.empty()) {
+    return [](int family) {
+      return make_unique<AsyncNameResolver>(family, std::string());
+    };
+  }
+  return [udpServers, tcpServers](int family) {
+    std::vector<std::shared_ptr<AsyncResolver>> resolvers;
+    if (!udpServers.empty()) {
+      resolvers.push_back(
+          std::make_shared<AsyncNameResolver>(family, udpServers));
+    }
+    if (!tcpServers.empty()) {
+      resolvers.push_back(
+          std::make_shared<AsyncNameResolver>(family, tcpServers, true));
+    }
+    return make_unique<PlainBootstrapResolver>(family, std::move(resolvers));
+  };
+}
+
 } // namespace
 
 AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
@@ -357,6 +384,8 @@ AsyncNameResolverMan::createResolvers(int family) const
 #ifdef ENABLE_SSL
   if (resolverMode_ == RESOLVER_MULTI) {
     auto config = parseAsyncDnsMultiServerConfigList(servers_);
+    auto plainBootstrapResolverFactory =
+        createPlainBootstrapResolverFactory(config);
     if (config.udpServers.empty() && config.tcpServers.empty()) {
       resolvers.push_back(
           std::make_shared<AsyncNameResolver>(family, std::string()));
@@ -374,12 +403,12 @@ AsyncNameResolverMan::createResolvers(int family) const
     if (!config.dotServers.empty()) {
       resolvers.push_back(std::make_shared<AsyncDotNameResolver>(
           family, std::move(config.dotServers), AsyncDotTransportFactory(),
-          AsyncDotBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_)));
+          plainBootstrapResolverFactory, getBootstrapFamily(ipv4_, ipv6_)));
     }
     if (!config.dohServers.empty()) {
       resolvers.push_back(std::make_shared<AsyncDohNameResolver>(
           family, std::move(config.dohServers), AsyncDohTransportFactory(),
-          dohHttp2_, AsyncDohBootstrapResolverFactory(),
+          dohHttp2_, plainBootstrapResolverFactory,
           getBootstrapFamily(ipv4_, ipv6_)));
     }
     return resolvers;

@@ -1338,8 +1338,10 @@ Advanced Options
   address family/backend result that succeeds; unfinished resolvers continue in
   the background to fill aria2's DNS cache for later connections. ``dot``,
   ``doh``, and ``multi`` are available only when aria2 is built with SSL/TLS
-  support. DoT/DoH server hostnames are first resolved through plain c-ares
-  using the default resolver configuration and the address families enabled for
+  support. DoT/DoH server hostnames are first resolved through plain c-ares. In
+  ``multi`` mode, explicitly configured plain ``udp://`` and ``tcp://`` servers
+  are also used for this secure server bootstrap; otherwise aria2 uses the
+  default resolver configuration and the address families enabled for
   asynchronous DNS, so :option:`--disable-ipv6=true` also disables IPv6
   bootstrap lookups. aria2 then connects to the resolved IP address. DoT/DoH
   entries can append ``#TLS_HOST`` to use ``TLS_HOST`` as the TLS SNI,
@@ -1370,9 +1372,11 @@ Advanced Options
   the resolver normally reads DNS server addresses from the system resolver
   configuration, such as ``/etc/resolv.conf``; this option overrides that
   server list. ``dot`` and ``doh`` require explicit servers. If a DoT/DoH
-  server host is a hostname, aria2 bootstraps it through plain c-ares using the
-  default resolver configuration and the address families enabled for
-  asynchronous DNS. With the ``multi`` backend, use ``udp://IP`` or bare ``IP``
+  server host is a hostname, aria2 bootstraps it through plain c-ares. With the
+  ``multi`` backend, explicit plain ``udp://`` and ``tcp://`` servers are also
+  used for secure server bootstrap; otherwise aria2 uses the default resolver
+  configuration and the address families enabled for asynchronous DNS. With the
+  ``multi`` backend, use ``udp://IP`` or bare ``IP``
   for plain DNS over UDP, ``tcp://IP`` for plain DNS over TCP,
   ``dot://HOST[:PORT][#TLS_HOST]`` for DoT, and HTTPS URLs for DoH. If no plain
   DNS server entry is given, the plain c-ares fallback uses the system resolver

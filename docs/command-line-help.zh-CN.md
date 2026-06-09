@@ -33,7 +33,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | --- | --- | --- | --- |
 | FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
-| DoT / DoH / DNS multi fallback | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot|multi`；server 可写数值 IP 或域名，域名会先用 plain c-ares DNS bootstrap 成 IP 再连接；`multi` 会并行 plain DNS、DoT、DoH，最快结果先用，未完成 resolver 后台填 cache；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncNameResolver.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
+| DoT / DoH / DNS multi fallback | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot|multi`；server 可写数值 IP 或域名，域名会先用 plain c-ares DNS bootstrap 成 IP 再连接；`multi` 有显式 `udp://`/`tcp://` plain server 时，DoT/DoH 域名 server 的 bootstrap 也使用这些 plain server；`multi` 会并行 plain DNS、DoT、DoH，最快结果先用，未完成 resolver 后台填 cache；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncNameResolver.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
 | IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；已有两族地址时做 active family 均衡；如果 IPv4 存在且 IPv6 只有 ULA/link-local/site-local/loopback/multicast/unspecified/IPv4-mapped 这类非公网 scope，主选址优先 IPv4；连接失败/超时会给同一下载项的同 host/port/family 加短 TTL 软降权，连接成功清除；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand` 和 `selectIPAddress()`、`src/FileEntry.cc`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
 | DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
@@ -161,8 +161,8 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 
 - `OptionHandlerFactory.cc` 只负责注册和基础取值范围；`--async-dns-mode=doh|dot|multi` 真正能不能跑，还要等 `AsyncNameResolverMan::validateAsyncNameResolverConfig()` 检查 server。
 - `AsyncNameResolverMan::startAsync()` 根据 IPv4/IPv6 可用性创建最多两个 resolver。源码先启动 AAAA，再启动 A；`getResolvedAddress()` 也按 resolver 顺序收集结果。
-- `AsyncNameResolverMan::createResolver()` 每次创建 DoT/DoH resolver 都会重新解析 `--async-dns-server`，并校验 server 列表非空、格式合法。域名 server 不再被配置层拒绝，而是在 resolver 内部先走 plain c-ares bootstrap；bootstrap 使用默认 resolver 配置，并遵守当前可用地址族和 `--disable-ipv6`。
-- `AsyncNameResolverMan::createResolvers()` 在 `multi` 模式下会为每个 active family 同时创建 plain c-ares UDP/TCP、DoT、DoH resolver。`getStatus()` 仍保持“任一 resolver 成功即成功，全部失败才失败”；未完成 resolver 会交给 `AsyncDnsCacheCommand` 后台继续，后续成功结果写入 DNS cache 并唤醒下载组。
+- `AsyncNameResolverMan::createResolver()` 每次创建 DoT/DoH resolver 都会重新解析 `--async-dns-server`，并校验 server 列表非空、格式合法。域名 server 不再被配置层拒绝，而是在 resolver 内部先走 plain c-ares bootstrap；`dot`/`doh` 单后端使用默认 resolver 配置，`multi` 有显式 plain server 时使用这些 `udp://`/`tcp://` server，并遵守当前可用地址族和 `--disable-ipv6`。
+- `AsyncNameResolverMan::createResolvers()` 在 `multi` 模式下会为每个 active family 同时创建 plain c-ares UDP/TCP、DoT、DoH resolver；secure resolver 的域名 server bootstrap 只使用 plain resolver 子集，不会递归启动 DoT/DoH。`getStatus()` 仍保持“任一 resolver 成功即成功，全部失败才失败”；未完成 resolver 会交给 `AsyncDnsCacheCommand` 后台继续，后续成功结果写入 DNS cache 并唤醒下载组。
 - `AsyncDotNameResolver` / `AsyncDohNameResolver` 对域名 server 会先创建 c-ares bootstrap resolver，解析 `connectHost`，然后只把解析出的 IP 交给 `SocketCore::establishConnection()`；TLS SNI、证书校验主机、DoH HTTP `Host` / HTTP/2 `:authority` 仍使用 `tlsHost` 或原 server 域名。
 - bootstrap 成功后，同一 secure server 的多个 IP 会按返回顺序尝试；某个 IP 的 TCP/TLS/DoT/DoH 查询失败会先试下一个 IP，该 server 全部失败后再切到 server 列表的下一个条目。
 - DoT resolver 生成普通 DNS wire query 后前面加 2 字节长度，按 RFC 7858 风格通过 TLS 连接发送；响应先读 2 字节长度，再读 DNS message。
@@ -208,14 +208,14 @@ aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,
 DoT 规则：
 
 - 解析器能接受 `HOST`、`HOST:PORT`、`IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。数值地址和域名都可追加 `#TLS_HOST`，例如 `1.1.1.1#cloudflare-dns.com`、`dns.example.org#cloudflare-dns.com` 或 `[2606:4700:4700::1111]:853#cloudflare-dns.com`。
-- server host 是域名时，DoT resolver 先用 plain c-ares DNS 解析该域名，再连接解析出的 IP；bootstrap 解析遵守 `--disable-ipv6` 和可用地址族，TLS SNI 和证书校验主机仍是 `#TLS_HOST` 或原域名。
+- server host 是域名时，DoT resolver 先用 plain c-ares DNS 解析该域名，再连接解析出的 IP；`multi` 模式有显式 plain server 时使用这些 `udp://`/`tcp://` server bootstrap，否则使用默认 resolver 配置；bootstrap 解析遵守 `--disable-ipv6` 和可用地址族，TLS SNI 和证书校验主机仍是 `#TLS_HOST` 或原域名。
 - `--async-dns-mode=dot` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoT server configured”。
 - `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 未写 hint 时证书校验主机回退为 IP 本身，且不会发送 DNS 主机名形式的 SNI。
 
 DoH 规则：
 
 - 解析器能接受 HTTPS URL，例如 `https://1.1.1.1/dns-query`、`https://[2606:4700:4700::1111]/dns-query` 或 `https://dns.example.org/dns-query`，默认端口 `443`。数值 HTTPS URL 或域名 HTTPS URL 都可追加 `#TLS_HOST`，例如 `https://1.1.1.1/dns-query#cloudflare-dns.com` 或 `https://dns.example.org/dns-query#cloudflare-dns.com`。
-- URL host 是域名时，DoH resolver 先用 plain c-ares DNS 解析该域名，再连接解析出的 IP；bootstrap 解析遵守 `--disable-ipv6` 和可用地址族，TLS SNI、证书校验主机和 HTTP `Host` / `:authority` 仍是 `#TLS_HOST` 或 URL host。
+- URL host 是域名时，DoH resolver 先用 plain c-ares DNS 解析该域名，再连接解析出的 IP；`multi` 模式有显式 plain server 时使用这些 `udp://`/`tcp://` server bootstrap，否则使用默认 resolver 配置；bootstrap 解析遵守 `--disable-ipv6` 和可用地址族，TLS SNI、证书校验主机和 HTTP `Host` / `:authority` 仍是 `#TLS_HOST` 或 URL host。
 - `--async-dns-mode=doh` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoH server configured”。
 - URL 必须有 path，拒绝 userinfo、密码；query 允许作为 path 的一部分发送。fragment 被当作 TLS/HTTP 逻辑主机名，只允许合法 DNS 主机名，不能是 IP、`localhost` 或单标签名。
 - `AsyncDohNameResolver.cc::createDohRequest()` 是 HTTP/1.1 fallback 路径，发送 `POST`、`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
@@ -647,7 +647,7 @@ Alt-Svc 源码状态：
 | `--always-resume [true\|false]` | `true` | 总是尝试断点续传；失败次数受 `--max-resume-failure-tries` 影响。 |
 | `--async-dns [true\|false]` | 非 Android 默认 `true`，Android 默认 `false` | 启用异步 DNS。 |
 | `--async-dns-mode=<cares\|dot\|doh\|multi>` | `cares` | 异步 DNS 后端，详见 2.3；`multi` 会并行 plain DNS、DoT、DoH。 |
-| `--async-dns-server=<SERVER>[,...]` | cares 读系统配置；DoT/DoH 必填；multi 无 plain server 时用系统 resolver | 指定异步 DNS server，格式随 mode 变化；DoT/DoH 可写数值地址或域名，域名会 plain DNS bootstrap 并遵守 `--disable-ipv6`，且可加 `#TLS_HOST`；multi 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST` 是 DoT，HTTPS URL 是 DoH。 |
+| `--async-dns-server=<SERVER>[,...]` | cares 读系统配置；DoT/DoH 必填；multi 无 plain server 时用系统 resolver | 指定异步 DNS server，格式随 mode 变化；DoT/DoH 可写数值地址或域名，域名会 plain DNS bootstrap 并遵守 `--disable-ipv6`，且可加 `#TLS_HOST`；multi 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST` 是 DoT，HTTPS URL 是 DoH；有显式 plain server 时，DoT/DoH 域名 server 的 bootstrap 也走这些 plain server。 |
 | `--enable-async-dns6 [true\|false]` | 已废弃 | 旧 IPv6 异步 DNS 开关；当前使用 `--disable-ipv6` 控制。 |
 | `--auto-file-renaming [true\|false]` | `true` | 同名文件自动追加 `.1` 到 `.9999`。 |
 | `--auto-save-interval=<SEC>` | `60` | 定期保存 `.aria2` 控制文件。 |
@@ -769,7 +769,7 @@ aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,
 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立开关，别在配置文件里写这两个名字。
 倒数第二条会让 DoH 先尝试 HTTP/2；构建缺少 nghttp2 时 `--enable-http2=true` 会在参数阶段被拒绝。构建支持 H2 但 TLS ALPN 或服务端未选中 `h2` 时，会正常回退到 HTTP/1.1 DoH。
 
-`multi` 示例会同时发起 plain c-ares、DoT、DoH resolver，最快成功的地址先用于当前连接，未完成 resolver 后台继续填 DNS cache。因为 plain DNS 是并行发出的，不能把 `multi` 当作纯隐私模式；需要避免明文 DNS 泄漏时应使用 `dot` 或 `doh` 单后端。
+`multi` 示例会同时发起 plain c-ares、DoT、DoH resolver，最快成功的地址先用于当前连接，未完成 resolver 后台继续填 DNS cache。显式配置的 plain server 也会用于 DoT/DoH 域名 server 的 bootstrap；这个 bootstrap 只走 plain resolver 子集，不递归启动 secure resolver。因为 plain DNS 是并行发出的，不能把 `multi` 当作纯隐私模式；需要避免明文 DNS 泄漏时应使用 `dot` 或 `doh` 单后端。
 
 ### 5.5 双栈 DNS 和连接竞速
 

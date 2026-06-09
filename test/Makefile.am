@@ -257,7 +257,8 @@ endif # ENABLE_METALINK
 if ENABLE_ASYNC_DNS
 aria2c_SOURCES += AsyncNameResolverTest.cc AsyncServiceBindingResolverTest.cc
 if ENABLE_SSL
-aria2c_SOURCES += AsyncDotNameResolverTest.cc AsyncDohNameResolverTest.cc
+aria2c_SOURCES += AsyncDotNameResolverTest.cc AsyncDohNameResolverTest.cc\
+	PlainBootstrapResolverTest.cc
 endif # ENABLE_SSL
 endif # ENABLE_ASYNC_DNS
 

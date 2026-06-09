@@ -456,9 +456,9 @@
   _(" --async-dns-mode=cares|dot|doh|multi\n"                   \
     "                              Select asynchronous DNS resolver backend.\n" \
     "                              DoT/DoH server names are bootstrapped with\n" \
-    "                              plain c-ares using default resolver config\n" \
-    "                              and enabled address families. Append\n" \
-    "                              #TLS_HOST to set TLS/HTTP names. multi\n" \
+    "                              plain c-ares. multi uses explicit udp://\n" \
+    "                              and tcp:// servers for secure bootstrap.\n" \
+    "                              Append #TLS_HOST to set TLS/HTTP names. multi\n" \
     "                              queries plain DNS, DoT and DoH in parallel.\n" \
     "                              HTTPS RR discovery follows this backend.")
 #else  // !ENABLE_SSL
@@ -881,8 +881,10 @@
     "                              such as /etc/resolv.conf. This option overrides\n" \
     "                              that server list. DoT/DoH require explicit\n" \
     "                              servers; server hostnames are bootstrapped through\n" \
-    "                              plain c-ares using the default resolver\n" \
-    "                              configuration and enabled address families.\n" \
+    "                              plain c-ares. In multi mode, explicit udp://\n" \
+    "                              and tcp:// plain servers are used for this\n" \
+    "                              bootstrap. Otherwise the default resolver\n" \
+    "                              configuration and enabled families are used.\n" \
     "                              With multi, use udp://IP, tcp://IP,\n" \
     "                              dot://HOST[:PORT][#TLS_HOST], or HTTPS DoH\n" \
     "                              URLs; bare IP entries mean udp://IP. HTTPS\n" \
