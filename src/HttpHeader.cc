@@ -216,7 +216,8 @@ bool HttpHeader::isKeepAlive() const
 {
   const std::string& connection = find(CONNECTION);
   return !util::strieq(connection, "close") &&
-         (version_ == "HTTP/1.1" || util::strieq(connection, "keep-alive"));
+         (version_ == "HTTP/1.1" || version_ == "HTTP/2" ||
+          util::strieq(connection, "keep-alive"));
 }
 
 namespace {

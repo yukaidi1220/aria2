@@ -15,6 +15,7 @@ class HttpHeaderTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testClearField);
   CPPUNIT_TEST(testFieldContains);
   CPPUNIT_TEST(testRemove);
+  CPPUNIT_TEST(testIsKeepAlive);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -23,6 +24,7 @@ public:
   void testClearField();
   void testFieldContains();
   void testRemove();
+  void testIsKeepAlive();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpHeaderTest);
@@ -195,6 +197,33 @@ void HttpHeaderTest::testRemove()
 
   CPPUNIT_ASSERT(!h.defined(HttpHeader::TRANSFER_ENCODING));
   CPPUNIT_ASSERT(h.defined(HttpHeader::CONNECTION));
+}
+
+void HttpHeaderTest::testIsKeepAlive()
+{
+  {
+    HttpHeader h;
+    h.setVersion("HTTP/1.1");
+    CPPUNIT_ASSERT(h.isKeepAlive());
+  }
+  {
+    HttpHeader h;
+    h.setVersion("HTTP/1.0");
+    CPPUNIT_ASSERT(!h.isKeepAlive());
+    h.put(HttpHeader::CONNECTION, "keep-alive");
+    CPPUNIT_ASSERT(h.isKeepAlive());
+  }
+  {
+    HttpHeader h;
+    h.setVersion("HTTP/2");
+    CPPUNIT_ASSERT(h.isKeepAlive());
+  }
+  {
+    HttpHeader h;
+    h.setVersion("HTTP/2");
+    h.put(HttpHeader::CONNECTION, "close");
+    CPPUNIT_ASSERT(!h.isKeepAlive());
+  }
 }
 
 } // namespace aria2

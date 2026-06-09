@@ -52,6 +52,7 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSkipBodyAbortsBodyLongerThanContentLength);
   CPPUNIT_TEST(testSkipBodyRedirectsWhenBodyShorterThanContentLength);
   CPPUNIT_TEST(testSkipBodyAborts404WhenBodyShorterThanContentLength);
+  CPPUNIT_TEST(testSkipCoalesced421RetriesAfterEndStream);
   CPPUNIT_TEST(testSkipBodyAbortsOnStreamError);
   CPPUNIT_TEST(testTransportFailureThrows);
   CPPUNIT_TEST(testStreamClosedBeforeHeadersThrows);
@@ -75,6 +76,7 @@ public:
   void testSkipBodyAbortsBodyLongerThanContentLength();
   void testSkipBodyRedirectsWhenBodyShorterThanContentLength();
   void testSkipBodyAborts404WhenBodyShorterThanContentLength();
+  void testSkipCoalesced421RetriesAfterEndStream();
   void testSkipBodyAbortsOnStreamError();
   void testTransportFailureThrows();
   void testStreamClosedBeforeHeadersThrows();
@@ -87,6 +89,8 @@ namespace {
 class TestHttp2ResponseCommand : public Http2ResponseCommand {
 private:
   bool requeued_ = false;
+  bool retried_ = false;
+  time_t retryWait_ = -1;
 
 public:
   TestHttp2ResponseCommand(
@@ -104,9 +108,17 @@ public:
   using Http2ResponseCommand::executeInternal;
 
   bool requeued() const { return requeued_; }
+  bool retried() const { return retried_; }
+  time_t retryWait() const { return retryWait_; }
 
 protected:
   void requeueSelf() CXX11_OVERRIDE { requeued_ = true; }
+  bool prepareForRetry(time_t wait) CXX11_OVERRIDE
+  {
+    retried_ = true;
+    retryWait_ = wait;
+    return Http2ResponseCommand::prepareForRetry(wait);
+  }
 };
 
 class TestHttp2DownloadCommand : public Http2DownloadCommand {
@@ -538,6 +550,31 @@ void Http2ResponseCommandTest::testSkipBodyAborts404WhenBodyShorterThanContentLe
   fixture.transport.appendInboundData(fixture.server.drainOutboundData());
 
   CPPUNIT_ASSERT_THROW(command->executeInternal(), DlAbortEx);
+}
+
+void Http2ResponseCommandTest::testSkipCoalesced421RetriesAfterEndStream()
+{
+  CommandFixture fixture;
+  fixture.request->setHttp2OriginCoalesced(true);
+  auto command = fixture.makeCommand();
+  fixture.submitResponseHeaders(createHeaders(421, 4));
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+  CPPUNIT_ASSERT(!command->retried());
+  CPPUNIT_ASSERT(fixture.request->isHttp2OriginCoalesced());
+  CPPUNIT_ASSERT(!fixture.request->http2OriginCoalescingBlocked());
+
+  fixture.server.submitEndStream(fixture.streamId);
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(command->executeInternal());
+  CPPUNIT_ASSERT(command->retried());
+  CPPUNIT_ASSERT_EQUAL((time_t)0, command->retryWait());
+  CPPUNIT_ASSERT(!fixture.request->isHttp2OriginCoalesced());
+  CPPUNIT_ASSERT(fixture.request->http2OriginCoalescingBlocked());
 }
 
 void Http2ResponseCommandTest::testSkipBodyAbortsOnStreamError()
