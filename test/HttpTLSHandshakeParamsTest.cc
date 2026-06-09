@@ -21,6 +21,9 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDefaultAlpnProtocolsEmpty);
   CPPUNIT_TEST(testHttp2AlpnProtocolsWhenEnabled);
   CPPUNIT_TEST(testHttp2AlpnProtocolsDisabledByPipelining);
+  CPPUNIT_TEST(testHttpsServiceBindingHttp11RestrictsAlpn);
+  CPPUNIT_TEST(testHttpsServiceBindingH2RestrictsAlpn);
+  CPPUNIT_TEST(testHttpsServiceBindingDefaultAlpnKeepsConfiguredAlpn);
   CPPUNIT_TEST(testECHConfigBase64EnablesRequiredECH);
   CPPUNIT_TEST(testEnableECHRequiresConfig);
   CPPUNIT_TEST(testECHRejectsBadBase64);
@@ -36,6 +39,9 @@ public:
   void testDefaultAlpnProtocolsEmpty();
   void testHttp2AlpnProtocolsWhenEnabled();
   void testHttp2AlpnProtocolsDisabledByPipelining();
+  void testHttpsServiceBindingHttp11RestrictsAlpn();
+  void testHttpsServiceBindingH2RestrictsAlpn();
+  void testHttpsServiceBindingDefaultAlpnKeepsConfiguredAlpn();
   void testECHConfigBase64EnablesRequiredECH();
   void testEnableECHRequiresConfig();
   void testECHRejectsBadBase64();
@@ -112,6 +118,66 @@ void HttpTLSHandshakeParamsTest::testHttp2AlpnProtocolsDisabledByPipelining()
   auto protocols = createHttpAlpnProtocols(&option);
 
   CPPUNIT_ASSERT(protocols.empty());
+}
+
+void HttpTLSHandshakeParamsTest::testHttpsServiceBindingHttp11RestrictsAlpn()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  request.setHttpsServiceBindingEndpointInfo("origin.example", 443,
+                                             "svc.example", 8443,
+                                             HTTP_ALPN_HTTP11, false);
+  Option option;
+  option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+
+  auto params = createHttpTLSHandshakeParams(&request, &option);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, params.alpnProtocols.size());
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_HTTP11),
+                       params.alpnProtocols[0]);
+}
+
+void HttpTLSHandshakeParamsTest::testHttpsServiceBindingH2RestrictsAlpn()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  request.setHttpsServiceBindingEndpointInfo("origin.example", 443,
+                                             "svc.example", 8443,
+                                             HTTP_ALPN_H2, false);
+  Option option;
+  option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+
+  auto params = createHttpTLSHandshakeParams(&request, &option);
+
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT_EQUAL((size_t)1, params.alpnProtocols.size());
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_H2), params.alpnProtocols[0]);
+#else  // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(params.alpnProtocols.empty());
+#endif // !HAVE_LIBNGHTTP2
+}
+
+void HttpTLSHandshakeParamsTest::
+    testHttpsServiceBindingDefaultAlpnKeepsConfiguredAlpn()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  request.setHttpsServiceBindingEndpointInfo("origin.example", 443,
+                                             "svc.example", 8443,
+                                             HTTP_ALPN_HTTP11, true);
+  Option option;
+  option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+
+  auto params = createHttpTLSHandshakeParams(&request, &option);
+
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT_EQUAL((size_t)2, params.alpnProtocols.size());
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_H2), params.alpnProtocols[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_HTTP11),
+                       params.alpnProtocols[1]);
+#else  // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(params.alpnProtocols.empty());
+#endif // !HAVE_LIBNGHTTP2
 }
 
 void HttpTLSHandshakeParamsTest::testECHConfigBase64EnablesRequiredECH()

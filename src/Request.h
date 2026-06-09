@@ -54,6 +54,7 @@ public:
     std::string connectHost;
     uint16_t connectPort;
     std::string alpn;
+    bool defaultAlpnUsed;
 
     HttpsServiceBindingEndpointInfo();
 
@@ -210,7 +211,8 @@ public:
                                           uint16_t originPort,
                                           const std::string& connectHost,
                                           uint16_t connectPort,
-                                          const std::string& alpn);
+                                          const std::string& alpn,
+                                          bool defaultAlpnUsed);
 
   void clearHttpsServiceBindingEndpointInfo();
 

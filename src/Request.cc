@@ -53,7 +53,7 @@ const std::string Request::METHOD_HEAD = "HEAD";
 const std::string Request::DEFAULT_FILE = "index.html";
 
 Request::HttpsServiceBindingEndpointInfo::HttpsServiceBindingEndpointInfo()
-    : originPort(0), connectPort(0)
+    : originPort(0), connectPort(0), defaultAlpnUsed(false)
 {
 }
 
@@ -232,13 +232,14 @@ void Request::resetConnectedAddrInfo()
 void Request::setHttpsServiceBindingEndpointInfo(
     const std::string& originHost, uint16_t originPort,
     const std::string& connectHost, uint16_t connectPort,
-    const std::string& alpn)
+    const std::string& alpn, bool defaultAlpnUsed)
 {
   httpsServiceBindingEndpointInfo_.originHost = originHost;
   httpsServiceBindingEndpointInfo_.originPort = originPort;
   httpsServiceBindingEndpointInfo_.connectHost = connectHost;
   httpsServiceBindingEndpointInfo_.connectPort = connectPort;
   httpsServiceBindingEndpointInfo_.alpn = alpn;
+  httpsServiceBindingEndpointInfo_.defaultAlpnUsed = defaultAlpnUsed;
   httpsServiceBindingEndpointInfoSet_ = true;
 }
 

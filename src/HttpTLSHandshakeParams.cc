@@ -36,6 +36,7 @@
 
 #ifdef ENABLE_SSL
 
+#include <algorithm>
 #include <cctype>
 #include <iterator>
 #include <vector>
@@ -127,6 +128,32 @@ TLSECHParams createHttpECHParams(const Option* option,
   return echParams;
 }
 
+std::vector<std::string> applyHttpsServiceBindingAlpn(
+    const Request* request, std::vector<std::string> protocols)
+{
+  if (!request || !request->hasHttpsServiceBindingEndpointInfo()) {
+    return protocols;
+  }
+
+  const auto& info = request->getHttpsServiceBindingEndpointInfo();
+  if (info.defaultAlpnUsed) {
+    return protocols;
+  }
+  if (info.alpn == HTTP_ALPN_HTTP11) {
+    protocols.clear();
+    protocols.push_back(HTTP_ALPN_HTTP11);
+  }
+#ifdef HAVE_LIBNGHTTP2
+  else if (info.alpn == HTTP_ALPN_H2 &&
+           std::find(std::begin(protocols), std::end(protocols),
+                     HTTP_ALPN_H2) != std::end(protocols)) {
+    protocols.clear();
+    protocols.push_back(HTTP_ALPN_H2);
+  }
+#endif // HAVE_LIBNGHTTP2
+  return protocols;
+}
+
 } // namespace
 
 std::vector<std::string> createHttpAlpnProtocols(const Option* option)
@@ -150,9 +177,10 @@ TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
   const auto verifyHost = getLogicalHostForRequest(request->getHost(), option);
   auto sniHostConfig =
       getTLSSNIHostConfig(request->getHost(), verifyHost, option);
-  auto params = TLSHandshakeParams(sniHostConfig.sniHost, verifyHost,
-                                   createHttpAlpnProtocols(option),
-                                   sniHostConfig.overridden);
+  auto params = TLSHandshakeParams(
+      sniHostConfig.sniHost, verifyHost,
+      applyHttpsServiceBindingAlpn(request, createHttpAlpnProtocols(option)),
+      sniHostConfig.overridden);
   params.echParams = createHttpECHParams(option, sniHostConfig);
   return params;
 }

@@ -125,7 +125,8 @@ void RequestTest::testResetConnectedAddrInfo()
 
   req.setConnectedAddrInfo("example.org", "192.0.2.1", 443);
   req.setHttpsServiceBindingEndpointInfo("origin.example", 443,
-                                         "svc.example", 8443, "http/1.1");
+                                         "svc.example", 8443, "http/1.1",
+                                         false);
   CPPUNIT_ASSERT(req.hasHttpsServiceBindingEndpointInfo());
   req.confirmConnectedAddrInfo();
   req.resetConnectedAddrInfo();
@@ -311,7 +312,8 @@ void RequestTest::testHttpsServiceBindingEndpointInfo()
   CPPUNIT_ASSERT(req.setUri("https://origin.example/file"));
 
   req.setHttpsServiceBindingEndpointInfo("origin.example", 443,
-                                         "svc.example", 8443, "http/1.1");
+                                         "svc.example", 8443, "http/1.1",
+                                         false);
   CPPUNIT_ASSERT(req.hasHttpsServiceBindingEndpointInfo());
   const auto& info = req.getHttpsServiceBindingEndpointInfo();
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), info.originHost);
@@ -319,15 +321,17 @@ void RequestTest::testHttpsServiceBindingEndpointInfo()
   CPPUNIT_ASSERT_EQUAL(std::string("svc.example"), info.connectHost);
   CPPUNIT_ASSERT_EQUAL((uint16_t)8443, info.connectPort);
   CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), info.alpn);
+  CPPUNIT_ASSERT(!info.defaultAlpnUsed);
   CPPUNIT_ASSERT(info.serviceBindingUsed());
 
   CPPUNIT_ASSERT(req.redirectUri("https://redirect.example/file"));
   CPPUNIT_ASSERT(!req.hasHttpsServiceBindingEndpointInfo());
 
   req.setHttpsServiceBindingEndpointInfo("origin.example", 443,
-                                         "origin.example", 443, "h2");
+                                         "origin.example", 443, "h2", true);
   CPPUNIT_ASSERT(!req.getHttpsServiceBindingEndpointInfo()
                       .serviceBindingUsed());
+  CPPUNIT_ASSERT(req.getHttpsServiceBindingEndpointInfo().defaultAlpnUsed);
   req.clearHttpsServiceBindingEndpointInfo();
   CPPUNIT_ASSERT(!req.hasHttpsServiceBindingEndpointInfo());
 }

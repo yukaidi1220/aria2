@@ -149,8 +149,7 @@ const dns::ServiceBindingEndpoint* findHttpsServiceBindingEndpoint(
 {
   for (const auto& endpoint : endpoints) {
     if (endpoint.connectHost == connectHost &&
-        endpoint.connectPort == connectPort &&
-        endpoint.serviceBindingUsed()) {
+        endpoint.connectPort == connectPort) {
       return &endpoint;
     }
   }
@@ -167,7 +166,7 @@ void setHttpsServiceBindingEndpointInfo(
   }
   request->setHttpsServiceBindingEndpointInfo(
       endpoint->originHost, endpoint->originPort, endpoint->connectHost,
-      endpoint->connectPort, endpoint->alpn);
+      endpoint->connectPort, endpoint->alpn, endpoint->defaultAlpnUsed);
 }
 
 #ifdef ENABLE_SSL
@@ -298,6 +297,7 @@ ConnectionAuthority HttpInitiateConnectionCommand::selectConnectionAuthority(
     const std::shared_ptr<Request>& proxyRequest) const
 {
   if (proxyRequest) {
+    getRequest()->clearHttpsServiceBindingEndpointInfo();
     return InitiateConnectionCommand::selectConnectionAuthority(proxyRequest);
   }
 
