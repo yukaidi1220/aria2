@@ -1335,27 +1335,32 @@ Advanced Options
 
   Select asynchronous DNS resolver backend. ``cares`` uses the c-ares
   resolver. ``dot`` uses DNS over TLS. ``doh`` uses DNS over HTTPS. ``multi``
-  starts plain c-ares, DoT, and DoH resolvers in parallel and uses the first
-  address family/backend result that succeeds; unfinished resolvers continue in
-  the background to fill aria2's DNS cache for later connections. ``dot``,
-  ``doh``, and ``multi`` are available only when aria2 is built with SSL/TLS
-  support. DoT/DoH server hostnames are first resolved through plain c-ares. In
-  ``multi`` mode, explicitly configured plain ``udp://`` and ``tcp://`` servers
-  are also used for this secure server bootstrap; otherwise aria2 uses the
-  default resolver configuration and the address families enabled for
-  asynchronous DNS, so :option:`--disable-ipv6=true` also disables IPv6
-  bootstrap lookups. aria2 then connects to the resolved IP address. DoT/DoH
-  entries can append ``#TLS_HOST`` to use ``TLS_HOST`` as the TLS SNI,
+  starts DoT and DoH resolvers first when secure DNS servers are configured and
+  uses the first secure result that succeeds; plain DNS is reserved for secure
+  server bootstrap and explicit fallback after all secure resolvers fail.
+  Unfinished resolvers continue in the background to fill aria2's DNS cache for
+  later connections. ``dot``, ``doh``, and ``multi`` are available only when
+  aria2 is built with SSL/TLS support. DoT/DoH server hostnames are first
+  resolved through plain c-ares. In ``multi`` mode, explicitly configured plain
+  ``udp://`` and ``tcp://`` servers are also used for this secure server
+  bootstrap; otherwise aria2 uses the default resolver configuration and the
+  address families enabled for asynchronous DNS, so
+  :option:`--disable-ipv6=true` also disables IPv6 bootstrap lookups. aria2
+  then connects to the resolved IP address. DoT/DoH entries can append
+  ``#TLS_HOST`` to use ``TLS_HOST`` as the TLS SNI,
   certificate verification hostname, and DoH HTTP ``Host`` header. The DoH
   backend can use HTTP/2 when aria2 is built with nghttp2 and
   :option:`--enable-http2=true` is enabled and
   :option:`--enable-http-pipelining=false`; otherwise it uses HTTP/1.1.
-  Background HTTPS/SVCB TYPE65 discovery follows the selected backend: c-ares
-  for ``cares``, DoT for ``dot``, DoH for ``doh``, and the configured backends
-  for ``multi``. Discovery results are cached for later connection decisions,
-  and a cached direct HTTPS endpoint can change the TCP connect target/port and
-  narrow TLS ALPN. Discovery results do not yet automatically configure ECH or
-  HTTP/3 behavior.
+  Background HTTPS/SVCB TYPE65 discovery runs separately from the A/AAAA
+  download-name fallback flow. It can use c-ares for ``cares``, DoT for
+  ``dot``, DoH for ``doh``, and configured discovery resolvers for ``multi``,
+  but ``multi`` HTTPS/SVCB discovery does not yet implement the same
+  secure-first staged fallback used for download hostname A/AAAA lookups.
+  Discovery results are cached for later connection decisions, and a cached
+  direct HTTPS endpoint can change the TCP connect target/port and narrow TLS
+  ALPN. Discovery results do not yet automatically configure ECH or HTTP/3
+  behavior.
   Default: ``cares``
 
 .. option:: --async-dns-server=<SERVER>[,...]
@@ -1384,9 +1389,10 @@ Advanced Options
   DNS server entry is given, the plain c-ares fallback uses the system resolver
   configuration for A/AAAA address lookup. HTTPS/SVCB TYPE65 discovery only
   uses plain DNS in ``multi`` when a plain server was explicitly configured, or
-  when no secure server was configured either. Since ``multi`` can query plain
-  DNS in parallel with secure DNS, use ``dot`` or ``doh`` instead when plain DNS
-  leakage is unacceptable.
+  when no secure server was configured either. When secure servers are present,
+  ``multi`` resolves download hostnames through secure DNS first, then falls
+  back to explicit plain DNS servers and finally system c-ares DNS if every
+  secure resolver fails.
 
 .. option:: --auto-file-renaming [true|false]
 

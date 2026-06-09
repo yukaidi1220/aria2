@@ -464,8 +464,9 @@
     "                              plain c-ares. multi uses explicit udp://\n" \
     "                              and tcp:// servers for secure bootstrap.\n" \
     "                              Append #TLS_HOST to set TLS/HTTP names. multi\n" \
-    "                              queries plain DNS, DoT and DoH in parallel.\n" \
-    "                              HTTPS RR discovery follows this backend.")
+    "                              tries secure DNS before plain fallback.\n" \
+    "                              HTTPS RR discovery is a separate background\n" \
+    "                              lookup and may not use the same fallback flow.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
@@ -892,10 +893,9 @@
     "                              configuration and enabled families are used.\n" \
     "                              With multi, use udp://IP, tcp://IP,\n" \
     "                              dot://HOST[:PORT][#TLS_HOST], or HTTPS DoH\n" \
-    "                              URLs; bare IP entries mean udp://IP. HTTPS\n" \
-    "                              RR discovery only uses plain DNS in multi\n" \
-    "                              when plain servers are configured, or when\n" \
-    "                              no secure servers are configured either.")
+    "                              URLs; bare IP entries mean udp://IP. multi\n" \
+    "                              resolves download names with secure DNS first;\n" \
+    "                              plain DNS is fallback or secure bootstrap.")
 #define TEXT_ENABLE_RPC                                               \
   _(" --enable-rpc[=true|false]    Enable JSON-RPC/XML-RPC server.\n" \
     "                              It is strongly recommended to set secret\n" \

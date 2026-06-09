@@ -35,11 +35,26 @@
    - 行为：新增 `--conf-precedence=command|conf`，默认 `command` 保持命令行优先；显式或配置为 `conf` 时，配置文件可覆盖重复的命令行选项。
    - 行为：启动日志打印 DNS、IPv6、H2/H3、分片/连接数和配置加载相关关键参数的最终值及来源。
 
+7. 下载域名、UDP tracker、DHT entry point 的 DNS fallback 骨架。
+   - 落点：`src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc`、`src/NameResolveCommand.cc`、`src/DHTEntryPointNameResolveCommand.cc`
+   - 行为：`multi` 有 DoT/DoH secure server 时，下载域名主阶段只跑 secure resolver；secure 全失败后才进入显式 `udp://`/`tcp://` plain DNS；显式 plain 也失败或未配置时进入系统 c-ares。
+   - 行为：纯 DoT/DoH 全失败后进入系统 c-ares；显式 c-ares server 全失败后也进入系统 c-ares。系统 c-ares 仍失败后，HTTP/FTP 下载路径最后走同步 `getaddrinfo`；同步也失败时保持 `NAME_RESOLVE_ERROR`。UDP tracker 和 DHT entry point 沿用各自既有的“记录失败并跳过该入口”语义。
+   - 日志：network 级别打印从 secure/explicit plain 降级到 explicit plain/system c-ares，以及 async DNS 最终失败后 fallback 到 `getaddrinfo` 的原因。
+
+8. 外部评审后的修补。
+   - 修正 `multi` 只有 plain server 时的 fallback 日志，不再把 explicit plain DNS 误报成 secure DNS。
+   - `AsyncNameResolverMan::reset()` 清理 hostname 和 resolver phase，避免复用对象时残留旧 fallback 状态。
+   - 测试侧把 `createResolvers()` 收窄为 protected 观测口，并补真实 `multi` 主阶段 resolver 类型断言，避免只靠 mock 计数造成假测。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
    - `testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 `async-dns=false` 时 secure DNS 配置不触发启动期校验失败。
    - `testPlainBootstrapFactoryUsesConfiguredPlainServers`：覆盖 `multi` 显式 `udp://`/`tcp://` plain server 会生成 `PlainBootstrapResolver`。
+   - `testStartAsyncCaresWithExplicitServerFallsBackToSystem`：覆盖显式 c-ares server 失败后进入系统 c-ares。
+   - `testStartAsyncDotFallsBackToSystem`：覆盖 DoT 失败后进入系统 c-ares。
+   - `testStartAsyncMultiStartsSecureBackendsBeforePlainFallback` / `testStartAsyncMultiFallsBackToExplicitPlainThenSystem`：覆盖 `multi` 下载域名解析的 secure-first 和显式 plain -> 系统 c-ares fallback 阶段。
+   - `testStartAsyncMultiStartsSecureBackendsBeforePlainFallback` 额外断言真实 `createResolvers()` 主阶段只创建 DoT/DoH resolver，不提前创建 plain resolver。
    - 既有 DoT/DoH/multi 配置校验测试显式设置 `async-dns=true`，避免新早退让测试空跑。
 
 2. `test/OptionHandlerTest.cc`
@@ -51,8 +66,9 @@
    - `git diff --check` 通过；只有 Windows 工作区的 LF/CRLF 提示，没有 whitespace error。
 
 2. CI：
-   - 上一个已推送提交 `5708d426 Honor HTTPS SVCB endpoint ALPN in TLS handshakes` 的 GitHub Actions build 已通过，run id `27231314848`。
-   - 本报告对应的当前第一刀尚未推送；推送前必须完成外部 review，推送后再回填 GitHub Actions run 和 artifact 链接。
+   - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
+   - 前置提交 `fed40f3e Support config discovery precedence and startup option logs` 的 GitHub Actions build 已通过，run id `27235349508`。
+   - 本报告对应的 secure-first fallback 切片尚未推送；推送前必须完成外部 review，推送后再回填 GitHub Actions run 和 artifact 链接。
 
 3. artifact：
    - 当前阶段没有新的构建 artifact 链接；待本轮 commit 推送并 CI 生成 artifact 后补充。
@@ -65,15 +81,15 @@
 
 ### DNS 模式（6-9）
 
-部分完成。第 6 条已先打护栏：`async-dns=false` 不再配置 secure DNS resolver。第 7 条原有 c-ares 行为基本保持：未配 server 用系统 DNS，配 server 用配置 server。第 8、9 条的 DoT/DoH/multi 格式解析已存在，但 secure-only 下载域名解析策略尚未完成。
+部分完成。第 6 条已先打护栏：`async-dns=false` 不再配置 secure DNS resolver。第 7 条原有 c-ares 行为基本保持：未配 server 用系统 DNS，配 server 用配置 server；本轮又补了“显式 c-ares server 全失败后 fallback 到系统 c-ares”。第 8、9 条的 DoT/DoH/multi 格式解析已存在；下载域名、UDP tracker、DHT entry point 的 A/AAAA 主解析已开始执行 secure-first/fallback 骨架，但真实网络验收和更细日志断言还没完成。
 
 ### multi 规则（10-16）
 
-部分完成。第 11、12 条的 secure server 数值地址/域名 bootstrap 路径已有基础，且本轮让 SVCB discovery 里的 secure server 域名 bootstrap 复用显式 plain server。第 10、13、14、15、16 条还没完整实现：当前下载域名 `multi` 仍是 plain/DoT/DoH 并行 first-success，不是“plain 默认只 bootstrap/fallback”；完整降级链 `secure DNS -> c-ares system DNS -> getaddrinfo -> NAME_RESOLVE_ERROR` 和 network fallback 日志仍需下一阶段实现。
+部分完成。第 11、12 条的 secure server 数值地址/域名 bootstrap 路径已有基础，且本轮让 SVCB discovery 里的 secure server 域名 bootstrap 复用显式 plain server。第 10、13、15、16 条已有主链路骨架：`multi` 下载域名先并发 DoT/DoH，secure 全失败后再用显式 plain DNS，然后系统 c-ares，最后同步 `getaddrinfo`，失败才 `NAME_RESOLVE_ERROR`；这些降级会打 network 日志。第 14 条“失败 DNS server 只影响自己”仍主要依赖各 resolver 现有 server retry 逻辑，还需要真实网络/fake server 验收。
 
 ### 配置校验（17-20）
 
-部分完成。`dot://223.6.6.6,180.184.1.1` 中第二项按裸 IP/plain UDP 处理的解析规则已存在；语法错误启动期失败已有基础。服务器不可达的运行期 fallback、全部无效时只走声明 fallback 链路，还需要配合 secure-first multi 和 fallback 日志一起补。
+部分完成。`dot://223.6.6.6,180.184.1.1` 中第二项按裸 IP/plain UDP 处理的解析规则已存在；语法错误启动期失败已有基础。服务器不可达的运行期 fallback 已有主链路骨架，全部无效时最终会走到同步 `getaddrinfo` 后失败；还需要用 fake DNS/真实网络把“没有未声明路径偷跑”和日志断言补齐。
 
 ### IPv4 / IPv6（21-25）
 
@@ -81,7 +97,7 @@
 
 ### HTTPS RR / H2 / H3（26-30）
 
-部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。HTTPS RR 查询目前已能跟随 DNS backend，且 SVCB endpoint ALPN 已接入 TLS ALPN 收窄。未启用 H3/无明确能力时“不额外查 HTTPS RR”的精确开关、DoH H2 日志 `DNS: DoH using HTTP/2`、以及 HTTPS RR 在 multi 下完全遵守 plain bootstrap/fallback 规则，还需要继续补。
+部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，并且 DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server；但 `multi` 下它仍是后台并行 discovery，不是本轮 A/AAAA 主解析那套 secure-first 阶段式 fallback。未启用 H3/无明确能力时“不额外查 HTTPS RR”的精确开关、DoH H2 日志 `DNS: DoH using HTTP/2`、以及 HTTPS RR 在 multi 下完全遵守 plain bootstrap/fallback 规则，还需要继续补。
 
 ### 日志可观测性（31-35）
 
@@ -103,7 +119,7 @@
 
 1. 配置加载与来源追踪：继续补全量 option 来源追踪、运行期修改日志和更多启动日志断言；当前已完成基础配置查找顺序、`--no-conf=true`、`--conf-precedence=command|conf` 和关键参数来源日志。
 
-2. secure-first multi：把下载域名解析拆成 secure resolver 并发优先，plain resolver 默认只用于 DoT/DoH server bootstrap；仅在显式 fallback 阶段进入 plain c-ares/system DNS/getaddrinfo，并打出 network 日志。
+2. secure-first multi 验收：下载域名主解析骨架已改为 secure resolver 优先，plain resolver 默认只用于 DoT/DoH server bootstrap 或失败后的 fallback；下一步要用 fake DNS/真实网络验证 secure、显式 plain、系统 c-ares、getaddrinfo 每一层的日志和失败边界。
 
 3. DNS/连接可观测性：统一记录 DNS query、server、协议、bootstrap/fallback 阶段、A/AAAA、最终地址列表、选中/失败/避让 IP，并让连接成功、TLS 成功和 response received 都能关联 remote IP。
 

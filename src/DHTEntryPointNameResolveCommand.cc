@@ -170,6 +170,28 @@ int DHTEntryPointNameResolveCommand::resolveHostname(
 
   switch (asyncNameResolverMan_->getStatus()) {
   case -1:
+    if (asyncNameResolverMan_->startFallback(e_, this)) {
+      return 0;
+    }
+    A2_LOG_NETWORK(
+        fmt("DNS: async DNS failed for %s; falling back to getaddrinfo",
+            hostname.c_str()));
+    {
+      NameResolver resolver;
+      resolver.setSocktype(SOCK_DGRAM);
+      resolver.setFamily(family_);
+      try {
+        resolver.resolve(res, hostname);
+      }
+      catch (RecoverableException& e) {
+        A2_LOG_ERROR_EX(EX_EXCEPTION_CAUGHT, e);
+      }
+    }
+    if (!res.empty()) {
+      A2_LOG_INFO(fmt(MSG_NAME_RESOLUTION_COMPLETE, getCuid(),
+                      hostname.c_str(), res.front().c_str()));
+      return 1;
+    }
     A2_LOG_INFO(fmt(MSG_NAME_RESOLUTION_FAILED, getCuid(), hostname.c_str(),
                     asyncNameResolverMan_->getLastError().c_str()));
     return -1;

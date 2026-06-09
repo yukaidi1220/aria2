@@ -35,6 +35,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testAsyncResolverWriteEventUsesExceptFd);
   CPPUNIT_TEST(testAsyncResolverExceptFdIsProcessedAsWriteReady);
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
+  CPPUNIT_TEST(testStartAsyncCaresWithExplicitServerFallsBackToSystem);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testCreateDotResolver);
   CPPUNIT_TEST(testCreateDotResolverAcceptsDomainServer);
@@ -44,8 +45,9 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateDohResolverAcceptsDomainServer);
   CPPUNIT_TEST(testCreateDohResolverUsesUnspecBootstrapForDualStack);
   CPPUNIT_TEST(testCreateDohResolverRejectsEmptyServerList);
-  CPPUNIT_TEST(testStartAsyncMultiStartsConfiguredBackends);
-  CPPUNIT_TEST(testStartAsyncMultiAddsSystemPlainFallback);
+  CPPUNIT_TEST(testStartAsyncDotFallsBackToSystem);
+  CPPUNIT_TEST(testStartAsyncMultiStartsSecureBackendsBeforePlainFallback);
+  CPPUNIT_TEST(testStartAsyncMultiFallsBackToExplicitPlainThenSystem);
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
   CPPUNIT_TEST(testValidateConfigAcceptsDotDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
@@ -81,6 +83,7 @@ public:
   void testAsyncResolverWriteEventUsesExceptFd();
   void testAsyncResolverExceptFdIsProcessedAsWriteReady();
   void testValidateConfigLeavesCaresServersUnchanged();
+  void testStartAsyncCaresWithExplicitServerFallsBackToSystem();
 #ifdef ENABLE_SSL
   void testCreateDotResolver();
   void testCreateDotResolverAcceptsDomainServer();
@@ -90,8 +93,9 @@ public:
   void testCreateDohResolverAcceptsDomainServer();
   void testCreateDohResolverUsesUnspecBootstrapForDualStack();
   void testCreateDohResolverRejectsEmptyServerList();
-  void testStartAsyncMultiStartsConfiguredBackends();
-  void testStartAsyncMultiAddsSystemPlainFallback();
+  void testStartAsyncDotFallsBackToSystem();
+  void testStartAsyncMultiStartsSecureBackendsBeforePlainFallback();
+  void testStartAsyncMultiFallsBackToExplicitPlainThenSystem();
   void testValidateConfigAcceptsDotIpServers();
   void testValidateConfigAcceptsDotDomainServer();
   void testValidateConfigRejectsDotEmptyServerList();
@@ -189,6 +193,55 @@ public:
     return ipv4Resolver_;
   }
 };
+
+class MockFallbackAsyncNameResolverMan : public AsyncNameResolverMan {
+private:
+  mutable size_t createResolversCalls_;
+  std::vector<size_t> resolverCounts_;
+
+public:
+  MockFallbackAsyncNameResolverMan() : createResolversCalls_(0)
+  {
+    resolverCounts_.push_back(2);
+    resolverCounts_.push_back(2);
+    resolverCounts_.push_back(1);
+  }
+
+  explicit MockFallbackAsyncNameResolverMan(std::vector<size_t> resolverCounts)
+      : createResolversCalls_(0), resolverCounts_(std::move(resolverCounts))
+  {
+  }
+
+  size_t getCreateResolversCalls() const { return createResolversCalls_; }
+
+  std::vector<std::shared_ptr<AsyncResolver>>
+  createResolvers(int family) const CXX11_OVERRIDE
+  {
+    size_t resolverCount = 1;
+    if (!resolverCounts_.empty()) {
+      auto index = createResolversCalls_;
+      if (index >= resolverCounts_.size()) {
+        index = resolverCounts_.size() - 1;
+      }
+      resolverCount = resolverCounts_[index];
+    }
+    ++createResolversCalls_;
+    std::vector<std::shared_ptr<AsyncResolver>> resolvers;
+    for (size_t i = 0; i < resolverCount; ++i) {
+      resolvers.push_back(std::make_shared<MockAsyncResolver>(
+          family, AsyncResolver::STATUS_ERROR, std::vector<std::string>(),
+          "mock resolver failed"));
+    }
+    return resolvers;
+  }
+};
+
+#ifdef ENABLE_SSL
+class InspectableAsyncNameResolverMan : public AsyncNameResolverMan {
+public:
+  using AsyncNameResolverMan::createResolvers;
+};
+#endif // ENABLE_SSL
 
 class MockCommand : public Command {
 public:
@@ -357,6 +410,28 @@ void AsyncNameResolverTest::testValidateConfigLeavesCaresServersUnchanged()
                                   "dns.example.org");
 }
 
+void AsyncNameResolverTest::testStartAsyncCaresWithExplicitServerFallsBackToSystem()
+{
+  MockFallbackAsyncNameResolverMan resolverMan({1, 1});
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_CARES);
+  resolverMan.setServers("192.0.2.53");
+  resolverMan.setIPv6(false);
+  MockCommand command(1);
+
+  resolverMan.startAsync("example.org", nullptr, &command);
+
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+}
+
 #ifdef ENABLE_SSL
 void AsyncNameResolverTest::testCreateDotResolver()
 {
@@ -449,9 +524,31 @@ void AsyncNameResolverTest::testCreateDohResolverRejectsEmptyServerList()
   CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
 }
 
-void AsyncNameResolverTest::testStartAsyncMultiStartsConfiguredBackends()
+void AsyncNameResolverTest::testStartAsyncDotFallsBackToSystem()
 {
-  AsyncNameResolverMan resolverMan;
+  MockFallbackAsyncNameResolverMan resolverMan({1, 1});
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOT);
+  resolverMan.setServers("dns.example.org");
+  resolverMan.setIPv6(false);
+  MockCommand command(1);
+
+  resolverMan.startAsync("example.org", nullptr, &command);
+
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiStartsSecureBackendsBeforePlainFallback()
+{
+  InspectableAsyncNameResolverMan resolverMan;
   resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
   resolverMan.setServers(
       "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
@@ -459,27 +556,46 @@ void AsyncNameResolverTest::testStartAsyncMultiStartsConfiguredBackends()
   resolverMan.setIPv6(false);
   MockCommand command(1);
 
+  auto resolvers = resolverMan.createResolvers(AF_INET);
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolvers.size());
+  CPPUNIT_ASSERT(dynamic_cast<AsyncDotNameResolver*>(resolvers[0].get()));
+  CPPUNIT_ASSERT(dynamic_cast<AsyncDohNameResolver*>(resolvers[1].get()));
+
   resolverMan.startAsync("example.org", nullptr, &command);
 
   auto status = resolverMan.getQueryStatus();
-  CPPUNIT_ASSERT_EQUAL((size_t)4, countQueryStatusEntries(status));
+  CPPUNIT_ASSERT_EQUAL((size_t)2, countQueryStatusEntries(status));
   CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
 }
 
-void AsyncNameResolverTest::testStartAsyncMultiAddsSystemPlainFallback()
+void AsyncNameResolverTest::testStartAsyncMultiFallsBackToExplicitPlainThenSystem()
 {
-  AsyncNameResolverMan resolverMan;
+  MockFallbackAsyncNameResolverMan resolverMan;
   resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
-  resolverMan.setServers("dot://dns.example.org,"
+  resolverMan.setServers("udp://192.0.2.53,tcp://192.0.2.54,"
+                         "dot://dns.example.org,"
                          "https://dns.example.org/dns-query");
   resolverMan.setIPv6(false);
   MockCommand command(1);
 
   resolverMan.startAsync("example.org", nullptr, &command);
 
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)2,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)2,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
   auto status = resolverMan.getQueryStatus();
-  CPPUNIT_ASSERT_EQUAL((size_t)3, countQueryStatusEntries(status));
+  CPPUNIT_ASSERT_EQUAL((size_t)1, countQueryStatusEntries(status));
   CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
+  CPPUNIT_ASSERT_EQUAL((size_t)3, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
 }
 
 void AsyncNameResolverTest::testValidateConfigAcceptsDotIpServers()

@@ -1860,15 +1860,39 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     }
     switch (asyncNameResolverMan_->getStatus()) {
     case -1:
-      if (!isProxyRequest(req_->getProtocol(), getOption())) {
-        e_->getRequestGroupMan()
-            ->getOrCreateServerStat(req_->getHost(), req_->getProtocol())
-            ->setError();
+      if (asyncNameResolverMan_->startFallback(e_, this)) {
+        return A2STR::NIL;
       }
-      throw DL_ABORT_EX2(fmt(MSG_NAME_RESOLUTION_FAILED, getCuid(),
-                             hostname.c_str(),
-                             asyncNameResolverMan_->getLastError().c_str()),
-                         error_code::NAME_RESOLVE_ERROR);
+      {
+        A2_LOG_NETWORK(
+            fmt("DNS: async DNS failed for %s; falling back to getaddrinfo",
+                hostname.c_str()));
+        NameResolver res;
+        res.setSocktype(SOCK_STREAM);
+        if (e_->getOption()->getAsBool(PREF_DISABLE_IPV6)) {
+          res.setFamily(AF_INET);
+        }
+        try {
+          res.resolve(addrs, hostname);
+        }
+        catch (DlAbortEx& err) {
+          if (!isProxyRequest(req_->getProtocol(), getOption())) {
+            e_->getRequestGroupMan()
+                ->getOrCreateServerStat(req_->getHost(), req_->getProtocol())
+                ->setError();
+          }
+          A2_LOG_NETWORK(
+              fmt("DNS: getaddrinfo fallback failed for %s after async DNS "
+                  "failure: %s",
+                  hostname.c_str(), err.what()));
+          throw;
+        }
+      }
+      A2_LOG_NETWORK(
+          fmt("DNS: getaddrinfo fallback succeeded for %s after async DNS "
+              "failure",
+              hostname.c_str()));
+      break;
     case 0:
       return A2STR::NIL;
 

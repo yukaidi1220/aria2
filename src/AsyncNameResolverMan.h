@@ -104,6 +104,9 @@ public:
   int getStatus() const;
   // Returns last error string
   const std::string& getLastError() const;
+  // Starts the next explicit async DNS fallback phase after the current
+  // resolver phase has failed.
+  bool startFallback(DownloadEngine* e, Command* command);
   // Returns active query status for diagnostics.
   std::string getQueryStatus() const;
   // Resets state. Also removes resolvers from DownloadEngine.
@@ -118,7 +121,17 @@ public:
 
   virtual std::shared_ptr<AsyncResolver> createResolver(int family) const;
 
+protected:
+  virtual std::vector<std::shared_ptr<AsyncResolver>>
+  createResolvers(int family) const;
+
 private:
+  enum ResolverPhase {
+    RESOLVER_PHASE_PRIMARY,
+    RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK,
+    RESOLVER_PHASE_SYSTEM_CARES_FALLBACK,
+  };
+
   struct ResolverSlot {
     explicit ResolverSlot(std::shared_ptr<AsyncResolver> resolver)
         : resolver(std::move(resolver)), checked(false)
@@ -131,16 +144,17 @@ private:
 
   void startAsyncFamily(const std::string& hostname, int family,
                         DownloadEngine* e, Command* command);
-  std::vector<std::shared_ptr<AsyncResolver>>
-  createResolvers(int family) const;
+  bool getNextFallbackPhase(ResolverPhase& nextPhase) const;
   void setNameResolverCheck(size_t resolverIndex, DownloadEngine* e,
                             Command* command);
   void disableNameResolverCheck(size_t index, DownloadEngine* e,
                                 Command* command);
 
   std::vector<ResolverSlot> resolverSlots_;
+  std::string hostname_;
   std::string servers_;
   ResolverMode resolverMode_;
+  ResolverPhase resolverPhase_;
   bool dohHttp2_;
   bool ipv4_;
   bool ipv6_;

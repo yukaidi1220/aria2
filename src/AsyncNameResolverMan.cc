@@ -291,6 +291,7 @@ createPlainBootstrapResolverFactory(const AsyncDnsMultiServerConfig& config)
 
 AsyncNameResolverMan::AsyncNameResolverMan()
     : resolverMode_(RESOLVER_CARES),
+      resolverPhase_(RESOLVER_PHASE_PRIMARY),
       dohHttp2_(false),
       ipv4_(true),
       ipv6_(true)
@@ -327,6 +328,8 @@ void AsyncNameResolverMan::startAsync(const std::string& hostname,
 {
   assert(!resolverChecked());
   resolverSlots_.clear();
+  hostname_ = hostname;
+  resolverPhase_ = RESOLVER_PHASE_PRIMARY;
   A2_LOG_NETWORK(
       fmt("DNS: start resolving %s using %s", hostname.c_str(),
           resolverModeToString(resolverMode_)));
@@ -384,13 +387,30 @@ AsyncNameResolverMan::createResolvers(int family) const
 #ifdef ENABLE_SSL
   if (resolverMode_ == RESOLVER_MULTI) {
     auto config = parseAsyncDnsMultiServerConfigList(servers_);
-    auto plainBootstrapResolverFactory =
-        createPlainBootstrapResolverFactory(config);
-    if (config.udpServers.empty() && config.tcpServers.empty()) {
-      resolvers.push_back(
-          std::make_shared<AsyncNameResolver>(family, std::string()));
+    const auto hasPlain =
+        !config.udpServers.empty() || !config.tcpServers.empty();
+    const auto hasSecure =
+        !config.dotServers.empty() || !config.dohServers.empty();
+
+    if (resolverPhase_ == RESOLVER_PHASE_PRIMARY && hasSecure) {
+      auto plainBootstrapResolverFactory =
+          createPlainBootstrapResolverFactory(config);
+      if (!config.dotServers.empty()) {
+        resolvers.push_back(std::make_shared<AsyncDotNameResolver>(
+            family, std::move(config.dotServers), AsyncDotTransportFactory(),
+            plainBootstrapResolverFactory, getBootstrapFamily(ipv4_, ipv6_)));
+      }
+      if (!config.dohServers.empty()) {
+        resolvers.push_back(std::make_shared<AsyncDohNameResolver>(
+            family, std::move(config.dohServers), AsyncDohTransportFactory(),
+            dohHttp2_, plainBootstrapResolverFactory,
+            getBootstrapFamily(ipv4_, ipv6_)));
+      }
+      return resolvers;
     }
-    else {
+
+    if ((resolverPhase_ == RESOLVER_PHASE_PRIMARY && !hasSecure) ||
+        resolverPhase_ == RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK) {
       if (!config.udpServers.empty()) {
         resolvers.push_back(
             std::make_shared<AsyncNameResolver>(family, config.udpServers));
@@ -399,21 +419,25 @@ AsyncNameResolverMan::createResolvers(int family) const
         resolvers.push_back(std::make_shared<AsyncNameResolver>(
             family, config.tcpServers, true));
       }
+      if (!resolvers.empty()) {
+        return resolvers;
+      }
     }
-    if (!config.dotServers.empty()) {
-      resolvers.push_back(std::make_shared<AsyncDotNameResolver>(
-          family, std::move(config.dotServers), AsyncDotTransportFactory(),
-          plainBootstrapResolverFactory, getBootstrapFamily(ipv4_, ipv6_)));
-    }
-    if (!config.dohServers.empty()) {
-      resolvers.push_back(std::make_shared<AsyncDohNameResolver>(
-          family, std::move(config.dohServers), AsyncDohTransportFactory(),
-          dohHttp2_, plainBootstrapResolverFactory,
-          getBootstrapFamily(ipv4_, ipv6_)));
+
+    if (resolverPhase_ == RESOLVER_PHASE_SYSTEM_CARES_FALLBACK ||
+        (resolverPhase_ == RESOLVER_PHASE_PRIMARY && !hasPlain &&
+         !hasSecure)) {
+      resolvers.push_back(
+          std::make_shared<AsyncNameResolver>(family, std::string()));
     }
     return resolvers;
   }
 #endif // ENABLE_SSL
+  if (resolverPhase_ == RESOLVER_PHASE_SYSTEM_CARES_FALLBACK) {
+    resolvers.push_back(
+        std::make_shared<AsyncNameResolver>(family, std::string()));
+    return resolvers;
+  }
   resolvers.push_back(createResolver(family));
   return resolvers;
 }
@@ -516,7 +540,12 @@ int AsyncNameResolverMan::getStatus() const
 {
   size_t success = 0;
   size_t error = 0;
+  size_t active = 0;
   for (const auto& slot : resolverSlots_) {
+    if (!slot.resolver) {
+      continue;
+    }
+    ++active;
     switch (slot.resolver->getStatus()) {
     case AsyncResolver::STATUS_SUCCESS:
       ++success;
@@ -531,7 +560,7 @@ int AsyncNameResolverMan::getStatus() const
   if (success) {
     return 1;
   }
-  else if (error == resolverSlots_.size()) {
+  else if (active == 0 || error == active) {
     return -1;
   }
   else {
@@ -542,12 +571,107 @@ int AsyncNameResolverMan::getStatus() const
 const std::string& AsyncNameResolverMan::getLastError() const
 {
   for (const auto& slot : resolverSlots_) {
+    if (!slot.resolver) {
+      continue;
+    }
     if (slot.resolver->getStatus() == AsyncResolver::STATUS_ERROR) {
       // TODO This is not last error chronologically.
       return slot.resolver->getError();
     }
   }
   return A2STR::NIL;
+}
+
+bool AsyncNameResolverMan::getNextFallbackPhase(ResolverPhase& nextPhase) const
+{
+#ifdef ENABLE_SSL
+  if ((resolverMode_ == RESOLVER_DOT || resolverMode_ == RESOLVER_DOH) &&
+      resolverPhase_ == RESOLVER_PHASE_PRIMARY) {
+    nextPhase = RESOLVER_PHASE_SYSTEM_CARES_FALLBACK;
+    return true;
+  }
+
+  if (resolverMode_ == RESOLVER_MULTI) {
+    auto config = parseAsyncDnsMultiServerConfigList(servers_);
+    const auto hasPlain =
+        !config.udpServers.empty() || !config.tcpServers.empty();
+    const auto hasSecure =
+        !config.dotServers.empty() || !config.dohServers.empty();
+    if (hasSecure && resolverPhase_ == RESOLVER_PHASE_PRIMARY && hasPlain) {
+      nextPhase = RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK;
+      return true;
+    }
+    if (hasSecure &&
+        (resolverPhase_ == RESOLVER_PHASE_PRIMARY ||
+         resolverPhase_ == RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK)) {
+      nextPhase = RESOLVER_PHASE_SYSTEM_CARES_FALLBACK;
+      return true;
+    }
+    if (!hasSecure && hasPlain && resolverPhase_ == RESOLVER_PHASE_PRIMARY) {
+      nextPhase = RESOLVER_PHASE_SYSTEM_CARES_FALLBACK;
+      return true;
+    }
+  }
+#endif // ENABLE_SSL
+  if (resolverMode_ == RESOLVER_CARES && !servers_.empty() &&
+      resolverPhase_ == RESOLVER_PHASE_PRIMARY) {
+    nextPhase = RESOLVER_PHASE_SYSTEM_CARES_FALLBACK;
+    return true;
+  }
+  return false;
+}
+
+bool AsyncNameResolverMan::startFallback(DownloadEngine* e, Command* command)
+{
+  ResolverPhase nextPhase;
+  if (hostname_.empty() || getStatus() != -1 ||
+      !getNextFallbackPhase(nextPhase)) {
+    return false;
+  }
+
+  const auto previousPhase = resolverPhase_;
+  disableNameResolverCheck(e, command);
+  assert(!resolverChecked());
+  resolverSlots_.clear();
+  resolverPhase_ = nextPhase;
+
+  const char* nextName =
+      nextPhase == RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK
+          ? "explicit plain DNS"
+          : "system c-ares DNS";
+  const char* previousName = "explicit DNS";
+#ifdef ENABLE_SSL
+  if (previousPhase == RESOLVER_PHASE_PRIMARY) {
+    if (resolverMode_ == RESOLVER_DOT || resolverMode_ == RESOLVER_DOH) {
+      previousName = "secure DNS";
+    }
+    else if (resolverMode_ == RESOLVER_MULTI) {
+      auto config = parseAsyncDnsMultiServerConfigList(servers_);
+      if (!config.dotServers.empty() || !config.dohServers.empty()) {
+        previousName = "secure DNS";
+      }
+      else if (!config.udpServers.empty() || !config.tcpServers.empty()) {
+        previousName = "explicit plain DNS";
+      }
+    }
+  }
+#endif // ENABLE_SSL
+  if (previousPhase == RESOLVER_PHASE_PRIMARY &&
+      resolverMode_ == RESOLVER_CARES && !servers_.empty()) {
+    previousName = "explicit c-ares DNS";
+  }
+  if (previousPhase == RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK) {
+    previousName = "explicit plain DNS";
+  }
+  A2_LOG_NETWORK(fmt("DNS: %s failed; falling back to %s for %s",
+                     previousName, nextName, hostname_.c_str()));
+  if (ipv6_) {
+    startAsyncFamily(hostname_, AF_INET6, e, command);
+  }
+  if (ipv4_) {
+    startAsyncFamily(hostname_, AF_INET, e, command);
+  }
+  return true;
 }
 
 std::string AsyncNameResolverMan::getQueryStatus() const
@@ -578,6 +702,8 @@ void AsyncNameResolverMan::reset(DownloadEngine* e, Command* command)
   disableNameResolverCheck(e, command);
   assert(!resolverChecked());
   resolverSlots_.clear();
+  hostname_.clear();
+  resolverPhase_ = RESOLVER_PHASE_PRIMARY;
 }
 
 void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
