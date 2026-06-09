@@ -224,6 +224,9 @@ protected:
 
   virtual bool executeInternal() = 0;
 
+  virtual void onAllConnectAddressesFailed(
+      const std::string& connectedHostname, uint16_t connectedPort);
+
   // Returns true if the derived class wants to execute
   // executeInternal() unconditionally
   virtual bool noCheck() const { return false; }

@@ -47,6 +47,19 @@ namespace aria2 {
 class PeerStat;
 
 class Request {
+public:
+  struct HttpsServiceBindingEndpointInfo {
+    std::string originHost;
+    uint16_t originPort;
+    std::string connectHost;
+    uint16_t connectPort;
+    std::string alpn;
+
+    HttpsServiceBindingEndpointInfo();
+
+    bool serviceBindingUsed() const;
+  };
+
 private:
   uri::UriStruct us_;
   std::string uri_;
@@ -74,6 +87,8 @@ private:
   bool removalRequested_;
   bool http2OriginCoalesced_;
   bool http2OriginCoalescingBlocked_;
+  bool httpsServiceBindingEndpointInfoSet_;
+  HttpsServiceBindingEndpointInfo httpsServiceBindingEndpointInfo_;
   uint16_t connectedPort_;
   Timer wakeTime_;
 
@@ -190,6 +205,25 @@ public:
   void unconfirmConnectedAddrInfo() { connectedAddrConfirmed_ = false; }
 
   bool connectedAddrInfoConfirmed() const { return connectedAddrConfirmed_; }
+
+  void setHttpsServiceBindingEndpointInfo(const std::string& originHost,
+                                          uint16_t originPort,
+                                          const std::string& connectHost,
+                                          uint16_t connectPort,
+                                          const std::string& alpn);
+
+  void clearHttpsServiceBindingEndpointInfo();
+
+  bool hasHttpsServiceBindingEndpointInfo() const
+  {
+    return httpsServiceBindingEndpointInfoSet_;
+  }
+
+  const HttpsServiceBindingEndpointInfo&
+  getHttpsServiceBindingEndpointInfo() const
+  {
+    return httpsServiceBindingEndpointInfo_;
+  }
 
   void setWakeTime(Timer timer) { wakeTime_ = timer; }
 

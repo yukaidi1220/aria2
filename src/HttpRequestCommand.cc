@@ -57,6 +57,7 @@
 #include "HostMapping.h"
 #include "HttpProtocol.h"
 #include "HttpTLSHandshakeParams.h"
+#include "ServiceBindingSelector.h"
 #include "prefs.h"
 #include "a2functional.h"
 #include "util.h"
@@ -96,9 +97,41 @@ HttpRequestCommand::~HttpRequestCommand() = default;
 
 #ifdef ENABLE_SSL
 namespace {
+constexpr uint32_t HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL = 60;
+
 bool isTLSHandshakeFailure(const RecoverableException& e)
 {
   return util::startsWith(std::string(e.what()), "SSL/TLS handshake failure:");
+}
+
+bool markHttpsServiceBindingEndpointFailed(
+    const std::shared_ptr<Request>& req, DownloadEngine* e,
+    const std::string& connectedHostname, uint16_t connectedPort)
+{
+  if (!req->hasHttpsServiceBindingEndpointInfo()) {
+    return false;
+  }
+
+  const auto& info = req->getHttpsServiceBindingEndpointInfo();
+  if (info.connectHost != connectedHostname ||
+      info.connectPort != connectedPort || !info.serviceBindingUsed()) {
+    return false;
+  }
+
+  dns::ServiceBindingEndpoint endpoint;
+  endpoint.originHost = info.originHost;
+  endpoint.originPort = info.originPort;
+  endpoint.connectHost = info.connectHost;
+  endpoint.connectPort = info.connectPort;
+  endpoint.alpn = info.alpn;
+  e->markHttpsServiceBindingEndpointFailed(
+      endpoint, HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL);
+  A2_LOG_NETWORK(fmt("HTTPS RR: temporarily avoiding failed endpoint %s:%u "
+                     "for origin %s:%u",
+                     endpoint.connectHost.c_str(), endpoint.connectPort,
+                     endpoint.originHost.c_str(), endpoint.originPort));
+  req->clearHttpsServiceBindingEndpointInfo();
+  return true;
 }
 
 bool tryRetryTLSHandshakeWithNextAddress(
@@ -126,6 +159,8 @@ bool tryRetryTLSHandshakeWithNextAddress(
     if (getMappedAddresses(req->getConnectedHostname(), option.get())
         .empty()) {
       e->removeCachedIPAddress(req->getConnectedHostname(), connectedPort);
+      markHttpsServiceBindingEndpointFailed(
+          req, e, req->getConnectedHostname(), connectedPort);
     }
     return false;
   }

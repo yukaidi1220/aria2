@@ -98,6 +98,10 @@ protected:
                              const std::vector<std::string>& resolvedAddresses,
                              ConnectCommand* c);
 
+  virtual void onAllConnectAddressesFailed(
+      const std::string& connectedHostname,
+      uint16_t connectedPort) CXX11_OVERRIDE;
+
 public:
   InitiateConnectionCommand(cuid_t cuid, const std::shared_ptr<Request>& req,
                             const std::shared_ptr<FileEntry>& fileEntry,

@@ -132,7 +132,7 @@ std::vector<dns::ServiceBindingEndpoint> getCachedHttpsServiceBindingEndpoints(
     return endpoints;
   }
 
-  auto endpoints = getHttpsServiceBindingEndpoints(
+  endpoints = getHttpsServiceBindingEndpoints(
       *records, request->getHost(), request->getPort(), option);
   endpoints.erase(
       std::remove_if(std::begin(endpoints), std::end(endpoints),
@@ -141,6 +141,33 @@ std::vector<dns::ServiceBindingEndpoint> getCachedHttpsServiceBindingEndpoints(
                      }),
       std::end(endpoints));
   return endpoints;
+}
+
+const dns::ServiceBindingEndpoint* findHttpsServiceBindingEndpoint(
+    const std::vector<dns::ServiceBindingEndpoint>& endpoints,
+    const std::string& connectHost, uint16_t connectPort)
+{
+  for (const auto& endpoint : endpoints) {
+    if (endpoint.connectHost == connectHost &&
+        endpoint.connectPort == connectPort &&
+        endpoint.serviceBindingUsed()) {
+      return &endpoint;
+    }
+  }
+  return nullptr;
+}
+
+void setHttpsServiceBindingEndpointInfo(
+    const std::shared_ptr<Request>& request,
+    const dns::ServiceBindingEndpoint* endpoint)
+{
+  if (!endpoint) {
+    request->clearHttpsServiceBindingEndpointInfo();
+    return;
+  }
+  request->setHttpsServiceBindingEndpointInfo(
+      endpoint->originHost, endpoint->originPort, endpoint->connectHost,
+      endpoint->connectPort, endpoint->alpn);
 }
 
 #ifdef ENABLE_SSL
@@ -300,6 +327,10 @@ ConnectionAuthority HttpInitiateConnectionCommand::selectConnectionAuthority(
       }
     }
   }
+  setHttpsServiceBindingEndpointInfo(
+      getRequest(), findHttpsServiceBindingEndpoint(endpoints,
+                                                    authority.hostname,
+                                                    authority.port));
 
   return authority;
 }

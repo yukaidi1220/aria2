@@ -139,6 +139,7 @@ bool InitiateConnectionCommand::executeInternal()
     }
     if (getMappedAddresses(hostname, getOption().get()).empty()) {
       getDownloadEngine()->removeCachedIPAddress(hostname, port);
+      onAllConnectAddressesFailed(hostname, port);
     }
     throw;
   }
@@ -265,6 +266,13 @@ void InitiateConnectionCommand::setupBackupConnection(
   if (backupConnectInfo) {
     c->setBackupConnectInfo(backupConnectInfo);
   }
+}
+
+void InitiateConnectionCommand::onAllConnectAddressesFailed(
+    const std::string& connectedHostname, uint16_t connectedPort)
+{
+  AbstractCommand::onAllConnectAddressesFailed(connectedHostname,
+                                               connectedPort);
 }
 
 } // namespace aria2

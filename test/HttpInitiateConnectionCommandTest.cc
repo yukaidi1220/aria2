@@ -34,6 +34,7 @@ class HttpInitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed);
   CPPUNIT_TEST(testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint);
   CPPUNIT_TEST(testCreateNextCommandReusesSvcbConnectPortPooledSocket);
+  CPPUNIT_TEST(testConnectFailureMarksSvcbEndpointFailed);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -47,6 +48,7 @@ public:
   void testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed();
   void testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint();
   void testCreateNextCommandReusesSvcbConnectPortPooledSocket();
+  void testConnectFailureMarksSvcbEndpointFailed();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpInitiateConnectionCommandTest);
@@ -122,6 +124,7 @@ createSocketPair()
 class TestHttpInitiateConnectionCommand
     : public HttpInitiateConnectionCommand {
 public:
+  using AbstractCommand::onAllConnectAddressesFailed;
   using HttpInitiateConnectionCommand::createNextCommand;
   using HttpInitiateConnectionCommand::selectConnectionAuthority;
 
@@ -230,6 +233,13 @@ void HttpInitiateConnectionCommandTest::
   CPPUNIT_ASSERT_EQUAL(std::string("svc.example"), authority.hostname);
   CPPUNIT_ASSERT_EQUAL((uint16_t)8443, authority.port);
   CPPUNIT_ASSERT(!authority.directOrigin);
+  CPPUNIT_ASSERT(request->hasHttpsServiceBindingEndpointInfo());
+  const auto& info = request->getHttpsServiceBindingEndpointInfo();
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), info.originHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, info.originPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example"), info.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, info.connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), info.alpn);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.10"),
                        e.findCachedIPAddress("svc.example", 8443));
   CPPUNIT_ASSERT(e.findCachedIPAddress("origin.example", 443).empty());
@@ -291,6 +301,7 @@ void HttpInitiateConnectionCommandTest::
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), authority.hostname);
   CPPUNIT_ASSERT_EQUAL((uint16_t)443, authority.port);
   CPPUNIT_ASSERT(authority.directOrigin);
+  CPPUNIT_ASSERT(!request->hasHttpsServiceBindingEndpointInfo());
   CPPUNIT_ASSERT(e.findCachedIPAddress("svc.example", 8443).empty());
 }
 
@@ -316,6 +327,7 @@ void HttpInitiateConnectionCommandTest::
   CPPUNIT_ASSERT_EQUAL(std::string("proxy.example"), authority.hostname);
   CPPUNIT_ASSERT_EQUAL((uint16_t)8080, authority.port);
   CPPUNIT_ASSERT(!authority.directOrigin);
+  CPPUNIT_ASSERT(!request->hasHttpsServiceBindingEndpointInfo());
   CPPUNIT_ASSERT(e.findCachedIPAddress("svc.example", 8443).empty());
 }
 
@@ -348,6 +360,39 @@ void HttpInitiateConnectionCommandTest::
                        request->getConnectedHostname());
   CPPUNIT_ASSERT_EQUAL(peerInfo.addr, request->getConnectedAddr());
   CPPUNIT_ASSERT_EQUAL(peerInfo.port, request->getConnectedPort());
+}
+
+void HttpInitiateConnectionCommandTest::
+    testConnectFailureMarksSvcbEndpointFailed()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(makeSvcbRecord("svc1.example", 8443, 1, "192.0.2.10"));
+  records.push_back(makeSvcbRecord("svc2.example", 9443, 2, "192.0.2.11"));
+  e.cacheHttpsServiceBindingRecords("origin.example", 443, records, 60);
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto authority = command.selectConnectionAuthority(nullptr);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc1.example"), authority.hostname);
+  CPPUNIT_ASSERT(request->hasHttpsServiceBindingEndpointInfo());
+
+  command.onAllConnectAddressesFailed("svc1.example", 8443);
+
+  CPPUNIT_ASSERT(!request->hasHttpsServiceBindingEndpointInfo());
+  auto failed = makeEndpoint("origin.example", 443, "svc1.example", 8443);
+  failed.alpn = "http/1.1";
+  CPPUNIT_ASSERT(e.isHttpsServiceBindingEndpointFailed(failed));
+
+  auto nextAuthority = command.selectConnectionAuthority(nullptr);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc2.example"), nextAuthority.hostname);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)9443, nextAuthority.port);
 }
 
 } // namespace aria2

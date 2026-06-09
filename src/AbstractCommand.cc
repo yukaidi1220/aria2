@@ -87,6 +87,8 @@
 namespace aria2 {
 
 namespace {
+constexpr uint32_t HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL = 60;
+
 bool shouldWaitBeforeRetry(error_code::Value code)
 {
   switch (code) {
@@ -151,6 +153,18 @@ bool shouldPreferIPv4OverScopedIPv6(const std::vector<std::string>& addrs)
   return hasNumericAddressFamily(addrs, AF_INET) &&
          hasNumericAddressFamily(addrs, AF_INET6) &&
          !hasIPv6Address(addrs, isIPv6GlobalUnicastAddress);
+}
+
+dns::ServiceBindingEndpoint createHttpsServiceBindingEndpoint(
+    const Request::HttpsServiceBindingEndpointInfo& info)
+{
+  dns::ServiceBindingEndpoint endpoint;
+  endpoint.originHost = info.originHost;
+  endpoint.originPort = info.originPort;
+  endpoint.connectHost = info.connectHost;
+  endpoint.connectPort = info.connectPort;
+  endpoint.alpn = info.alpn;
+  return endpoint;
 }
 
 std::vector<int>
@@ -1054,6 +1068,7 @@ bool AbstractCommand::execute()
             fmt("CUID#%" PRId64 " - All IP addresses for %s were marked bad",
                 getCuid(), connectedHostname.c_str()));
         e_->removeCachedIPAddress(connectedHostname, connectedPort);
+        onAllConnectAddressesFailed(connectedHostname, connectedPort);
       }
 #ifdef ENABLE_ASYNC_DNS
       if (dnsTimeout && asyncNameResolverMan_->started()) {
@@ -1930,6 +1945,29 @@ void AbstractCommand::refreshSegments()
   getSegmentMan()->getInFlightSegment(segments_, getCuid());
 }
 
+void AbstractCommand::onAllConnectAddressesFailed(
+    const std::string& connectedHostname, uint16_t connectedPort)
+{
+  if (!req_ || !req_->hasHttpsServiceBindingEndpointInfo()) {
+    return;
+  }
+
+  const auto& info = req_->getHttpsServiceBindingEndpointInfo();
+  if (info.connectHost != connectedHostname ||
+      info.connectPort != connectedPort || !info.serviceBindingUsed()) {
+    return;
+  }
+
+  auto endpoint = createHttpsServiceBindingEndpoint(info);
+  e_->markHttpsServiceBindingEndpointFailed(
+      endpoint, HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL);
+  A2_LOG_NETWORK(fmt("HTTPS RR: temporarily avoiding failed endpoint %s:%u "
+                     "for origin %s:%u",
+                     endpoint.connectHost.c_str(), endpoint.connectPort,
+                     endpoint.originHost.c_str(), endpoint.originPort));
+  req_->clearHttpsServiceBindingEndpointInfo();
+}
+
 bool AbstractCommand::checkIfConnectionEstablished(
     const std::shared_ptr<SocketCore>& socket,
     const std::string& connectedHostname, const std::string& connectedAddr,
@@ -1955,6 +1993,7 @@ bool AbstractCommand::checkIfConnectionEstablished(
                             "No host mapping address left to try"));
     }
     e_->removeCachedIPAddress(connectedHostname, connectedPort);
+    onAllConnectAddressesFailed(connectedHostname, connectedPort);
     // Don't set error if proxy server is used and its method is GET.
     if (resolveProxyMethod(req_->getProtocol()) != V_GET ||
         !isProxyRequest(req_->getProtocol(), getOption())) {

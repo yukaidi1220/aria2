@@ -52,6 +52,16 @@ const std::string Request::METHOD_HEAD = "HEAD";
 
 const std::string Request::DEFAULT_FILE = "index.html";
 
+Request::HttpsServiceBindingEndpointInfo::HttpsServiceBindingEndpointInfo()
+    : originPort(0), connectPort(0)
+{
+}
+
+bool Request::HttpsServiceBindingEndpointInfo::serviceBindingUsed() const
+{
+  return connectHost != originHost || connectPort != originPort;
+}
+
 Request::Request()
     : method_(METHOD_GET),
       connectedAddrConfirmed_(false),
@@ -64,6 +74,7 @@ Request::Request()
       removalRequested_(false),
       http2OriginCoalesced_(false),
       http2OriginCoalescingBlocked_(false),
+      httpsServiceBindingEndpointInfoSet_(false),
       connectedPort_(0),
       wakeTime_(global::wallclock())
 {
@@ -215,6 +226,26 @@ void Request::setConnectedAddrInfo(const std::string& hostname,
 void Request::resetConnectedAddrInfo()
 {
   setConnectedAddrInfo(A2STR::NIL, A2STR::NIL, 0);
+  clearHttpsServiceBindingEndpointInfo();
+}
+
+void Request::setHttpsServiceBindingEndpointInfo(
+    const std::string& originHost, uint16_t originPort,
+    const std::string& connectHost, uint16_t connectPort,
+    const std::string& alpn)
+{
+  httpsServiceBindingEndpointInfo_.originHost = originHost;
+  httpsServiceBindingEndpointInfo_.originPort = originPort;
+  httpsServiceBindingEndpointInfo_.connectHost = connectHost;
+  httpsServiceBindingEndpointInfo_.connectPort = connectPort;
+  httpsServiceBindingEndpointInfo_.alpn = alpn;
+  httpsServiceBindingEndpointInfoSet_ = true;
+}
+
+void Request::clearHttpsServiceBindingEndpointInfo()
+{
+  httpsServiceBindingEndpointInfo_ = HttpsServiceBindingEndpointInfo();
+  httpsServiceBindingEndpointInfoSet_ = false;
 }
 
 } // namespace aria2

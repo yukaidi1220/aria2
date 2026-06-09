@@ -28,6 +28,7 @@ class RequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testConnectedAddrConfirmation);
   CPPUNIT_TEST(testResetConnectedAddrInfo);
   CPPUNIT_TEST(testHttp2OriginCoalescingState);
+  CPPUNIT_TEST(testHttpsServiceBindingEndpointInfo);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -47,6 +48,7 @@ public:
   void testConnectedAddrConfirmation();
   void testResetConnectedAddrInfo();
   void testHttp2OriginCoalescingState();
+  void testHttpsServiceBindingEndpointInfo();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(RequestTest);
@@ -122,6 +124,9 @@ void RequestTest::testResetConnectedAddrInfo()
   Request req;
 
   req.setConnectedAddrInfo("example.org", "192.0.2.1", 443);
+  req.setHttpsServiceBindingEndpointInfo("origin.example", 443,
+                                         "svc.example", 8443, "http/1.1");
+  CPPUNIT_ASSERT(req.hasHttpsServiceBindingEndpointInfo());
   req.confirmConnectedAddrInfo();
   req.resetConnectedAddrInfo();
 
@@ -129,6 +134,7 @@ void RequestTest::testResetConnectedAddrInfo()
   CPPUNIT_ASSERT_EQUAL(std::string(), req.getConnectedAddr());
   CPPUNIT_ASSERT_EQUAL((uint16_t)0, req.getConnectedPort());
   CPPUNIT_ASSERT(!req.connectedAddrInfoConfirmed());
+  CPPUNIT_ASSERT(!req.hasHttpsServiceBindingEndpointInfo());
 }
 
 void RequestTest::testRedirectUri()
@@ -297,6 +303,33 @@ void RequestTest::testHttp2OriginCoalescingState()
   CPPUNIT_ASSERT(req.redirectUri("https://cdn.example/file"));
   CPPUNIT_ASSERT(!req.isHttp2OriginCoalesced());
   CPPUNIT_ASSERT(!req.http2OriginCoalescingBlocked());
+}
+
+void RequestTest::testHttpsServiceBindingEndpointInfo()
+{
+  Request req;
+  CPPUNIT_ASSERT(req.setUri("https://origin.example/file"));
+
+  req.setHttpsServiceBindingEndpointInfo("origin.example", 443,
+                                         "svc.example", 8443, "http/1.1");
+  CPPUNIT_ASSERT(req.hasHttpsServiceBindingEndpointInfo());
+  const auto& info = req.getHttpsServiceBindingEndpointInfo();
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), info.originHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, info.originPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example"), info.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, info.connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), info.alpn);
+  CPPUNIT_ASSERT(info.serviceBindingUsed());
+
+  CPPUNIT_ASSERT(req.redirectUri("https://redirect.example/file"));
+  CPPUNIT_ASSERT(!req.hasHttpsServiceBindingEndpointInfo());
+
+  req.setHttpsServiceBindingEndpointInfo("origin.example", 443,
+                                         "origin.example", 443, "h2");
+  CPPUNIT_ASSERT(!req.getHttpsServiceBindingEndpointInfo()
+                      .serviceBindingUsed());
+  req.clearHttpsServiceBindingEndpointInfo();
+  CPPUNIT_ASSERT(!req.hasHttpsServiceBindingEndpointInfo());
 }
 
 void RequestTest::testRedirectUri_uriNormalization()
