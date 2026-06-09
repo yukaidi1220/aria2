@@ -36,8 +36,18 @@
 #define D_HTTP_INITIATE_CONNECTION_COMMAND_H
 
 #include "InitiateConnectionCommand.h"
+#include "ServiceBindingSelector.h"
 
 namespace aria2 {
+
+struct HttpConnectionAuthority {
+  std::string hostname;
+  uint16_t port = 0;
+};
+
+HttpConnectionAuthority selectHttpConnectionAuthority(
+    const Request* request, const Request* proxyRequest,
+    const std::vector<dns::ServiceBindingEndpoint>& endpoints);
 
 // HttpInitiateConnectionCommand determines remote host to connect and
 // resolves IP address from that hostname and creates subsequent

@@ -58,6 +58,7 @@
 #include "SocketCore.h"
 #include "HttpTLSHandshakeParams.h"
 #include "RecoverableException.h"
+#include "ServiceBindingSelector.h"
 #include "message.h"
 #include "prefs.h"
 #include "A2STR.h"
@@ -70,6 +71,40 @@
 #include "HttpProxyRequestConnectChain.h"
 
 namespace aria2 {
+
+HttpConnectionAuthority selectHttpConnectionAuthority(
+    const Request* request, const Request* proxyRequest,
+    const std::vector<dns::ServiceBindingEndpoint>& endpoints)
+{
+  HttpConnectionAuthority authority;
+  if (proxyRequest) {
+    authority.hostname = proxyRequest->getHost();
+    authority.port = proxyRequest->getPort();
+    return authority;
+  }
+  if (!request) {
+    return authority;
+  }
+
+  authority.hostname = request->getHost();
+  authority.port = request->getPort();
+  if (request->getProtocol() != V_HTTPS) {
+    return authority;
+  }
+
+  for (const auto& endpoint : endpoints) {
+    if (endpoint.originHost != request->getHost() ||
+        endpoint.originPort != request->getPort() ||
+        endpoint.connectHost.empty() || endpoint.connectPort == 0) {
+      continue;
+    }
+    authority.hostname = endpoint.connectHost;
+    authority.port = endpoint.connectPort;
+    return authority;
+  }
+
+  return authority;
+}
 
 namespace {
 
