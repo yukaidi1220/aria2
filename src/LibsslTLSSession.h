@@ -74,6 +74,9 @@ public:
        // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
   }
   virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE;
+  virtual bool supportsECHConfigList() const CXX11_OVERRIDE;
+  virtual int setECHConfigList(const std::string& echConfigList)
+      CXX11_OVERRIDE;
   virtual bool peerCertificateMatchesHostname(
       const std::string& hostname) const CXX11_OVERRIDE;
   virtual int closeConnection() CXX11_OVERRIDE;
@@ -92,6 +95,7 @@ private:
   OpenSSLTLSContext* tlsContext_;
   // Last error code from openSSL library functions
   int rv_;
+  std::string lastErrorString_;
 };
 
 } // namespace aria2

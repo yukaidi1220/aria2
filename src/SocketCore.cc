@@ -1057,6 +1057,23 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
         A2_LOG_DEBUG("TLS SNI hostname was not set");
       }
     }
+    if (clientSide &&
+        (params.echParams.requested || !params.echParams.configList.empty())) {
+      if (params.echParams.configList.empty()) {
+        if (params.echParams.required) {
+          throw DL_ABORT_EX("TLS ECH requires an ECHConfigList");
+        }
+      }
+      else if (!tlsSession_->supportsECHConfigList()) {
+        throw DL_ABORT_EX(
+            "SSL/TLS backend does not support ECHConfigList");
+      }
+      else if ((rv = tlsSession_->setECHConfigList(
+                    params.echParams.configList)) != TLS_ERR_OK) {
+        throw DL_ABORT_EX(fmt(EX_SSL_INIT_FAILURE,
+                              tlsSession_->getLastErrorString().c_str()));
+      }
+    }
     if (clientSide && !effectiveParams.alpnProtocols.empty()) {
       if (!tlsSession_->supportsAlpnProtocols()) {
         A2_LOG_NETWORK(

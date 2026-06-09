@@ -34,6 +34,9 @@
 /* copyright --> */
 #include "LibsslTLSSession.h"
 
+#ifdef HAVE_OPENSSL_ECH_H
+#  include <openssl/ech.h>
+#endif // HAVE_OPENSSL_ECH_H
 #include <openssl/err.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
@@ -43,6 +46,13 @@
 #include "SocketCore.h"
 
 namespace aria2 {
+
+#if defined(HAVE_OPENSSL_ECH_H) &&                                         \
+    defined(HAVE_DECL_SSL_SET1_ECH_CONFIG_LIST) &&                         \
+    HAVE_DECL_SSL_SET1_ECH_CONFIG_LIST &&                                  \
+    defined(HAVE_SSL_SET1_ECH_CONFIG_LIST)
+#  define A2_OPENSSL_HAS_ECH 1
+#endif // OpenSSL ECH API
 
 #if !OPENSSL_101_API
 namespace {
@@ -155,7 +165,7 @@ TLSSession* TLSSession::make(TLSContext* ctx)
 }
 
 OpenSSLTLSSession::OpenSSLTLSSession(OpenSSLTLSContext* tlsContext)
-    : ssl_(nullptr), tlsContext_(tlsContext), rv_(1)
+    : ssl_(nullptr), tlsContext_(tlsContext), rv_(1), lastErrorString_()
 {
 }
 
@@ -242,6 +252,39 @@ std::string OpenSSLTLSSession::getSelectedAlpnProtocol() const
   return std::string();
 #endif // !(!defined(OPENSSL_NO_TLSEXT) &&
        // defined(TLSEXT_TYPE_application_layer_protocol_negotiation))
+}
+
+bool OpenSSLTLSSession::supportsECHConfigList() const
+{
+#ifdef A2_OPENSSL_HAS_ECH
+  return true;
+#else  // !A2_OPENSSL_HAS_ECH
+  return false;
+#endif // !A2_OPENSSL_HAS_ECH
+}
+
+int OpenSSLTLSSession::setECHConfigList(const std::string& echConfigList)
+{
+  if (echConfigList.empty()) {
+    return TLS_ERR_OK;
+  }
+
+#ifdef A2_OPENSSL_HAS_ECH
+  ERR_clear_error();
+  rv_ = SSL_set1_ech_config_list(
+      ssl_, reinterpret_cast<const unsigned char*>(echConfigList.data()),
+      echConfigList.size());
+  if (rv_ == 1) {
+    lastErrorString_.clear();
+    return TLS_ERR_OK;
+  }
+  auto err = ERR_get_error();
+  lastErrorString_ = err ? ERR_error_string(err, nullptr)
+                         : "SSL_set1_ech_config_list failed";
+  return TLS_ERR_ERROR;
+#else  // !A2_OPENSSL_HAS_ECH
+  return TLS_ERR_ERROR;
+#endif // !A2_OPENSSL_HAS_ECH
 }
 
 int OpenSSLTLSSession::closeConnection()
@@ -429,6 +472,9 @@ int OpenSSLTLSSession::tlsAccept(TLSVersion& version)
 
 std::string OpenSSLTLSSession::getLastErrorString()
 {
+  if (!lastErrorString_.empty()) {
+    return lastErrorString_;
+  }
   if (rv_ <= 0) {
     int sslError = SSL_get_error(ssl_, rv_);
     switch (sslError) {

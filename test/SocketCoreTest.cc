@@ -8,6 +8,9 @@
 #include "Exception.h"
 #ifdef ENABLE_SSL
 #  include "TLSSession.h"
+#  ifdef HAVE_OPENSSL
+#    include "LibsslTLSSession.h"
+#  endif // HAVE_OPENSSL
 #  ifdef HAVE_LIBGNUTLS
 #    include "LibgnutlsTLSSession.h"
 #  endif // HAVE_LIBGNUTLS
@@ -33,6 +36,9 @@ class SocketCoreTest : public CppUnit::TestFixture {
 #ifdef HAVE_LIBGNUTLS
   CPPUNIT_TEST(testGnuTLSSessionAlpnSupport);
 #endif // HAVE_LIBGNUTLS
+#ifdef HAVE_OPENSSL
+  CPPUNIT_TEST(testOpenSSLECHSupportDetection);
+#endif // HAVE_OPENSSL
   CPPUNIT_TEST(testTLSSessionPeerCertificateMatchDefault);
   CPPUNIT_TEST(testMatchesTLSHandshakeParams);
   CPPUNIT_TEST(testIsTLSSNIHostname);
@@ -59,6 +65,9 @@ public:
 #ifdef HAVE_LIBGNUTLS
   void testGnuTLSSessionAlpnSupport();
 #endif // HAVE_LIBGNUTLS
+#ifdef HAVE_OPENSSL
+  void testOpenSSLECHSupportDetection();
+#endif // HAVE_OPENSSL
   void testTLSSessionPeerCertificateMatchDefault();
   void testMatchesTLSHandshakeParams();
   void testIsTLSSNIHostname();
@@ -525,6 +534,21 @@ void SocketCoreTest::testGnuTLSSessionAlpnSupport()
 #endif // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
 }
 #endif // HAVE_LIBGNUTLS
+
+#ifdef HAVE_OPENSSL
+void SocketCoreTest::testOpenSSLECHSupportDetection()
+{
+  OpenSSLTLSSession session(nullptr);
+#if defined(HAVE_OPENSSL_ECH_H) &&                                         \
+    defined(HAVE_DECL_SSL_SET1_ECH_CONFIG_LIST) &&                         \
+    HAVE_DECL_SSL_SET1_ECH_CONFIG_LIST &&                                  \
+    defined(HAVE_SSL_SET1_ECH_CONFIG_LIST)
+  CPPUNIT_ASSERT(session.supportsECHConfigList());
+#else  // !OpenSSL ECH API
+  CPPUNIT_ASSERT(!session.supportsECHConfigList());
+#endif // !OpenSSL ECH API
+}
+#endif // HAVE_OPENSSL
 
 void SocketCoreTest::testTLSSessionPeerCertificateMatchDefault()
 {
