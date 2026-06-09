@@ -47,12 +47,19 @@
 #include "EventPoll.h"
 #include "Exception.h"
 #include "HttpHeader.h"
+#include "HttpHeaderProcessor.h"
 #include "LogFactory.h"
 #include "a2functional.h"
 #include "fmt.h"
 #include "util.h"
 
 namespace aria2 {
+
+enum DohExchangeReadResult {
+  DOH_EXCHANGE_READ_HEADER_PENDING,
+  DOH_EXCHANGE_READ_BODY_PENDING,
+  DOH_EXCHANGE_READ_COMPLETE,
+};
 
 namespace {
 const size_t MAX_DOH_MESSAGE_SIZE = 65535;
@@ -136,7 +143,184 @@ std::string createDohRequest(const AsyncDohServerConfig& server,
   request += dnsQuery;
   return request;
 }
+} // namespace
 
+class AsyncDohExchange {
+public:
+  virtual ~AsyncDohExchange() = default;
+
+  virtual void reset() = 0;
+
+  virtual void submitRequest(const AsyncDohServerConfig& server,
+                             const std::string& dnsQuery) = 0;
+
+  virtual std::vector<std::string> createAlpnProtocols() const = 0;
+
+  virtual bool writeRequest(AsyncDohTransport& transport) = 0;
+
+  virtual DohExchangeReadResult
+  readResponseHeader(AsyncDohTransport& transport) = 0;
+
+  virtual bool readResponseBody(AsyncDohTransport& transport) = 0;
+
+  virtual const std::vector<unsigned char>& getResponseBody() const = 0;
+
+  virtual size_t getReadProgress() const = 0;
+};
+
+class AsyncDohHttp1Exchange : public AsyncDohExchange {
+public:
+  AsyncDohHttp1Exchange()
+      : httpHeaderProcessor_(HttpHeaderProcessor::CLIENT_PARSER),
+        writeOffset_(0),
+        responseOffset_(0)
+  {
+  }
+
+  virtual void reset() CXX11_OVERRIDE
+  {
+    writeBuffer_.clear();
+    writeOffset_ = 0;
+    httpHeaderProcessor_.clear();
+    responseHeader_.reset();
+    responseBuffer_.clear();
+    responseOffset_ = 0;
+  }
+
+  virtual void submitRequest(const AsyncDohServerConfig& server,
+                             const std::string& dnsQuery) CXX11_OVERRIDE
+  {
+    reset();
+    writeBuffer_ = createDohRequest(server, dnsQuery);
+  }
+
+  virtual std::vector<std::string> createAlpnProtocols() const CXX11_OVERRIDE
+  {
+    return std::vector<std::string>();
+  }
+
+  virtual bool writeRequest(AsyncDohTransport& transport) CXX11_OVERRIDE
+  {
+    auto nwrite = transport.writeData(writeBuffer_.data() + writeOffset_,
+                                      writeBuffer_.size() - writeOffset_);
+    if (nwrite < 0) {
+      throw DL_ABORT_EX("DoH request write failed");
+    }
+    if (nwrite == 0) {
+      if (!transport.wantRead() && !transport.wantWrite()) {
+        throw DL_ABORT_EX("DoH connection closed while writing request");
+      }
+      return false;
+    }
+    writeOffset_ += static_cast<size_t>(nwrite);
+    return writeOffset_ == writeBuffer_.size();
+  }
+
+  virtual DohExchangeReadResult
+  readResponseHeader(AsyncDohTransport& transport) CXX11_OVERRIDE
+  {
+    unsigned char buf[MAX_DOH_READ_SIZE];
+    auto nread = transport.readData(buf, sizeof(buf));
+    if (nread == 0) {
+      if (!transport.wantRead() && !transport.wantWrite()) {
+        throw DL_ABORT_EX(
+            "DoH connection closed while reading response header");
+      }
+      return DOH_EXCHANGE_READ_HEADER_PENDING;
+    }
+
+    if (!httpHeaderProcessor_.parse(buf, nread)) {
+      return DOH_EXCHANGE_READ_HEADER_PENDING;
+    }
+
+    auto bodyOffset = httpHeaderProcessor_.getLastBytesProcessed();
+    responseHeader_ = httpHeaderProcessor_.getResult();
+    prepareResponseBody();
+    if (bodyOffset < nread) {
+      appendResponseBody(buf + bodyOffset, nread - bodyOffset);
+    }
+    return responseComplete() ? DOH_EXCHANGE_READ_COMPLETE
+                              : DOH_EXCHANGE_READ_BODY_PENDING;
+  }
+
+  virtual bool readResponseBody(AsyncDohTransport& transport) CXX11_OVERRIDE
+  {
+    if (responseComplete()) {
+      return true;
+    }
+
+    auto nread = transport.readData(responseBuffer_.data() + responseOffset_,
+                                    responseBuffer_.size() - responseOffset_);
+    if (nread == 0) {
+      if (!transport.wantRead() && !transport.wantWrite()) {
+        throw DL_ABORT_EX(
+            "DoH connection closed while reading response body");
+      }
+      return false;
+    }
+    responseOffset_ += nread;
+    return responseComplete();
+  }
+
+  bool responseComplete() const
+  {
+    return !responseBuffer_.empty() && responseOffset_ == responseBuffer_.size();
+  }
+
+  virtual const std::vector<unsigned char>& getResponseBody() const
+      CXX11_OVERRIDE
+  {
+    return responseBuffer_;
+  }
+
+  virtual size_t getReadProgress() const CXX11_OVERRIDE
+  {
+    return httpHeaderProcessor_.getHeaderString().size() + responseOffset_;
+  }
+
+private:
+  void prepareResponseBody()
+  {
+    if (!responseHeader_) {
+      throw DL_ABORT_EX("DoH response header was not parsed");
+    }
+    if (responseHeader_->getStatusCode() != 200) {
+      throw DL_ABORT_EX(
+          fmt("DoH server returned HTTP status %d",
+              responseHeader_->getStatusCode()));
+    }
+    if (responseHeader_->defined(HttpHeader::TRANSFER_ENCODING)) {
+      throw DL_ABORT_EX("DoH Transfer-Encoding response is not supported");
+    }
+    const auto& contentLength =
+        responseHeader_->find(HttpHeader::CONTENT_LENGTH);
+    int64_t n;
+    if (!util::parseLLIntNoThrow(n, contentLength) || n <= 0 ||
+        n > static_cast<int64_t>(MAX_DOH_MESSAGE_SIZE)) {
+      throw DL_ABORT_EX("Bad DoH response Content-Length");
+    }
+    responseBuffer_.assign(static_cast<size_t>(n), 0);
+    responseOffset_ = 0;
+  }
+
+  void appendResponseBody(const unsigned char* data, size_t len)
+  {
+    if (responseOffset_ + len > responseBuffer_.size()) {
+      throw DL_ABORT_EX("DoH response body is larger than Content-Length");
+    }
+    memcpy(responseBuffer_.data() + responseOffset_, data, len);
+    responseOffset_ += len;
+  }
+
+  std::string writeBuffer_;
+  size_t writeOffset_;
+  HttpHeaderProcessor httpHeaderProcessor_;
+  std::unique_ptr<HttpHeader> responseHeader_;
+  std::vector<unsigned char> responseBuffer_;
+  size_t responseOffset_;
+};
+
+namespace {
 class SocketCoreDohTransport : public AsyncDohTransport {
 public:
   SocketCoreDohTransport() : socket_(std::make_shared<SocketCore>()) {}
@@ -160,6 +344,11 @@ public:
   virtual bool tlsConnect(const TLSHandshakeParams& params) CXX11_OVERRIDE
   {
     return socket_->tlsConnect(params);
+  }
+
+  virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE
+  {
+    return socket_->getSelectedAlpnProtocol();
   }
 
   virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE
@@ -202,13 +391,11 @@ AsyncDohNameResolver::AsyncDohNameResolver(
     : family_(family),
       servers_(std::move(servers)),
       transportFactory_(std::move(transportFactory)),
+      exchange_(make_unique<AsyncDohHttp1Exchange>()),
       status_(STATUS_READY),
       state_(DOH_IDLE),
       serverIndex_(0),
-      queryId_(0),
-      writeOffset_(0),
-      httpHeaderProcessor_(HttpHeaderProcessor::CLIENT_PARSER),
-      responseOffset_(0)
+      queryId_(0)
 {
   if (!transportFactory_) {
     transportFactory_ = createSocketCoreDohTransport;
@@ -225,11 +412,7 @@ void AsyncDohNameResolver::resolve(const std::string& name)
   socks_.clear();
   transport_.reset();
   serverIndex_ = 0;
-  writeOffset_ = 0;
-  httpHeaderProcessor_.clear();
-  responseHeader_.reset();
-  responseBuffer_.clear();
-  responseOffset_ = 0;
+  exchange_->reset();
   status_ = STATUS_QUERYING;
   state_ = DOH_IDLE;
 
@@ -265,12 +448,7 @@ bool AsyncDohNameResolver::startCurrentServer()
   while (serverIndex_ < servers_.size()) {
     const auto& server = servers_[serverIndex_];
     try {
-      writeOffset_ = 0;
-      httpHeaderProcessor_.clear();
-      responseHeader_.reset();
-      responseBuffer_.clear();
-      responseOffset_ = 0;
-      writeBuffer_ = createDohRequest(server, dnsQuery_);
+      exchange_->submitRequest(server, dnsQuery_);
       transport_ = transportFactory_(server);
       if (!transport_) {
         throw DL_ABORT_EX("DoH transport factory returned null");
@@ -394,7 +572,7 @@ void AsyncDohNameResolver::processBufferedRead()
   while (status_ == STATUS_QUERYING && canProcessBufferedRead()) {
     try {
       auto prevState = state_;
-      auto prevResponseOffset = responseOffset_;
+      auto prevReadProgress = exchange_->getReadProgress();
       auto prevBufferedLength = transport_->getRecvBufferedLength();
       if (state_ == DOH_READING_RESPONSE_HEADER) {
         processReadResponseHeader();
@@ -406,7 +584,8 @@ void AsyncDohNameResolver::processBufferedRead()
         break;
       }
 
-      if (state_ == prevState && responseOffset_ == prevResponseOffset &&
+      if (state_ == prevState &&
+          exchange_->getReadProgress() == prevReadProgress &&
           transport_ &&
           transport_->getRecvBufferedLength() == prevBufferedLength) {
         break;
@@ -425,7 +604,8 @@ TLSHandshakeParams AsyncDohNameResolver::createTLSHandshakeParams() const
   const auto& server = servers_[serverIndex_];
   const auto verifyHost =
       server.tlsHost.empty() ? server.connectHost : server.tlsHost;
-  return TLSHandshakeParams(verifyHost, verifyHost);
+  return TLSHandshakeParams(verifyHost, verifyHost,
+                            exchange_->createAlpnProtocols());
 }
 
 void AsyncDohNameResolver::process(sock_t readfd, sock_t writefd)
@@ -486,114 +666,42 @@ void AsyncDohNameResolver::processTlsHandshake()
     return;
   }
   state_ = DOH_WRITING_REQUEST;
-  writeOffset_ = 0;
 }
 
 void AsyncDohNameResolver::processWriteRequest()
 {
-  auto nwrite =
-      transport_->writeData(writeBuffer_.data() + writeOffset_,
-                            writeBuffer_.size() - writeOffset_);
-  if (nwrite < 0) {
-    throw DL_ABORT_EX("DoH request write failed");
-  }
-  if (nwrite == 0) {
-    if (!transport_->wantRead() && !transport_->wantWrite()) {
-      throw DL_ABORT_EX("DoH connection closed while writing request");
-    }
-    return;
-  }
-  writeOffset_ += static_cast<size_t>(nwrite);
-  if (writeOffset_ == writeBuffer_.size()) {
+  if (exchange_->writeRequest(*transport_)) {
     state_ = DOH_READING_RESPONSE_HEADER;
   }
 }
 
 void AsyncDohNameResolver::processReadResponseHeader()
 {
-  unsigned char buf[MAX_DOH_READ_SIZE];
-  auto nread = transport_->readData(buf, sizeof(buf));
-  if (nread == 0) {
-    if (!transport_->wantRead() && !transport_->wantWrite()) {
-      throw DL_ABORT_EX("DoH connection closed while reading response header");
-    }
+  switch (exchange_->readResponseHeader(*transport_)) {
+  case DOH_EXCHANGE_READ_HEADER_PENDING:
     return;
-  }
-
-  if (!httpHeaderProcessor_.parse(buf, nread)) {
+  case DOH_EXCHANGE_READ_BODY_PENDING:
+    state_ = DOH_READING_RESPONSE_BODY;
     return;
-  }
-
-  auto bodyOffset = httpHeaderProcessor_.getLastBytesProcessed();
-  responseHeader_ = httpHeaderProcessor_.getResult();
-  prepareResponseBody();
-  if (bodyOffset < nread) {
-    appendResponseBody(buf + bodyOffset, nread - bodyOffset);
-  }
-}
-
-void AsyncDohNameResolver::prepareResponseBody()
-{
-  if (!responseHeader_) {
-    throw DL_ABORT_EX("DoH response header was not parsed");
-  }
-  if (responseHeader_->getStatusCode() != 200) {
-    throw DL_ABORT_EX(
-        fmt("DoH server returned HTTP status %d",
-            responseHeader_->getStatusCode()));
-  }
-  if (responseHeader_->defined(HttpHeader::TRANSFER_ENCODING)) {
-    throw DL_ABORT_EX("DoH Transfer-Encoding response is not supported");
-  }
-  const auto& contentLength = responseHeader_->find(HttpHeader::CONTENT_LENGTH);
-  int64_t n;
-  if (!util::parseLLIntNoThrow(n, contentLength) || n <= 0 ||
-      n > static_cast<int64_t>(MAX_DOH_MESSAGE_SIZE)) {
-    throw DL_ABORT_EX("Bad DoH response Content-Length");
-  }
-  responseBuffer_.assign(static_cast<size_t>(n), 0);
-  responseOffset_ = 0;
-  state_ = DOH_READING_RESPONSE_BODY;
-}
-
-void AsyncDohNameResolver::appendResponseBody(const unsigned char* data,
-                                              size_t len)
-{
-  if (responseOffset_ + len > responseBuffer_.size()) {
-    throw DL_ABORT_EX("DoH response body is larger than Content-Length");
-  }
-  memcpy(responseBuffer_.data() + responseOffset_, data, len);
-  responseOffset_ += len;
-  if (responseOffset_ == responseBuffer_.size()) {
+  case DOH_EXCHANGE_READ_COMPLETE:
     finishResponse();
+    return;
   }
+  throw DL_ABORT_EX("Invalid DoH exchange read state");
 }
 
 void AsyncDohNameResolver::processReadResponseBody()
 {
-  if (responseOffset_ == responseBuffer_.size()) {
-    finishResponse();
-    return;
-  }
-
-  auto nread = transport_->readData(responseBuffer_.data() + responseOffset_,
-                                    responseBuffer_.size() - responseOffset_);
-  if (nread == 0) {
-    if (!transport_->wantRead() && !transport_->wantWrite()) {
-      throw DL_ABORT_EX("DoH connection closed while reading response body");
-    }
-    return;
-  }
-  responseOffset_ += nread;
-  if (responseOffset_ == responseBuffer_.size()) {
+  if (exchange_->readResponseBody(*transport_)) {
     finishResponse();
   }
 }
 
 void AsyncDohNameResolver::finishResponse()
 {
+  const auto& responseBody = exchange_->getResponseBody();
   resolvedAddresses_ =
-      dns::parseResponse(responseBuffer_.data(), responseBuffer_.size(),
+      dns::parseResponse(responseBody.data(), responseBody.size(),
                          queryId_, hostname_, getQueryType(family_));
   if (resolvedAddresses_.empty()) {
     throw DL_ABORT_EX("no address returned by DoH server");

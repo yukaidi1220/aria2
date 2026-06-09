@@ -47,12 +47,11 @@
 
 #include "AsyncDnsServerConfig.h"
 #include "AsyncResolver.h"
-#include "HttpHeaderProcessor.h"
 #include "SocketCore.h"
 
 namespace aria2 {
 
-class HttpHeader;
+class AsyncDohExchange;
 
 class AsyncDohTransport {
 public:
@@ -65,6 +64,11 @@ public:
   virtual std::string getSocketError() const = 0;
 
   virtual bool tlsConnect(const TLSHandshakeParams& params) = 0;
+
+  virtual std::string getSelectedAlpnProtocol() const
+  {
+    return std::string();
+  }
 
   virtual ssize_t writeData(const void* data, size_t len) = 0;
 
@@ -148,14 +152,13 @@ private:
   void processWriteRequest();
   void processReadResponseHeader();
   void processReadResponseBody();
-  void prepareResponseBody();
-  void appendResponseBody(const unsigned char* data, size_t len);
   void finishResponse();
 
   int family_;
   std::vector<AsyncDohServerConfig> servers_;
   AsyncDohTransportFactory transportFactory_;
   std::unique_ptr<AsyncDohTransport> transport_;
+  std::unique_ptr<AsyncDohExchange> exchange_;
   std::vector<AsyncResolverSocketEntry> socks_;
   STATUS status_;
   DohState state_;
@@ -165,12 +168,6 @@ private:
   std::string hostname_;
   uint16_t queryId_;
   std::string dnsQuery_;
-  std::string writeBuffer_;
-  size_t writeOffset_;
-  HttpHeaderProcessor httpHeaderProcessor_;
-  std::unique_ptr<HttpHeader> responseHeader_;
-  std::vector<unsigned char> responseBuffer_;
-  size_t responseOffset_;
 };
 
 } // namespace aria2
