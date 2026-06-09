@@ -100,11 +100,26 @@ namespace aria2 {
 #endif // __MINGW32__
 
 #ifdef ENABLE_SSL
+bool operator==(const TLSECHParams& lhs, const TLSECHParams& rhs)
+{
+  return lhs.requested == rhs.requested && lhs.required == rhs.required &&
+         lhs.configList == rhs.configList && lhs.source == rhs.source &&
+         lhs.outerName == rhs.outerName &&
+         lhs.outerAlpnProtocols == rhs.outerAlpnProtocols &&
+         lhs.retryConfigList == rhs.retryConfigList;
+}
+
+bool operator!=(const TLSECHParams& lhs, const TLSECHParams& rhs)
+{
+  return !(lhs == rhs);
+}
+
 bool operator==(const TLSHandshakeParams& lhs,
                 const TLSHandshakeParams& rhs)
 {
   return lhs.sniHost == rhs.sniHost && lhs.verifyHost == rhs.verifyHost &&
          lhs.alpnProtocols == rhs.alpnProtocols &&
+         lhs.echParams == rhs.echParams &&
          lhs.sniHostOverridden == rhs.sniHostOverridden;
 }
 
@@ -112,6 +127,14 @@ bool operator!=(const TLSHandshakeParams& lhs,
                 const TLSHandshakeParams& rhs)
 {
   return !(lhs == rhs);
+}
+
+bool tlsHandshakeParamsCompatibleForOriginCoalescing(
+    const TLSHandshakeParams& established, const TLSHandshakeParams& candidate)
+{
+  return !established.sniHostOverridden && !candidate.sniHostOverridden &&
+         established.alpnProtocols == candidate.alpnProtocols &&
+         established.echParams == candidate.echParams;
 }
 
 bool isTLSSNIHostname(const std::string& hostname)
@@ -1143,6 +1166,14 @@ bool SocketCore::matchesTLSHandshakeParams(
     const TLSHandshakeParams& params) const
 {
   return tlsHandshakeParamsSet_ && tlsHandshakeParams_ == params;
+}
+
+bool SocketCore::matchesTLSHandshakeParamsForOriginCoalescing(
+    const TLSHandshakeParams& params) const
+{
+  return tlsHandshakeParamsSet_ &&
+         tlsHandshakeParamsCompatibleForOriginCoalescing(tlsHandshakeParams_,
+                                                        params);
 }
 
 std::string SocketCore::getSelectedAlpnProtocol() const

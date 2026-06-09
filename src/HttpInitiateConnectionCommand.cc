@@ -108,6 +108,7 @@ createTLSHttp2OriginCoalescingPredicate(const Request* request,
   return [requestGroup, protocol, host, port,
           tlsParams](const std::shared_ptr<SocketCore>& socket) {
     if (socket->getSelectedAlpnProtocol() != HTTP_ALPN_H2 ||
+        !socket->matchesTLSHandshakeParamsForOriginCoalescing(tlsParams) ||
         !socket->peerCertificateMatchesHostname(tlsParams.verifyHost)) {
       return false;
     }

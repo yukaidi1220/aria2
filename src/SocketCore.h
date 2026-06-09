@@ -54,10 +54,24 @@ namespace aria2 {
 class TLSContext;
 class TLSSession;
 
+struct TLSECHParams {
+  bool requested = false;
+  bool required = false;
+  std::string configList;
+  std::string source;
+  std::string outerName;
+  std::vector<std::string> outerAlpnProtocols;
+  std::string retryConfigList;
+};
+
+bool operator==(const TLSECHParams& lhs, const TLSECHParams& rhs);
+bool operator!=(const TLSECHParams& lhs, const TLSECHParams& rhs);
+
 struct TLSHandshakeParams {
   std::string sniHost;
   std::string verifyHost;
   std::vector<std::string> alpnProtocols;
+  TLSECHParams echParams;
   bool sniHostOverridden = false;
 
   TLSHandshakeParams() = default;
@@ -105,6 +119,8 @@ bool operator==(const TLSHandshakeParams& lhs,
                 const TLSHandshakeParams& rhs);
 bool operator!=(const TLSHandshakeParams& lhs,
                 const TLSHandshakeParams& rhs);
+bool tlsHandshakeParamsCompatibleForOriginCoalescing(
+    const TLSHandshakeParams& established, const TLSHandshakeParams& candidate);
 bool isTLSSNIHostname(const std::string& hostname);
 #endif // ENABLE_SSL
 
@@ -353,6 +369,8 @@ public:
   bool tlsConnect(const std::string& hostname);
   bool tlsConnect(const TLSHandshakeParams& params);
   bool matchesTLSHandshakeParams(const TLSHandshakeParams& params) const;
+  bool matchesTLSHandshakeParamsForOriginCoalescing(
+      const TLSHandshakeParams& params) const;
 
   std::string getSelectedAlpnProtocol() const;
   bool peerCertificateMatchesHostname(const std::string& hostname) const;

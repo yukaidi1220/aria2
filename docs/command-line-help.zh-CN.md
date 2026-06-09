@@ -37,7 +37,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | DoH over H2 | 未实现 | DoH resolver 固定发送 HTTP/1.1 `POST application/dns-message`，不会因为 `--enable-http2=true` 变成 H2 | `src/AsyncDohNameResolver.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存 | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
 | HTTP/3 / H3 / QUIC | 只有禁用占位参数 | `--enable-http3=true` 会被 `UnsupportedFeatureOptionHandler` 拒绝；源码没有 QUIC 传输、H3 command、`h3` ALPN 分发或依赖探测 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
-| ECH | 只有禁用占位参数 | `--enable-ech=true` 会被拒绝；当前没有 ClientHelloOuter/Inner、ECHConfig 获取或 TLS 后端接线 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
+| ECH | 只有禁用占位参数和 TLS 参数骨架 | `--enable-ech=true` 会被拒绝；当前没有 ClientHelloOuter/Inner、ECHConfig 获取或 TLS 后端接线；H2 origin coalescing 会比较 ALPN/ECH 参数并拒绝 FakeSNI override 连接 | `src/OptionHandlerFactory.cc`、`src/SocketCore.h`、`src/TLSSession.h`、`src/usage_text.h` |
 | XP/Win7 兼容 | 以 HTTP/1.1 fallback 和可构建性为主 | 旧 Windows 原生 TLS 栈通常不要指望 ALPN/FakeSNI override；H2 要看 OpenSSL/GnuTLS ALPN，FakeSNI override 要看 OpenSSL/GnuTLS | `src/FeatureConfig.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 
 ### 2.1 FakeSNI / `--tls-sni-host`
@@ -235,7 +235,7 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 
 这些功能不要在文档或帮助里写成已经可用：
 
-- ECH：`--enable-ech=true` 目前是 `UnsupportedFeatureOptionHandler`，只允许默认 `false`；开启会在参数解析阶段失败。
+- ECH：`--enable-ech=true` 目前是 `UnsupportedFeatureOptionHandler`，只允许默认 `false`；开启会在参数解析阶段失败。源码里只预留了 `TLSHandshakeParams` 的 ECH 参数骨架和 `TLSSession` 默认 no-op API，不会发送 ECH ClientHello。
 - HTTP/3/H3/QUIC：当前有 `--enable-http3[=false]` 禁用壳，只允许默认 `false`；设置为 `true` 会在参数解析阶段失败。源码仍然没有 QUIC 传输层、HTTP/3 request/response command、H3 ALPN 分发或依赖探测，这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进 HTTP 下载 ALPN 列表。
 - DoH over H2：当前 `AsyncDohNameResolver` 使用 HTTP/1.1 POST `application/dns-message`，不会因为 `--enable-http2=true` 自动变成 DoH over H2。
 - WinTLS/AppleTLS 上的 FakeSNI override：普通 SNI 可用，但 SNI 与证书校验 hostname 不同会被提前拒绝。

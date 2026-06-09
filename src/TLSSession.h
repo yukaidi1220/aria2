@@ -53,6 +53,13 @@ enum TLSErrorCode {
   TLS_ERR_WOULDBLOCK = -2
 };
 
+enum TLSECHStatus {
+  TLS_ECH_STATUS_NOT_CONFIGURED,
+  TLS_ECH_STATUS_UNSUPPORTED,
+  TLS_ECH_STATUS_ACCEPTED,
+  TLS_ECH_STATUS_REJECTED
+};
+
 // To create another SSL/TLS backend, implement TLSSession class below.
 //
 class TLSSession {
@@ -90,6 +97,23 @@ public:
   // Returns selected ALPN protocol. Empty string means no protocol was
   // negotiated or backend does not support ALPN.
   virtual std::string getSelectedAlpnProtocol() const { return std::string(); }
+
+  // Returns true if this backend can consume a TLS ECHConfigList.
+  virtual bool supportsECHConfigList() const { return false; }
+
+  // Sets binary ECHConfigList for client side session. Backends which
+  // do not support ECH must fail when |echConfigList| is not empty.
+  virtual int setECHConfigList(const std::string& echConfigList)
+  {
+    return echConfigList.empty() ? TLS_ERR_OK : TLS_ERR_ERROR;
+  }
+
+  virtual TLSECHStatus getECHStatus() const
+  {
+    return TLS_ECH_STATUS_NOT_CONFIGURED;
+  }
+
+  virtual std::string getECHRetryConfigList() const { return std::string(); }
 
   // Returns true if the verified peer certificate covers |hostname|.
   // Backends which cannot inspect the peer certificate must return false.

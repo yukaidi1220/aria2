@@ -16,6 +16,7 @@ namespace aria2 {
 class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(HttpTLSHandshakeParamsTest);
   CPPUNIT_TEST(testDefaultHost);
+  CPPUNIT_TEST(testDefaultECHParamsEmpty);
   CPPUNIT_TEST(testDefaultAlpnProtocolsEmpty);
   CPPUNIT_TEST(testHttp2AlpnProtocolsWhenEnabled);
   CPPUNIT_TEST(testHttp2AlpnProtocolsDisabledByPipelining);
@@ -26,6 +27,7 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
 
 public:
   void testDefaultHost();
+  void testDefaultECHParamsEmpty();
   void testDefaultAlpnProtocolsEmpty();
   void testHttp2AlpnProtocolsWhenEnabled();
   void testHttp2AlpnProtocolsDisabledByPipelining();
@@ -48,6 +50,23 @@ void HttpTLSHandshakeParamsTest::testDefaultHost()
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
   CPPUNIT_ASSERT(params.alpnProtocols.empty());
   CPPUNIT_ASSERT(!params.sniHostOverridden);
+}
+
+void HttpTLSHandshakeParamsTest::testDefaultECHParamsEmpty()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+
+  auto params = createHttpTLSHandshakeParams(&request, &option);
+
+  CPPUNIT_ASSERT(!params.echParams.requested);
+  CPPUNIT_ASSERT(!params.echParams.required);
+  CPPUNIT_ASSERT(params.echParams.configList.empty());
+  CPPUNIT_ASSERT(params.echParams.source.empty());
+  CPPUNIT_ASSERT(params.echParams.outerName.empty());
+  CPPUNIT_ASSERT(params.echParams.outerAlpnProtocols.empty());
+  CPPUNIT_ASSERT(params.echParams.retryConfigList.empty());
 }
 
 void HttpTLSHandshakeParamsTest::testDefaultAlpnProtocolsEmpty()

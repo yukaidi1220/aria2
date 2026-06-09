@@ -27,7 +27,9 @@ class SocketCoreTest : public CppUnit::TestFixture {
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testTLSHandshakeParams);
   CPPUNIT_TEST(testTLSHandshakeParamsComparison);
+  CPPUNIT_TEST(testTLSHandshakeParamsOriginCoalescingCompatibility);
   CPPUNIT_TEST(testTLSSessionAlpnSupportDefault);
+  CPPUNIT_TEST(testTLSSessionECHSupportDefault);
 #ifdef HAVE_LIBGNUTLS
   CPPUNIT_TEST(testGnuTLSSessionAlpnSupport);
 #endif // HAVE_LIBGNUTLS
@@ -51,7 +53,9 @@ public:
 #ifdef ENABLE_SSL
   void testTLSHandshakeParams();
   void testTLSHandshakeParamsComparison();
+  void testTLSHandshakeParamsOriginCoalescingCompatibility();
   void testTLSSessionAlpnSupportDefault();
+  void testTLSSessionECHSupportDefault();
 #ifdef HAVE_LIBGNUTLS
   void testGnuTLSSessionAlpnSupport();
 #endif // HAVE_LIBGNUTLS
@@ -275,6 +279,13 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT(params.sniHost.empty());
     CPPUNIT_ASSERT(params.verifyHost.empty());
     CPPUNIT_ASSERT(params.alpnProtocols.empty());
+    CPPUNIT_ASSERT(!params.echParams.requested);
+    CPPUNIT_ASSERT(!params.echParams.required);
+    CPPUNIT_ASSERT(params.echParams.configList.empty());
+    CPPUNIT_ASSERT(params.echParams.source.empty());
+    CPPUNIT_ASSERT(params.echParams.outerName.empty());
+    CPPUNIT_ASSERT(params.echParams.outerAlpnProtocols.empty());
+    CPPUNIT_ASSERT(params.echParams.retryConfigList.empty());
     CPPUNIT_ASSERT(!params.sniHostOverridden);
   }
   {
@@ -311,6 +322,29 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT(params.sniHostOverridden);
   }
   {
+    TLSHandshakeParams params("front.example", "origin.example");
+    params.echParams.requested = true;
+    params.echParams.required = true;
+    params.echParams.configList = "ech-config";
+    params.echParams.source = "manual";
+    params.echParams.outerName = "public.example";
+    params.echParams.outerAlpnProtocols.push_back("h2");
+    params.echParams.retryConfigList = "retry-config";
+    CPPUNIT_ASSERT(params.echParams.requested);
+    CPPUNIT_ASSERT(params.echParams.required);
+    CPPUNIT_ASSERT_EQUAL(std::string("ech-config"),
+                         params.echParams.configList);
+    CPPUNIT_ASSERT_EQUAL(std::string("manual"), params.echParams.source);
+    CPPUNIT_ASSERT_EQUAL(std::string("public.example"),
+                         params.echParams.outerName);
+    CPPUNIT_ASSERT_EQUAL((size_t)1,
+                         params.echParams.outerAlpnProtocols.size());
+    CPPUNIT_ASSERT_EQUAL(std::string("h2"),
+                         params.echParams.outerAlpnProtocols[0]);
+    CPPUNIT_ASSERT_EQUAL(std::string("retry-config"),
+                         params.echParams.retryConfigList);
+  }
+  {
     std::vector<std::string> alpnProtocols;
     alpnProtocols.push_back("http/1.1");
     TLSHandshakeParams params("example.org", "example.org", alpnProtocols,
@@ -344,6 +378,67 @@ void SocketCoreTest::testTLSHandshakeParamsComparison()
   reversedAlpnProtocols.push_back("h2");
   CPPUNIT_ASSERT(withAlpn != TLSHandshakeParams("example.org", "example.org",
                                                 reversedAlpnProtocols));
+
+  TLSHandshakeParams withEch("example.org");
+  withEch.echParams.requested = true;
+  withEch.echParams.configList = "ech-config";
+  CPPUNIT_ASSERT(withEch == withEch);
+  CPPUNIT_ASSERT(withEch != base);
+
+  TLSHandshakeParams withDifferentEch("example.org");
+  withDifferentEch.echParams.requested = true;
+  withDifferentEch.echParams.configList = "other-ech-config";
+  CPPUNIT_ASSERT(withEch != withDifferentEch);
+}
+
+void SocketCoreTest::testTLSHandshakeParamsOriginCoalescingCompatibility()
+{
+  std::vector<std::string> alpnProtocols;
+  alpnProtocols.push_back("h2");
+  alpnProtocols.push_back("http/1.1");
+
+  TLSHandshakeParams established("origin.example", "origin.example",
+                                 alpnProtocols);
+  TLSHandshakeParams candidate("cdn.example", "cdn.example", alpnProtocols);
+  CPPUNIT_ASSERT(established != candidate);
+  CPPUNIT_ASSERT(tlsHandshakeParamsCompatibleForOriginCoalescing(established,
+                                                                candidate));
+
+  std::vector<std::string> http11OnlyProtocols;
+  http11OnlyProtocols.push_back("http/1.1");
+  TLSHandshakeParams differentAlpn("cdn.example", "cdn.example",
+                                   http11OnlyProtocols);
+  CPPUNIT_ASSERT(!tlsHandshakeParamsCompatibleForOriginCoalescing(
+      established, differentAlpn));
+
+  TLSHandshakeParams overriddenEstablished("front.example", "origin.example",
+                                           alpnProtocols, true);
+  CPPUNIT_ASSERT(!tlsHandshakeParamsCompatibleForOriginCoalescing(
+      overriddenEstablished, candidate));
+
+  TLSHandshakeParams overriddenCandidate("front.example", "cdn.example",
+                                         alpnProtocols, true);
+  CPPUNIT_ASSERT(!tlsHandshakeParamsCompatibleForOriginCoalescing(
+      established, overriddenCandidate));
+
+  TLSHandshakeParams echEstablished("origin.example", "origin.example",
+                                    alpnProtocols);
+  echEstablished.echParams.requested = true;
+  echEstablished.echParams.configList = "ech-config";
+
+  TLSHandshakeParams echCandidate("cdn.example", "cdn.example",
+                                  alpnProtocols);
+  echCandidate.echParams.requested = true;
+  echCandidate.echParams.configList = "ech-config";
+  CPPUNIT_ASSERT(tlsHandshakeParamsCompatibleForOriginCoalescing(
+      echEstablished, echCandidate));
+
+  TLSHandshakeParams differentEchCandidate("cdn.example", "cdn.example",
+                                           alpnProtocols);
+  differentEchCandidate.echParams.requested = true;
+  differentEchCandidate.echParams.configList = "other-ech-config";
+  CPPUNIT_ASSERT(!tlsHandshakeParamsCompatibleForOriginCoalescing(
+      echEstablished, differentEchCandidate));
 }
 
 namespace {
@@ -406,6 +501,18 @@ void SocketCoreTest::testTLSSessionAlpnSupportDefault()
   CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR, session.setAlpnProtocols(alpnProtocols));
 }
 
+void SocketCoreTest::testTLSSessionECHSupportDefault()
+{
+  DefaultTLSSession session;
+
+  CPPUNIT_ASSERT(!session.supportsECHConfigList());
+  CPPUNIT_ASSERT_EQUAL(TLS_ERR_OK, session.setECHConfigList(""));
+  CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR,
+                       session.setECHConfigList("ech-config"));
+  CPPUNIT_ASSERT(TLS_ECH_STATUS_NOT_CONFIGURED == session.getECHStatus());
+  CPPUNIT_ASSERT(session.getECHRetryConfigList().empty());
+}
+
 #ifdef HAVE_LIBGNUTLS
 void SocketCoreTest::testGnuTLSSessionAlpnSupport()
 {
@@ -430,6 +537,8 @@ void SocketCoreTest::testMatchesTLSHandshakeParams()
 {
   SocketCore socket;
   CPPUNIT_ASSERT(!socket.matchesTLSHandshakeParams(
+      TLSHandshakeParams("example.org")));
+  CPPUNIT_ASSERT(!socket.matchesTLSHandshakeParamsForOriginCoalescing(
       TLSHandshakeParams("example.org")));
 }
 
