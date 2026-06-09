@@ -35,6 +35,7 @@
 #include "AbstractCommand.h"
 
 #include <algorithm>
+#include <functional>
 #include <limits>
 
 #include "Request.h"
@@ -75,6 +76,10 @@
 #  include "AsyncNameResolver.h"
 #  include "AsyncNameResolverMan.h"
 #  include "AsyncServiceBindingResolver.h"
+#  ifdef ENABLE_SSL
+#    include "AsyncDohNameResolver.h"
+#    include "AsyncDotNameResolver.h"
+#  endif // ENABLE_SSL
 #endif // ENABLE_ASYNC_DNS
 
 namespace aria2 {
@@ -152,6 +157,29 @@ int getOppositeAddressFamily(int family)
 }
 
 #ifdef ENABLE_ASYNC_DNS
+struct AsyncServiceBindingDiscoveryResolver {
+  using ResolveFunc = std::function<void(const std::string&, uint16_t)>;
+  using RecordsFunc =
+      std::function<const std::vector<dns::ServiceBindingRecord>&()>;
+
+  AsyncServiceBindingDiscoveryResolver(std::shared_ptr<AsyncResolver> resolver,
+                                       ResolveFunc resolve,
+                                       RecordsFunc getRecords)
+      : resolver(std::move(resolver)),
+        resolve(std::move(resolve)),
+        getRecords(std::move(getRecords)),
+        checked(false),
+        finished(false)
+  {
+  }
+
+  std::shared_ptr<AsyncResolver> resolver;
+  ResolveFunc resolve;
+  RecordsFunc getRecords;
+  bool checked;
+  bool finished;
+};
+
 class AsyncDnsCacheCommand : public Command {
 private:
   struct ResolverEntry {
@@ -304,19 +332,26 @@ private:
   std::string hostname_;
   uint16_t port_;
   a2_gid_t gid_;
-  std::shared_ptr<AsyncServiceBindingResolver> resolver_;
+  std::vector<AsyncServiceBindingDiscoveryResolver> resolvers_;
   DownloadEngine* e_;
-  bool checked_;
+  bool emptySuccess_;
   Timer checkPoint_;
   std::chrono::seconds timeout_;
 
   void addCommandSelf() { e_->addCommand(std::unique_ptr<Command>(this)); }
 
-  void deleteNameResolverCheck()
+  void deleteNameResolverCheck(AsyncServiceBindingDiscoveryResolver& entry)
   {
-    if (checked_) {
-      e_->deleteNameResolverCheck(resolver_, this);
-      checked_ = false;
+    if (entry.checked) {
+      e_->deleteNameResolverCheck(entry.resolver, this);
+      entry.checked = false;
+    }
+  }
+
+  void deleteNameResolverChecks()
+  {
+    for (auto& entry : resolvers_) {
+      deleteNameResolverCheck(entry);
     }
   }
 
@@ -336,33 +371,50 @@ private:
 
   void finish()
   {
-    deleteNameResolverCheck();
+    deleteNameResolverChecks();
     e_->finishHttpsServiceBindingResolving(hostname_, port_);
+  }
+
+  void cacheRecords(const std::vector<dns::ServiceBindingRecord>& records)
+  {
+    auto ttl = getCacheTtl(records);
+    if (ttl > 0) {
+      e_->cacheHttpsServiceBindingRecords(hostname_, port_, records, ttl);
+    }
+    A2_LOG_NETWORK(
+        fmt("DNS: HTTPS RR discovery for %s:%u cached %lu record(s) "
+            "with ttl=%u for GID#%s",
+            hostname_.c_str(), static_cast<unsigned int>(port_),
+            static_cast<unsigned long>(records.size()),
+            static_cast<unsigned int>(ttl), GroupId::toHex(gid_).c_str()));
   }
 
 public:
   AsyncServiceBindingDiscoveryCommand(
       cuid_t cuid, std::string hostname, uint16_t port, a2_gid_t gid,
-      std::shared_ptr<AsyncServiceBindingResolver> resolver, DownloadEngine* e,
+      std::vector<AsyncServiceBindingDiscoveryResolver> resolvers,
+      DownloadEngine* e,
       std::chrono::seconds timeout)
       : Command(cuid),
         hostname_(std::move(hostname)),
         port_(port),
         gid_(gid),
-        resolver_(std::move(resolver)),
+        resolvers_(std::move(resolvers)),
         e_(e),
-        checked_(false),
+        emptySuccess_(false),
         timeout_(std::move(timeout))
   {
   }
 
-  ~AsyncServiceBindingDiscoveryCommand() { deleteNameResolverCheck(); }
+  ~AsyncServiceBindingDiscoveryCommand() { deleteNameResolverChecks(); }
 
   void start()
   {
-    resolver_->resolve(hostname_, port_);
-    if (resolver_->usable()) {
-      checked_ = e_->addNameResolverCheck(resolver_, this);
+    for (auto& entry : resolvers_) {
+      entry.resolve(hostname_, port_);
+      if (entry.resolver->usable()) {
+        entry.checked = e_->addNameResolverCheck(entry.resolver, this);
+      }
     }
     setStatusRealtime();
     e_->setNoWait(true);
@@ -383,41 +435,195 @@ public:
       return true;
     }
 
-    switch (resolver_->getStatus()) {
-    case AsyncResolver::STATUS_SUCCESS: {
-      const auto& records = resolver_->getServiceBindingRecords();
-      auto ttl = getCacheTtl(records);
-      if (ttl > 0) {
-        e_->cacheHttpsServiceBindingRecords(hostname_, port_, records, ttl);
+    bool querying = false;
+    for (auto& entry : resolvers_) {
+      if (entry.finished) {
+        continue;
       }
-      A2_LOG_NETWORK(
-          fmt("DNS: HTTPS RR discovery for %s:%u cached %lu record(s) "
-              "with ttl=%u for GID#%s",
-              hostname_.c_str(), static_cast<unsigned int>(port_),
-              static_cast<unsigned long>(records.size()),
-              static_cast<unsigned int>(ttl),
-              GroupId::toHex(gid_).c_str()));
-      finish();
-      return true;
-    }
-    case AsyncResolver::STATUS_ERROR:
-      A2_LOG_NETWORK(fmt("DNS: HTTPS RR discovery failed for %s:%u: %s",
-                         hostname_.c_str(), static_cast<unsigned int>(port_),
-                         resolver_->getError().c_str()));
-      finish();
-      return true;
-    default:
-      break;
+
+      switch (entry.resolver->getStatus()) {
+      case AsyncResolver::STATUS_SUCCESS: {
+        deleteNameResolverCheck(entry);
+        entry.finished = true;
+        const auto& records = entry.getRecords();
+        if (!records.empty()) {
+          cacheRecords(records);
+          finish();
+          return true;
+        }
+        emptySuccess_ = true;
+        break;
+      }
+      case AsyncResolver::STATUS_ERROR:
+        A2_LOG_NETWORK(fmt("DNS: HTTPS RR discovery failed for %s:%u: %s",
+                           hostname_.c_str(), static_cast<unsigned int>(port_),
+                           entry.resolver->getError().c_str()));
+        deleteNameResolverCheck(entry);
+        entry.finished = true;
+        break;
+      default:
+        querying = true;
+        if (entry.resolver->usable() && !entry.checked) {
+          entry.checked = e_->addNameResolverCheck(entry.resolver, this);
+        }
+        break;
+      }
     }
 
-    if (resolver_->usable() && !checked_) {
-      checked_ = e_->addNameResolverCheck(resolver_, this);
+    if (!querying) {
+      if (emptySuccess_) {
+        std::vector<dns::ServiceBindingRecord> emptyRecords;
+        cacheRecords(emptyRecords);
+      }
+      finish();
+      return true;
     }
+
     setStatusRealtime();
     addCommandSelf();
     return false;
   }
 };
+
+void appendServiceBindingResolver(
+    std::vector<AsyncServiceBindingDiscoveryResolver>& resolvers,
+    std::shared_ptr<AsyncServiceBindingResolver> resolver)
+{
+  resolvers.emplace_back(
+      resolver,
+      [resolver](const std::string& hostname, uint16_t port) {
+        resolver->resolve(hostname, port);
+      },
+      [resolver]() -> const std::vector<dns::ServiceBindingRecord>& {
+        return resolver->getServiceBindingRecords();
+      });
+}
+
+#ifdef ENABLE_SSL
+int getServiceBindingBootstrapFamily(const Option* option)
+{
+  auto ipv4 = net::getIPv4AddrConfigured();
+  auto ipv6 =
+      net::getIPv6AddrConfigured() && !option->getAsBool(PREF_DISABLE_IPV6);
+  if (ipv4 && ipv6) {
+    return AF_UNSPEC;
+  }
+  if (ipv6) {
+    return AF_INET6;
+  }
+  if (ipv4) {
+    return AF_INET;
+  }
+  return AF_UNSPEC;
+}
+
+bool isDohHttp2Enabled(const Option* option)
+{
+  return option->getAsBool(PREF_ENABLE_HTTP2) &&
+         !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING);
+}
+
+void appendServiceBindingResolver(
+    std::vector<AsyncServiceBindingDiscoveryResolver>& resolvers,
+    std::shared_ptr<AsyncDotNameResolver> resolver)
+{
+  resolvers.emplace_back(
+      resolver,
+      [resolver](const std::string& hostname, uint16_t port) {
+        resolver->resolveHttpsServiceBinding(hostname, port);
+      },
+      [resolver]() -> const std::vector<dns::ServiceBindingRecord>& {
+        return resolver->getServiceBindingRecords();
+      });
+}
+
+void appendServiceBindingResolver(
+    std::vector<AsyncServiceBindingDiscoveryResolver>& resolvers,
+    std::shared_ptr<AsyncDohNameResolver> resolver)
+{
+  resolvers.emplace_back(
+      resolver,
+      [resolver](const std::string& hostname, uint16_t port) {
+        resolver->resolveHttpsServiceBinding(hostname, port);
+      },
+      [resolver]() -> const std::vector<dns::ServiceBindingRecord>& {
+        return resolver->getServiceBindingRecords();
+      });
+}
+#endif // ENABLE_SSL
+
+std::vector<AsyncServiceBindingDiscoveryResolver>
+createServiceBindingDiscoveryResolvers(const Option* option)
+{
+  std::vector<AsyncServiceBindingDiscoveryResolver> resolvers;
+  const auto& mode = option->get(PREF_ASYNC_DNS_MODE);
+  const auto& servers = option->get(PREF_ASYNC_DNS_SERVER);
+  if (mode == V_CARES) {
+    appendServiceBindingResolver(
+        resolvers, std::make_shared<AsyncServiceBindingResolver>(servers));
+    return resolvers;
+  }
+
+#ifdef ENABLE_SSL
+  auto bootstrapFamily = getServiceBindingBootstrapFamily(option);
+  if (mode == V_DOT) {
+    auto dotServers = parseAsyncDnsDotServerConfigList(servers);
+    validateAsyncDnsDotServerConfig(dotServers);
+    appendServiceBindingResolver(
+        resolvers, std::make_shared<AsyncDotNameResolver>(
+                       AF_UNSPEC, std::move(dotServers),
+                       AsyncDotTransportFactory(),
+                       AsyncDotBootstrapResolverFactory(), bootstrapFamily));
+  }
+  else if (mode == V_DOH) {
+    auto dohServers = parseAsyncDnsDohServerConfigList(servers);
+    validateAsyncDnsDohServerConfig(dohServers);
+    appendServiceBindingResolver(
+        resolvers, std::make_shared<AsyncDohNameResolver>(
+                       AF_UNSPEC, std::move(dohServers),
+                       AsyncDohTransportFactory(), isDohHttp2Enabled(option),
+                       AsyncDohBootstrapResolverFactory(), bootstrapFamily));
+  }
+  else if (mode == V_MULTI) {
+    auto config = parseAsyncDnsMultiServerConfigList(servers);
+    auto hasSecureServers =
+        !config.dotServers.empty() || !config.dohServers.empty();
+    if (!config.udpServers.empty()) {
+      appendServiceBindingResolver(
+          resolvers,
+          std::make_shared<AsyncServiceBindingResolver>(config.udpServers));
+    }
+    if (!config.tcpServers.empty()) {
+      appendServiceBindingResolver(
+          resolvers,
+          std::make_shared<AsyncServiceBindingResolver>(config.tcpServers,
+                                                        true));
+    }
+    if (!hasSecureServers && config.udpServers.empty() &&
+        config.tcpServers.empty()) {
+      appendServiceBindingResolver(
+          resolvers, std::make_shared<AsyncServiceBindingResolver>());
+    }
+    if (!config.dotServers.empty()) {
+      appendServiceBindingResolver(
+          resolvers, std::make_shared<AsyncDotNameResolver>(
+                         AF_UNSPEC, std::move(config.dotServers),
+                         AsyncDotTransportFactory(),
+                         AsyncDotBootstrapResolverFactory(), bootstrapFamily));
+    }
+    if (!config.dohServers.empty()) {
+      appendServiceBindingResolver(
+          resolvers, std::make_shared<AsyncDohNameResolver>(
+                         AF_UNSPEC, std::move(config.dohServers),
+                         AsyncDohTransportFactory(),
+                         isDohHttp2Enabled(option),
+                         AsyncDohBootstrapResolverFactory(), bootstrapFamily));
+    }
+  }
+#endif // ENABLE_SSL
+
+  return resolvers;
+}
 
 bool addAsyncDnsCacheCommand(
     DownloadEngine* e, const std::string& hostname, uint16_t port,
@@ -442,9 +648,13 @@ void maybeStartHttpsServiceBindingDiscovery(DownloadEngine* e,
 {
   if (!e || !e->getOption() ||
       !e->getOption()->getAsBool(PREF_ASYNC_DNS) ||
-      e->getOption()->get(PREF_ASYNC_DNS_MODE) != V_CARES ||
       e->findCachedHttpsServiceBindingRecords(hostname, port) ||
       e->isHttpsServiceBindingResolving(hostname, port)) {
+    return;
+  }
+
+  auto resolvers = createServiceBindingDiscoveryResolvers(e->getOption());
+  if (resolvers.empty()) {
     return;
   }
 
@@ -452,10 +662,8 @@ void maybeStartHttpsServiceBindingDiscovery(DownloadEngine* e,
     return;
   }
 
-  auto resolver = std::make_shared<AsyncServiceBindingResolver>(
-      e->getOption()->get(PREF_ASYNC_DNS_SERVER));
   auto command = make_unique<AsyncServiceBindingDiscoveryCommand>(
-      e->newCUID(), hostname, port, gid, std::move(resolver), e,
+      e->newCUID(), hostname, port, gid, std::move(resolvers), e,
       std::chrono::seconds(e->getOption()->getAsInt(PREF_DNS_TIMEOUT)));
   command->start();
   e->addCommand(std::move(command));

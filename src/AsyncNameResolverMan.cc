@@ -135,13 +135,6 @@ AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
 }
 
 #ifdef ENABLE_SSL
-struct AsyncDnsMultiServerConfig {
-  std::string udpServers;
-  std::string tcpServers;
-  std::vector<AsyncDnsServerConfig> dotServers;
-  std::vector<AsyncDohServerConfig> dohServers;
-};
-
 bool startsWith(const std::string& s, const char* prefix)
 {
   auto prefixLen = strlen(prefix);
@@ -223,6 +216,8 @@ std::string normalizePlainDnsServer(const std::string& value)
   return server;
 }
 
+} // namespace
+
 AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
     const std::string& value)
 {
@@ -266,7 +261,6 @@ AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
   return config;
 }
 #endif // ENABLE_SSL
-} // namespace
 
 AsyncNameResolverMan::AsyncNameResolverMan()
     : resolverMode_(RESOLVER_CARES),

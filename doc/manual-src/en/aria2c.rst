@@ -491,8 +491,9 @@ HTTP Specific Options
 
   Set a base64 encoded binary ECHConfigList.  Supplying this option also
   enables required ECH for HTTPS.  This first stage only supports manual
-  ECHConfigList input; HTTPS/SVCB discovery, retry configs, and HTTP/3
-  discovery are not implemented yet.
+  ECHConfigList input; HTTPS/SVCB discovery and cache are available, but
+  automatic ECH configuration, retry configs, target switching, and HTTP/3
+  discovery/use are not implemented yet.
 
   This option cannot be combined with :option:`--tls-sni-host` overrides.
 
@@ -1346,6 +1347,11 @@ Advanced Options
   backend can use HTTP/2 when aria2 is built with nghttp2 and
   :option:`--enable-http2=true` is enabled and
   :option:`--enable-http-pipelining=false`; otherwise it uses HTTP/1.1.
+  Background HTTPS/SVCB TYPE65 discovery follows the selected backend: c-ares
+  for ``cares``, DoT for ``dot``, DoH for ``doh``, and the configured backends
+  for ``multi``. Discovery results are cached for later connection decisions,
+  but they do not yet automatically change the download target, ALPN, ECH, or
+  HTTP/3 behavior.
   Default: ``cares``
 
 .. option:: --async-dns-server=<SERVER>[,...]
@@ -1370,8 +1376,11 @@ Advanced Options
   for plain DNS over UDP, ``tcp://IP`` for plain DNS over TCP,
   ``dot://HOST[:PORT][#TLS_HOST]`` for DoT, and HTTPS URLs for DoH. If no plain
   DNS server entry is given, the plain c-ares fallback uses the system resolver
-  configuration. Since ``multi`` queries plain DNS in parallel with secure DNS,
-  use ``dot`` or ``doh`` instead when plain DNS leakage is unacceptable.
+  configuration for A/AAAA address lookup. HTTPS/SVCB TYPE65 discovery only
+  uses plain DNS in ``multi`` when a plain server was explicitly configured, or
+  when no secure server was configured either. Since ``multi`` can query plain
+  DNS in parallel with secure DNS, use ``dot`` or ``doh`` instead when plain DNS
+  leakage is unacceptable.
 
 .. option:: --auto-file-renaming [true|false]
 

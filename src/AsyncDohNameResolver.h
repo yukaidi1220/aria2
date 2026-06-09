@@ -47,6 +47,7 @@
 
 #include "AsyncDnsServerConfig.h"
 #include "AsyncResolver.h"
+#include "DnsMessage.h"
 #include "SocketCore.h"
 
 namespace aria2 {
@@ -115,6 +116,13 @@ public:
 
   virtual void resolve(const std::string& name) CXX11_OVERRIDE;
 
+  void resolveHttpsServiceBinding(const std::string& name, uint16_t port);
+
+  const std::vector<dns::ServiceBindingRecord>& getServiceBindingRecords() const
+  {
+    return serviceBindingRecords_;
+  }
+
   virtual const std::vector<std::string>& getResolvedAddresses() const
       CXX11_OVERRIDE
   {
@@ -171,6 +179,8 @@ private:
   void processReadResponseHeader();
   void processReadResponseBody();
   void finishResponse();
+  void startResolve(const std::string& name, const std::string& queryName,
+                    dns::QueryType queryType);
 
   int family_;
   int bootstrapFamily_;
@@ -188,8 +198,11 @@ private:
   std::vector<std::string> currentEndpoints_;
   size_t currentEndpointIndex_;
   std::vector<std::string> resolvedAddresses_;
+  std::vector<dns::ServiceBindingRecord> serviceBindingRecords_;
   std::string error_;
   std::string hostname_;
+  std::string queryName_;
+  dns::QueryType queryType_;
   uint16_t queryId_;
   std::string dnsQuery_;
 };

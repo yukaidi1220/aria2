@@ -42,12 +42,25 @@
 #include <memory>
 #include <utility>
 
+#ifdef ENABLE_SSL
+#  include "AsyncDnsServerConfig.h"
+#endif // ENABLE_SSL
+
 namespace aria2 {
 
 class AsyncResolver;
 class DownloadEngine;
 class Command;
 class Option;
+
+#ifdef ENABLE_SSL
+struct AsyncDnsMultiServerConfig {
+  std::string udpServers;
+  std::string tcpServers;
+  std::vector<AsyncDnsServerConfig> dotServers;
+  std::vector<AsyncDohServerConfig> dohServers;
+};
+#endif // ENABLE_SSL
 
 class AsyncNameResolverMan {
 public:
@@ -137,6 +150,11 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
 
 void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
                                      const std::string& servers);
+
+#ifdef ENABLE_SSL
+AsyncDnsMultiServerConfig
+parseAsyncDnsMultiServerConfigList(const std::string& value);
+#endif // ENABLE_SSL
 
 } // namespace aria2
 

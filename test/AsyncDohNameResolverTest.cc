@@ -29,6 +29,7 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testResolveAResponseWithBodyInHeaderRead);
   CPPUNIT_TEST(testResolveAResponseWithFragmentedHeaderRead);
   CPPUNIT_TEST(testResolveAAAAResponse);
+  CPPUNIT_TEST(testResolveHttpsServiceBindingResponse);
   CPPUNIT_TEST(testRequestPathPreservesQuery);
   CPPUNIT_TEST(testTLSHostIsUsedForHostHeaderAndHandshake);
   CPPUNIT_TEST(testTLSHostDefaultPortHostHeaderOmitsPort);
@@ -37,6 +38,7 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1);
   CPPUNIT_TEST(testResolveAResponseOverHttp2);
+  CPPUNIT_TEST(testResolveHttpsServiceBindingResponseOverHttp2);
   CPPUNIT_TEST(testRetryNextServerOnHttp2RstBeforeHeaders);
 #endif // HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testTlsWantReadUpdatesSocketEvents);
@@ -64,6 +66,7 @@ public:
   void testResolveAResponseWithBodyInHeaderRead();
   void testResolveAResponseWithFragmentedHeaderRead();
   void testResolveAAAAResponse();
+  void testResolveHttpsServiceBindingResponse();
   void testRequestPathPreservesQuery();
   void testTLSHostIsUsedForHostHeaderAndHandshake();
   void testTLSHostDefaultPortHostHeaderOmitsPort();
@@ -72,6 +75,7 @@ public:
 #ifdef HAVE_LIBNGHTTP2
   void testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1();
   void testResolveAResponseOverHttp2();
+  void testResolveHttpsServiceBindingResponseOverHttp2();
   void testRetryNextServerOnHttp2RstBeforeHeaders();
 #endif // HAVE_LIBNGHTTP2
   void testTlsWantReadUpdatesSocketEvents();
@@ -179,6 +183,12 @@ void appendAAAAAnswer(std::string& out, uint16_t nameOffset, uint32_t ttl,
   out.append(reinterpret_cast<const char*>(addr), 16);
 }
 
+uint16_t readUint16(const std::string& s, size_t offset)
+{
+  return (static_cast<uint16_t>(static_cast<unsigned char>(s[offset])) << 8) |
+         static_cast<uint16_t>(static_cast<unsigned char>(s[offset + 1]));
+}
+
 std::string getHeaderValue(const std::string& request,
                            const std::string& name)
 {
@@ -205,14 +215,22 @@ std::string getDohRequestBody(const std::string& request)
 
 uint16_t getDnsMessageId(const std::string& body)
 {
-  return (static_cast<uint16_t>(
-              static_cast<unsigned char>(body[0])) << 8) |
-         static_cast<uint16_t>(static_cast<unsigned char>(body[1]));
+  return readUint16(body, 0);
 }
 
 uint16_t getQueryId(const std::string& dohRequest)
 {
   return getDnsMessageId(getDohRequestBody(dohRequest));
+}
+
+uint16_t getQuestionType(const std::string& dnsMessage)
+{
+  size_t offset = 12;
+  while (offset < dnsMessage.size() && dnsMessage[offset]) {
+    offset += static_cast<unsigned char>(dnsMessage[offset]) + 1;
+  }
+  ++offset;
+  return readUint16(dnsMessage, offset);
 }
 
 #ifdef HAVE_LIBNGHTTP2
@@ -271,6 +289,25 @@ std::string createAAAAResponse(uint16_t id, const std::string& hostname)
   appendHeader(msg, id, 0x8180, 1, 1);
   appendQuestion(msg, hostname, dns::TYPE_AAAA);
   appendAAAAAnswer(msg, 12, 60, addr);
+  return msg;
+}
+
+std::string createHttpsResponse(uint16_t id, const std::string& hostname)
+{
+  std::string msg;
+  appendHeader(msg, id, 0x8180, 1, 1);
+  appendQuestion(msg, hostname, dns::TYPE_HTTPS);
+  appendCompressedName(msg, 12);
+  appendUint16(msg, dns::TYPE_HTTPS);
+  appendUint16(msg, 1);
+  appendUint32(msg, 120);
+  appendUint16(msg, 10);
+  appendUint16(msg, 1);
+  msg.push_back(0);
+  appendUint16(msg, 1);
+  appendUint16(msg, 3);
+  msg.push_back(2);
+  msg += "h2";
   return msg;
 }
 
@@ -654,6 +691,36 @@ void AsyncDohNameResolverTest::testResolveAAAAResponse()
                        resolver.getResolvedAddresses()[0]);
 }
 
+void AsyncDohNameResolverTest::testResolveHttpsServiceBindingResponse()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
+      makeTransportFactory(factory));
+
+  resolver.resolveHttpsServiceBinding("www.example.com", 8443);
+  driveUntilWriteRequestDone(resolver, factory);
+  auto transport = factory.transports.back();
+  auto dnsQuery = getDohRequestBody(transport->written);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)dns::TYPE_HTTPS,
+                       getQuestionType(dnsQuery));
+
+  auto response = createHttpsResponse(getDnsMessageId(dnsQuery),
+                                      "_8443._https.www.example.com");
+  transport->readBuffer = createHttpResponse(response);
+
+  driveUntilDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
+  CPPUNIT_ASSERT(resolver.getResolvedAddresses().empty());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getServiceBindingRecords().size());
+  const auto& record = resolver.getServiceBindingRecords()[0];
+  CPPUNIT_ASSERT_EQUAL((uint16_t)1, record.priority);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)120, record.ttl);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, record.alpn.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("h2"), record.alpn[0]);
+}
+
 void AsyncDohNameResolverTest::testRequestPathPreservesQuery()
 {
   FakeDohTransportFactory factory;
@@ -806,6 +873,44 @@ void AsyncDohNameResolverTest::testResolveAResponseOverHttp2()
   CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getResolvedAddresses().size());
   CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.9"),
                        resolver.getResolvedAddresses()[0]);
+}
+
+void AsyncDohNameResolverTest::testResolveHttpsServiceBindingResponseOverHttp2()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
+      makeTransportFactory(factory), true);
+
+  resolver.resolveHttpsServiceBinding("www.example.com", 443);
+  auto transport = factory.transports.back();
+  transport->selectedAlpnProtocol = HTTP_ALPN_H2;
+  driveUntilWriteRequestDone(resolver, factory);
+
+  std::string dnsQuery;
+  uint8_t flags = 0;
+  CPPUNIT_ASSERT(findFramePayload(transport->written, NGHTTP2_DATA, 1,
+                                  dnsQuery, flags));
+  CPPUNIT_ASSERT(flags & NGHTTP2_FLAG_END_STREAM);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)dns::TYPE_HTTPS,
+                       getQuestionType(dnsQuery));
+
+  http2test::FakeHttp2ServerSession server;
+  server.feedInboundData(transport->written);
+  auto response = createHttpsResponse(getDnsMessageId(dnsQuery),
+                                      "www.example.com");
+  auto headers = http2test::createResponseHeaders();
+  headers.emplace_back("content-length", util::uitos(response.size()));
+  server.submitResponse(1, headers, response);
+  transport->readBuffer = server.drainOutboundData();
+
+  driveUntilDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
+  CPPUNIT_ASSERT(resolver.getResolvedAddresses().empty());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getServiceBindingRecords().size());
+  CPPUNIT_ASSERT_EQUAL(std::string("h2"),
+                       resolver.getServiceBindingRecords()[0].alpn[0]);
 }
 
 void AsyncDohNameResolverTest::testRetryNextServerOnHttp2RstBeforeHeaders()

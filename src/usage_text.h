@@ -459,7 +459,8 @@
     "                              plain c-ares using default resolver config\n" \
     "                              and enabled address families. Append\n" \
     "                              #TLS_HOST to set TLS/HTTP names. multi\n" \
-    "                              queries plain DNS, DoT and DoH in parallel.")
+    "                              queries plain DNS, DoT and DoH in parallel.\n" \
+    "                              HTTPS RR discovery follows this backend.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
@@ -884,7 +885,10 @@
     "                              configuration and enabled address families.\n" \
     "                              With multi, use udp://IP, tcp://IP,\n" \
     "                              dot://HOST[:PORT][#TLS_HOST], or HTTPS DoH\n" \
-    "                              URLs; bare IP entries mean udp://IP.")
+    "                              URLs; bare IP entries mean udp://IP. HTTPS\n" \
+    "                              RR discovery only uses plain DNS in multi\n" \
+    "                              when plain servers are configured, or when\n" \
+    "                              no secure servers are configured either.")
 #define TEXT_ENABLE_RPC                                               \
   _(" --enable-rpc[=true|false]    Enable JSON-RPC/XML-RPC server.\n" \
     "                              It is strongly recommended to set secret\n" \

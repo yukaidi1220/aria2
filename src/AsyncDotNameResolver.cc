@@ -43,6 +43,7 @@
 
 #include "A2STR.h"
 #include "AsyncNameResolver.h"
+#include "AsyncServiceBindingResolver.h"
 #include "DlAbortEx.h"
 #include "DnsMessage.h"
 #include "EventPoll.h"
@@ -72,9 +73,18 @@ dns::QueryType getQueryType(int family)
   return family == AF_INET6 ? dns::TYPE_AAAA : dns::TYPE_A;
 }
 
-const char* familyToString(int family)
+const char* queryTypeToString(dns::QueryType queryType)
 {
-  return family == AF_INET6 ? "AAAA" : "A";
+  switch (queryType) {
+  case dns::TYPE_A:
+    return "A";
+  case dns::TYPE_AAAA:
+    return "AAAA";
+  case dns::TYPE_HTTPS:
+    return "HTTPS";
+  default:
+    return "unknown";
+  }
 }
 
 std::string formatHost(const std::string& host)
@@ -175,6 +185,7 @@ AsyncDotNameResolver::AsyncDotNameResolver(
       state_(DOT_IDLE),
       serverIndex_(0),
       currentEndpointIndex_(0),
+      queryType_(getQueryType(family)),
       queryId_(0),
       writeOffset_(0),
       responseLengthBuffer_{0, 0},
@@ -195,8 +206,25 @@ AsyncDotNameResolver::~AsyncDotNameResolver() = default;
 
 void AsyncDotNameResolver::resolve(const std::string& name)
 {
+  startResolve(name, name, getQueryType(family_));
+}
+
+void AsyncDotNameResolver::resolveHttpsServiceBinding(const std::string& name,
+                                                      uint16_t port)
+{
+  startResolve(name, createHttpsServiceBindingQueryName(name, port),
+               dns::TYPE_HTTPS);
+}
+
+void AsyncDotNameResolver::startResolve(const std::string& name,
+                                        const std::string& queryName,
+                                        dns::QueryType queryType)
+{
   hostname_ = name;
+  queryName_ = queryName;
+  queryType_ = queryType;
   resolvedAddresses_.clear();
+  serviceBindingRecords_.clear();
   error_.clear();
   socks_.clear();
   bootstrapResolver_.reset();
@@ -213,7 +241,7 @@ void AsyncDotNameResolver::resolve(const std::string& name)
 
   try {
     queryId_ = nextQueryId();
-    auto query = dns::createQuery(queryId_, hostname_, getQueryType(family_));
+    auto query = dns::createQuery(queryId_, queryName_, queryType_);
     if (query.size() > MAX_DOT_MESSAGE_SIZE) {
       fail("DNS query is too large for DoT");
       return;
@@ -293,7 +321,7 @@ bool AsyncDotNameResolver::startBootstrapResolver()
   bootstrapResolver_->resolve(server.connectHost);
   state_ = DOT_BOOTSTRAP_RESOLVING;
   A2_LOG_NETWORK(fmt("DNS: DoT bootstrap resolving %s for %s %s",
-                     server.connectHost.c_str(), familyToString(family_),
+                     server.connectHost.c_str(), queryTypeToString(queryType_),
                      hostname_.c_str()));
   if (bootstrapResolver_->getStatus() == STATUS_SUCCESS) {
     currentEndpoints_ = bootstrapResolver_->getResolvedAddresses();
@@ -334,7 +362,7 @@ bool AsyncDotNameResolver::startCurrentEndpoint()
       A2_LOG_NETWORK(fmt("DNS: DoT connecting to %s via %s for %s %s",
                          formatDotServer(server).c_str(),
                          formatHost(connectHost).c_str(),
-                         familyToString(family_), hostname_.c_str()));
+                         queryTypeToString(queryType_), hostname_.c_str()));
       updateSocketEvents();
       return true;
     }
@@ -394,7 +422,8 @@ void AsyncDotNameResolver::fail(std::string error)
   socks_.clear();
   bootstrapResolver_.reset();
   transport_.reset();
-  A2_LOG_NETWORK(fmt("DNS: DoT %s %s failed: %s", familyToString(family_),
+  A2_LOG_NETWORK(fmt("DNS: DoT %s %s failed: %s",
+                     queryTypeToString(queryType_),
                      hostname_.empty() ? "(pending)" : hostname_.c_str(),
                      error_.c_str()));
 }
@@ -708,9 +737,23 @@ void AsyncDotNameResolver::processReadResponseBody()
 
 void AsyncDotNameResolver::finishResponse()
 {
-  resolvedAddresses_ =
-      dns::parseResponse(responseBuffer_.data(), responseBuffer_.size(),
-                         queryId_, hostname_, getQueryType(family_));
+  if (queryType_ == dns::TYPE_HTTPS) {
+    serviceBindingRecords_ = dns::parseServiceBindingResponse(
+        responseBuffer_.data(), responseBuffer_.size(), queryId_, queryName_,
+        queryType_);
+    status_ = STATUS_SUCCESS;
+    state_ = DOT_DONE;
+    socks_.clear();
+    A2_LOG_NETWORK(fmt("DNS: DoT HTTPS RR %s returned %lu record(s)",
+                       hostname_.c_str(),
+                       static_cast<unsigned long>(
+                           serviceBindingRecords_.size())));
+    return;
+  }
+
+  resolvedAddresses_ = dns::parseResponse(
+      responseBuffer_.data(), responseBuffer_.size(), queryId_, queryName_,
+      queryType_);
   if (resolvedAddresses_.empty()) {
     throw DL_ABORT_EX("no address returned by DoT server");
   }
@@ -720,7 +763,8 @@ void AsyncDotNameResolver::finishResponse()
   if (A2_LOG_NETWORK_ENABLED) {
     auto addrs = strjoin(std::begin(resolvedAddresses_),
                          std::end(resolvedAddresses_), ", ");
-    A2_LOG_NETWORK(fmt("DNS: DoT %s %s -> %s", familyToString(family_),
+    A2_LOG_NETWORK(fmt("DNS: DoT %s %s -> %s",
+                       queryTypeToString(queryType_),
                        hostname_.c_str(), addrs.c_str()));
   }
 }

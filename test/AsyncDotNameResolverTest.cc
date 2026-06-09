@@ -21,6 +21,7 @@ class AsyncDotNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(AsyncDotNameResolverTest);
   CPPUNIT_TEST(testResolveAResponseWithFragmentedRead);
   CPPUNIT_TEST(testResolveAAAAResponse);
+  CPPUNIT_TEST(testResolveHttpsServiceBindingResponse);
   CPPUNIT_TEST(testNumericServerUsesAddressForHandshake);
   CPPUNIT_TEST(testNumericIPv6ServerUsesAddressForHandshake);
   CPPUNIT_TEST(testTlsWantReadUpdatesSocketEvents);
@@ -42,6 +43,7 @@ class AsyncDotNameResolverTest : public CppUnit::TestFixture {
 public:
   void testResolveAResponseWithFragmentedRead();
   void testResolveAAAAResponse();
+  void testResolveHttpsServiceBindingResponse();
   void testNumericServerUsesAddressForHandshake();
   void testNumericIPv6ServerUsesAddressForHandshake();
   void testTlsWantReadUpdatesSocketEvents();
@@ -144,11 +146,30 @@ void appendAAAAAnswer(std::string& out, uint16_t nameOffset, uint32_t ttl,
   out.append(reinterpret_cast<const char*>(addr), 16);
 }
 
+uint16_t readUint16(const std::string& s, size_t offset)
+{
+  return (static_cast<uint16_t>(static_cast<unsigned char>(s[offset])) << 8) |
+         static_cast<uint16_t>(static_cast<unsigned char>(s[offset + 1]));
+}
+
 uint16_t getQueryId(const std::string& dotQuery)
 {
-  return (static_cast<uint16_t>(
-              static_cast<unsigned char>(dotQuery[2])) << 8) |
-         static_cast<uint16_t>(static_cast<unsigned char>(dotQuery[3]));
+  return readUint16(dotQuery, 2);
+}
+
+std::string getDotQueryBody(const std::string& dotQuery)
+{
+  return dotQuery.substr(2);
+}
+
+uint16_t getQuestionType(const std::string& dnsMessage)
+{
+  size_t offset = 12;
+  while (offset < dnsMessage.size() && dnsMessage[offset]) {
+    offset += static_cast<unsigned char>(dnsMessage[offset]) + 1;
+  }
+  ++offset;
+  return readUint16(dnsMessage, offset);
 }
 
 std::string createAResponse(uint16_t id, const std::string& hostname)
@@ -168,6 +189,25 @@ std::string createAAAAResponse(uint16_t id, const std::string& hostname)
   appendHeader(msg, id, 0x8180, 1, 1);
   appendQuestion(msg, hostname, dns::TYPE_AAAA);
   appendAAAAAnswer(msg, 12, 60, addr);
+  return msg;
+}
+
+std::string createHttpsResponse(uint16_t id, const std::string& hostname)
+{
+  std::string msg;
+  appendHeader(msg, id, 0x8180, 1, 1);
+  appendQuestion(msg, hostname, dns::TYPE_HTTPS);
+  appendCompressedName(msg, 12);
+  appendUint16(msg, dns::TYPE_HTTPS);
+  appendUint16(msg, 1);
+  appendUint32(msg, 120);
+  appendUint16(msg, 10);
+  appendUint16(msg, 1);
+  msg.push_back(0);
+  appendUint16(msg, 1);
+  appendUint16(msg, 3);
+  msg.push_back(2);
+  msg += "h2";
   return msg;
 }
 
@@ -517,6 +557,35 @@ void AsyncDotNameResolverTest::testResolveAAAAResponse()
   CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getResolvedAddresses().size());
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
                        resolver.getResolvedAddresses()[0]);
+}
+
+void AsyncDotNameResolverTest::testResolveHttpsServiceBindingResponse()
+{
+  FakeDotTransportFactory factory;
+  AsyncDotNameResolver resolver(
+      AF_INET, {{"203.0.113.8", 853, "dns.example.org"}},
+      makeTransportFactory(factory));
+
+  resolver.resolveHttpsServiceBinding("www.example.com", 8443);
+  driveUntilWriteQueryDone(resolver, factory);
+  auto transport = factory.transports.back();
+  auto dnsQuery = getDotQueryBody(transport->written);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)dns::TYPE_HTTPS,
+                       getQuestionType(dnsQuery));
+
+  transport->readBuffer = createDotFrame(createHttpsResponse(
+      getQueryId(transport->written), "_8443._https.www.example.com"));
+
+  driveUntilDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
+  CPPUNIT_ASSERT(resolver.getResolvedAddresses().empty());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getServiceBindingRecords().size());
+  const auto& record = resolver.getServiceBindingRecords()[0];
+  CPPUNIT_ASSERT_EQUAL((uint16_t)1, record.priority);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)120, record.ttl);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, record.alpn.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("h2"), record.alpn[0]);
 }
 
 void AsyncDotNameResolverTest::testNumericServerUsesAddressForHandshake()
