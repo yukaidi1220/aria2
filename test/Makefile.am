@@ -29,6 +29,7 @@ aria2c_SOURCES = AllTest.cc\
 	HttpRequestTest.cc\
 	Http2HeaderBlockTest.cc\
 	AltSvcParserTest.cc\
+	ServiceBindingSelectorTest.cc\
 	HttpProtocolTest.cc\
 	HttpTLSHandshakeParamsTest.cc\
 	RequestGroupManTest.cc\

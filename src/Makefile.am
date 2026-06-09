@@ -246,6 +246,7 @@ SRCS =  \
 	StreamFilter.cc StreamFilter.h\
 	StreamPieceSelector.h\
 	StructParserStateMachine.h\
+	ServiceBindingSelector.cc ServiceBindingSelector.h\
 	TimeA2.cc TimeA2.h\
 	TimeBasedCommand.cc TimeBasedCommand.h\
 	TimedHaltCommand.cc TimedHaltCommand.h\
