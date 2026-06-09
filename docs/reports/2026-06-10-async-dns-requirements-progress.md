@@ -77,12 +77,18 @@
    - 前置提交 `fed40f3e Support config discovery precedence and startup option logs` 的 GitHub Actions build 已通过，run id `27235349508`。
    - 本报告对应的 secure-first fallback 切片已提交为 `0e483039 Implement secure-first async DNS fallback chain`，GitHub Actions build 已通过，run id `27238331842`，耗时 `8m55s`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27238331842
-   - HTTPS RR/TYPE65 staged fallback 切片需通过本次提交后的 GitHub Actions 验证；run 和 artifact 链接会在 CI 完成后追账。
+   - HTTPS RR/TYPE65 staged fallback 切片已提交为 `b41ada1a Stage HTTPS RR discovery DNS fallback`，GitHub Actions build 已通过，run id `27240908069`，耗时 `8m20s`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27240908069
 
 3. artifact：
-   - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521271861
-   - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521230494
-   - artifact 过期时间：`2026-09-07T21:54:20Z`。
+   - `0e483039` artifacts：
+     - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521271861
+     - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521230494
+     - artifact 过期时间：`2026-09-07T21:54:20Z`。
+   - `b41ada1a` artifacts：
+     - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27240908069/artifacts/7522240987
+     - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27240908069/artifacts/7522203553
+     - artifact 过期时间：`2026-09-07T22:50:05Z`。
 
 ## 47 条需求状态
 
