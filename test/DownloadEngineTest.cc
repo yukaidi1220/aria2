@@ -32,6 +32,7 @@ class DownloadEngineTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPopPooledSocketByAddressListWithPredicate);
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testFindActiveHttp2ConnectionHonorsRemoteStreamLimit);
+  CPPUNIT_TEST(testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit);
   CPPUNIT_TEST(testFindActiveHttp2ConnectionCoalescesOrigin);
   CPPUNIT_TEST(testFindActiveHttp2ConnectionSkipsProxiedCoalescing);
   CPPUNIT_TEST(testHttp2ConnectionContextKeepsRequestGroupAlive);
@@ -48,6 +49,7 @@ public:
   void testPopPooledSocketByAddressListWithPredicate();
 #ifdef HAVE_LIBNGHTTP2
   void testFindActiveHttp2ConnectionHonorsRemoteStreamLimit();
+  void testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit();
   void testFindActiveHttp2ConnectionCoalescesOrigin();
   void testFindActiveHttp2ConnectionSkipsProxiedCoalescing();
   void testHttp2ConnectionContextKeepsRequestGroupAlive();
@@ -206,6 +208,47 @@ void DownloadEngineTest::testFindActiveHttp2ConnectionHonorsRemoteStreamLimit()
   e.registerActiveHttp2Connection(request.get(), context);
 
   auto active = e.findActiveHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+
+  CPPUNIT_ASSERT(!active.isActive());
+}
+
+void DownloadEngineTest::testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit()
+{
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  auto sockets = createSocketPair();
+  auto peer = sockets.first->getPeerInfo();
+  auto option = std::make_shared<Option>();
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = createHttp2Request(peer.addr, peer.port);
+
+  auto transport = make_unique<http2test::MemoryHttp2Transport>();
+  auto rawTransport = transport.get();
+  auto exchange =
+      std::make_shared<Http2MultiplexExchange>(std::move(transport));
+  http2test::FakeHttp2ServerSession server;
+  server.submitMaxConcurrentStreams(2);
+  rawTransport->appendInboundData(server.drainOutboundData());
+  CPPUNIT_ASSERT(exchange->readInboundData());
+  exchange->submitRequest(http2test::createRequestHeaders());
+
+  auto context = std::make_shared<Http2ConnectionContext>(
+      requestGroup, exchange, sockets.first);
+  e.registerActiveHttp2Connection(request.get(), context);
+
+  auto active = e.findActiveHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+
+  CPPUNIT_ASSERT(active.isActive());
+  CPPUNIT_ASSERT(active.context == context);
+  CPPUNIT_ASSERT(active.exchange == exchange);
+  CPPUNIT_ASSERT(active.socket == sockets.first);
+
+  active.exchange->submitRequest(http2test::createRequestHeaders());
+
+  active = e.findActiveHttp2Connection(
       requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
       std::function<bool(const std::shared_ptr<SocketCore>&)>());
 
