@@ -793,7 +793,8 @@ restart:
     A2_LOG_NETWORK(
         fmt("TLS: handshake completed, cipher=%s",
             getCipherSuite(&handle_).c_str()));
-    switch (getProtocolVersion(&handle_)) {
+    const auto protocolVersion = getProtocolVersion(&handle_);
+    switch (protocolVersion) {
     case 0x302:
       version = TLS_PROTO_TLS11;
       break;
@@ -801,8 +802,11 @@ restart:
       version = TLS_PROTO_TLS12;
       break;
     default:
-      assert(0);
-      abort();
+      status_ = SEC_E_INTERNAL_ERROR;
+      state_ = st_error;
+      A2_LOG_ERROR(fmt("WinTLS: unsupported negotiated protocol 0x%x",
+                       protocolVersion));
+      return TLS_ERR_ERROR;
     }
     return TLS_ERR_OK;
   }

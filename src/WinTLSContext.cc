@@ -35,7 +35,6 @@
 
 #include "WinTLSContext.h"
 
-#include <cassert>
 #include <sstream>
 
 #include "BufferedFile.h"
@@ -81,9 +80,10 @@ WinTLSContext::WinTLSContext(TLSSessionSide side, TLSVersion ver)
     case TLS_PROTO_TLS12:
       credentials_.grbitEnabledProtocols |= SP_PROT_TLS1_2_CLIENT;
       break;
+    case TLS_PROTO_TLS13:
+      throw DL_ABORT_EX("WinTLS does not support TLSv1.3");
     default:
-      assert(0);
-      abort();
+      throw DL_ABORT_EX("WinTLS received an unsupported TLS version");
     }
   }
   else {
@@ -94,9 +94,10 @@ WinTLSContext::WinTLSContext(TLSSessionSide side, TLSVersion ver)
     case TLS_PROTO_TLS12:
       credentials_.grbitEnabledProtocols |= SP_PROT_TLS1_2_SERVER;
       break;
+    case TLS_PROTO_TLS13:
+      throw DL_ABORT_EX("WinTLS does not support TLSv1.3");
     default:
-      assert(0);
-      abort();
+      throw DL_ABORT_EX("WinTLS received an unsupported TLS version");
     }
   }
 
