@@ -1126,9 +1126,15 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+#ifdef HAVE_HTTP3
+    OptionHandler* op(new BooleanOptionHandler(
+        PREF_ENABLE_HTTP3, TEXT_ENABLE_HTTP3, A2_V_FALSE,
+        OptionHandler::OPT_ARG));
+#else  // !HAVE_HTTP3
     OptionHandler* op(new UnsupportedFeatureOptionHandler(
         PREF_ENABLE_HTTP3, TEXT_ENABLE_HTTP3, A2_V_FALSE, "HTTP/3",
         OptionHandler::OPT_ARG));
+#endif // !HAVE_HTTP3
     op->addTag(TAG_EXPERIMENTAL);
     op->addTag(TAG_HTTP);
     op->addTag(TAG_HTTPS);

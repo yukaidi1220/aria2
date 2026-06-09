@@ -574,9 +574,10 @@
     "                              disabled when HTTP pipelining is enabled.")
 #define TEXT_ENABLE_HTTP3                                               \
   _(" --enable-http3[=false]\n"                                         \
-    "                              Reserve the HTTP/3 over QUIC option name for\n" \
-    "                              future use. HTTP/3 is not implemented; setting\n" \
-    "                              true fails during option parsing.")
+    "                              Enable the HTTP/3 over QUIC capability gate\n" \
+    "                              when aria2 is built with ngtcp2, nghttp3, and\n" \
+    "                              a QUIC TLS backend. Unsupported builds reject\n" \
+    "                              true; the download path is still experimental.")
 #define TEXT_HOSTS_MAPPING                                              \
   _(" --hosts-mapping=HOST:IPADDR[,IPADDR:HOST]...\n"                   \
     "                              Set host mappings. HOST:IPADDR connects HOST\n" \

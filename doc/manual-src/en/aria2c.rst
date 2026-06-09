@@ -519,10 +519,11 @@ HTTP Specific Options
 
 .. option:: --enable-http3 [false]
 
-  Reserve the HTTP/3 over QUIC option name for future use. HTTP/3 is not
-  implemented in this aria2 build and no QUIC library is linked. Setting this
-  option to ``true`` fails during option parsing instead of silently falling
-  back to HTTP/1.1 or HTTP/2.
+  Enable the HTTP/3 over QUIC capability gate. This option is accepted only
+  when aria2 is built with ngtcp2, nghttp3, libngtcp2_crypto_ossl, and the
+  OpenSSL TLS backend selected by configure; unsupported builds reject
+  ``true`` during option parsing. The HTTP/3 download path is still
+  experimental and is not advertised through the regular HTTPS ALPN list.
 
   Default: ``false``
 

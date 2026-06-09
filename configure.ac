@@ -68,6 +68,15 @@ ARIA2_ARG_WITH([tcmalloc])
 ARIA2_ARG_WITH([jemalloc])
 ARIA2_ARG_WITHOUT([libssh2])
 ARIA2_ARG_WITH([libnghttp2])
+ARIA2_ARG_WITH([libngtcp2])
+ARIA2_ARG_WITH([libnghttp3])
+
+AC_ARG_WITH([libngtcp2-crypto-ossl],
+  AS_HELP_STRING([--with-libngtcp2-crypto-ossl],
+                 [Use libngtcp2 OpenSSL crypto backend.]),
+  [with_libngtcp2_crypto_ossl_requested=$withval
+   with_libngtcp2_crypto_ossl=$withval],
+  [with_libngtcp2_crypto_ossl=no])
 
 ARIA2_ARG_DISABLE([ssl])
 ARIA2_ARG_DISABLE([bittorrent])
@@ -531,6 +540,81 @@ if test "x$with_libnghttp2" = "xyes"; then
   fi
 fi
 
+have_libngtcp2=no
+if test "x$with_libngtcp2" = "xyes"; then
+  PKG_CHECK_MODULES([LIBNGTCP2], [libngtcp2], [have_libngtcp2=yes],
+                    [have_libngtcp2=no])
+  if test "x$have_libngtcp2" = "xyes"; then
+    AC_DEFINE([HAVE_LIBNGTCP2], [1],
+              [Define to 1 if you have libngtcp2.])
+  else
+    AC_MSG_WARN([$LIBNGTCP2_PKG_ERRORS])
+    if test "x$with_libngtcp2_requested" = "xyes"; then
+      ARIA2_DEP_NOT_MET([libngtcp2])
+    fi
+  fi
+fi
+
+have_libnghttp3=no
+if test "x$with_libnghttp3" = "xyes"; then
+  PKG_CHECK_MODULES([LIBNGHTTP3], [libnghttp3], [have_libnghttp3=yes],
+                    [have_libnghttp3=no])
+  if test "x$have_libnghttp3" = "xyes"; then
+    AC_DEFINE([HAVE_LIBNGHTTP3], [1],
+              [Define to 1 if you have libnghttp3.])
+  else
+    AC_MSG_WARN([$LIBNGHTTP3_PKG_ERRORS])
+    if test "x$with_libnghttp3_requested" = "xyes"; then
+      ARIA2_DEP_NOT_MET([libnghttp3])
+    fi
+  fi
+fi
+
+have_libngtcp2_crypto_ossl=no
+if test "x$with_libngtcp2_crypto_ossl" = "xyes"; then
+  PKG_CHECK_MODULES([LIBNGTCP2_CRYPTO_OSSL],
+                    [libngtcp2_crypto_ossl],
+                    [have_libngtcp2_crypto_ossl=yes],
+                    [have_libngtcp2_crypto_ossl=no])
+  if test "x$have_libngtcp2_crypto_ossl" = "xyes"; then
+    AC_DEFINE([HAVE_LIBNGTCP2_CRYPTO_OSSL], [1],
+              [Define to 1 if you have libngtcp2 OpenSSL crypto backend.])
+  else
+    AC_MSG_WARN([$LIBNGTCP2_CRYPTO_OSSL_PKG_ERRORS])
+    if test "x$with_libngtcp2_crypto_ossl_requested" = "xyes"; then
+      ARIA2_DEP_NOT_MET([libngtcp2_crypto_ossl])
+    fi
+  fi
+fi
+
+have_http3=no
+http3_requested=no
+if test "x$with_libngtcp2_requested" = "xyes" ||
+   test "x$with_libnghttp3_requested" = "xyes" ||
+   test "x$with_libngtcp2_crypto_ossl_requested" = "xyes"; then
+  http3_requested=yes
+fi
+if test "x$have_libngtcp2" = "xyes" &&
+   test "x$have_libnghttp3" = "xyes" &&
+   test "x$have_libngtcp2_crypto_ossl" = "xyes"; then
+  if test "x$have_openssl" = "xyes"; then
+    have_http3=yes
+    AC_DEFINE([HAVE_HTTP3], [1],
+              [Define to 1 if HTTP/3 dependencies are available.])
+  else
+    AC_MSG_WARN([HTTP/3 disabled because OpenSSL TLS backend is not enabled])
+    if test "x$with_libngtcp2_requested" = "xyes" ||
+       test "x$with_libnghttp3_requested" = "xyes" ||
+       test "x$with_libngtcp2_crypto_ossl_requested" = "xyes"; then
+      ARIA2_DEP_NOT_MET([openssl for HTTP/3])
+    fi
+  fi
+fi
+if test "x$http3_requested" = "xyes" &&
+   test "x$have_http3" != "xyes"; then
+  ARIA2_FET_NOT_SUPPORTED([HTTP/3])
+fi
+
 have_libcares=no
 if test "x$with_libcares" = "xyes"; then
   PKG_CHECK_MODULES([LIBCARES], [libcares >= 1.16.0], [have_libcares=yes],
@@ -683,6 +767,11 @@ AM_CONDITIONAL([HAVE_LIBSSH2], [test "x$have_libssh2" = "xyes"])
 
 # Set conditional for libnghttp2
 AM_CONDITIONAL([HAVE_LIBNGHTTP2], [test "x$have_libnghttp2" = "xyes"])
+AM_CONDITIONAL([HAVE_LIBNGTCP2], [test "x$have_libngtcp2" = "xyes"])
+AM_CONDITIONAL([HAVE_LIBNGHTTP3], [test "x$have_libnghttp3" = "xyes"])
+AM_CONDITIONAL([HAVE_LIBNGTCP2_CRYPTO_OSSL],
+               [test "x$have_libngtcp2_crypto_ossl" = "xyes"])
+AM_CONDITIONAL([HAVE_HTTP3], [test "x$have_http3" = "xyes"])
 
 case "$host" in
   *solaris*)
@@ -1146,6 +1235,10 @@ LibCares:       $have_libcares (CFLAGS='$LIBCARES_CFLAGS' LIBS='$LIBCARES_LIBS')
 Zlib:           $have_zlib (CFLAGS='$ZLIB_CFLAGS' LIBS='$ZLIB_LIBS')
 Libssh2:        $have_libssh2 (CFLAGS='$LIBSSH2_CFLAGS' LIBS='$LIBSSH2_LIBS')
 Libnghttp2:     $have_libnghttp2 (CFLAGS='$LIBNGHTTP2_CFLAGS' LIBS='$LIBNGHTTP2_LIBS')
+Libngtcp2:      $have_libngtcp2 (CFLAGS='$LIBNGTCP2_CFLAGS' LIBS='$LIBNGTCP2_LIBS')
+Libnghttp3:     $have_libnghttp3 (CFLAGS='$LIBNGHTTP3_CFLAGS' LIBS='$LIBNGHTTP3_LIBS')
+Libngtcp2 crypto ossl: $have_libngtcp2_crypto_ossl (CFLAGS='$LIBNGTCP2_CRYPTO_OSSL_CFLAGS' LIBS='$LIBNGTCP2_CRYPTO_OSSL_LIBS')
+HTTP/3:         $have_http3
 Tcmalloc:       $have_tcmalloc (CFLAGS='$TCMALLOC_CFLAGS' LIBS='$TCMALLOC_LIBS')
 Jemalloc:       $have_jemalloc (CFLAGS='$JEMALLOC_CFLAGS' LIBS='$JEMALLOC_LIBS')
 Epoll:          $have_epoll

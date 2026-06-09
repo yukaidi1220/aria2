@@ -37,7 +37,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
 | DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
-| HTTP/3 / H3 / QUIC | 只有禁用占位参数 | `--enable-http3=true` 会被 `UnsupportedFeatureOptionHandler` 拒绝；源码没有 QUIC 传输、H3 command、`h3` ALPN 分发或依赖探测 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
+| HTTP/3 / H3 / QUIC | 第一阶段能力门 | 默认构建仍拒绝 `--enable-http3=true`；只有构建时显式带 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 且使用 OpenSSL TLS 后端时才接受该开关；源码仍没有 QUIC 传输、H3 command 或 `h3` ALPN 分发 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/usage_text.h` |
 | ECH | 手动 ECHConfigList 第一阶段可用 | `--ech-config-base64=BASE64` 或 `--enable-ech=true --ech-config-base64=BASE64` 对 HTTPS 启用 required ECH；没有自动 HTTPS/SVCB 发现、retry config 自动重试或 H3 discovery；不能与 `--tls-sni-host` override 混用；TLS 后端不支持或握手后未接受 ECH 会失败 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h`、`src/LibsslTLSSession.cc` |
 | XP/Win7 兼容 | 以 HTTP/1.1 fallback 和可构建性为主 | 旧 Windows 原生 TLS 栈通常不要指望 ALPN/FakeSNI override；H2 要看 OpenSSL/GnuTLS ALPN，FakeSNI override 要看 OpenSSL/GnuTLS | `src/FeatureConfig.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 
@@ -291,7 +291,7 @@ aria2c --enable-ech=true --ech-config-base64=BASE64 https://origin.example/file
 这些功能不要在文档或帮助里写成已经可用：
 
 - ECH 自动发现：当前只支持手动 `--ech-config-base64`。HTTPS/SVCB 发现、retry config 自动重试、H3 discovery 都还没实现。
-- HTTP/3/H3/QUIC：当前有 `--enable-http3[=false]` 禁用壳，只允许默认 `false`；设置为 `true` 会在参数解析阶段失败。源码仍然没有 QUIC 传输层、HTTP/3 request/response command、H3 ALPN 分发或依赖探测，这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进 HTTP 下载 ALPN 列表。
+- HTTP/3/H3/QUIC：当前只有 capability gate。未构建完整 ngtcp2/nghttp3/QUIC TLS 依赖时，`--enable-http3=true` 会在参数解析阶段失败；即使构建时开了这个 gate，源码仍然没有 QUIC 传输层、HTTP/3 request/response command 或 H3 ALPN 分发。这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进普通 HTTPS 下载的 TCP TLS ALPN 列表。
 - DoH over H2：这是条件可用能力，不是 H3/ECH 占位。`AsyncDohNameResolver` 会在 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时尝试 ALPN `h2,http/1.1`；TLS 未选中 `h2` 时仍按 HTTP/1.1 POST `application/dns-message` 工作。
 - WinTLS/AppleTLS 上的 FakeSNI override：普通 SNI 可用，但 SNI 与证书校验 hostname 不同会被提前拒绝。
 - WinTLS/AppleTLS 当前代码里的 HTTP/2 ALPN：没有 ALPN 接口时会降级 HTTP/1.1；GnuTLS 只有在 configure 探测到 ALPN API 时才启用。
@@ -376,7 +376,7 @@ aria2c --enable-ech=true --ech-config-base64=BASE64 https://origin.example/file
 | `--enable-ech [true\|false]` | `false` | 启用 required ECH；必须配 `--ech-config-base64`。 |
 | `--ech-config-base64=<BASE64>` | 无 | base64 编码的二进制 ECHConfigList；会隐式启用 required ECH。 |
 | `--enable-http2 [false]` | `false` | 实验性 HTTP/2；需要 libnghttp2、HTTPS、ALPN，详见 2.4。 |
-| `--enable-http3 [false]` | `false` | HTTP/3 over QUIC 保留名；当前未实现，设为 true 会失败。 |
+| `--enable-http3 [false]` | `false` | HTTP/3 over QUIC 能力门；默认构建设为 true 会失败，详见 2.7。 |
 | `--hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>` | 无 | hosts 映射，详见 2.2。 |
 
 ### 3.4 HTTP 专用选项
@@ -654,7 +654,7 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 
 - HTTP/2 目前已有同 origin active/idle 复用、保守 origin coalescing、421 负缓存，以及 DoH over H2 请求体发送说明；后续阶段还要补真实网络端到端测试，并继续完善错误恢复、Range/redirect 行为。
 - IPv4/IPv6 目前已有第一阶段双栈竞速：A/AAAA 并发解析、后台 DNS cache 补齐唤醒、异步 DNS 下 `0ms` opposite-family 备份连接。后续若要更完整贴近 RFC 8305，还应实现按地址列表交错排序、连接尝试取消/统计更细粒度、DNS cache TTL 和坏地址恢复策略。
-- H3/QUIC 当前只有 `--enable-http3[=false]` 禁用壳和文档边界；后续应先做依赖探测与能力矩阵，不能直接把 `h3` ALPN 写进下载链路。
+- H3/QUIC 当前只有依赖探测、`HAVE_HTTP3` 能力门和 `--enable-http3` 选项语义；后续还要补 UDP/QUIC transport、nghttp3 exchange、Alt-Svc/HTTPS RR discovery、失败回退和真实下载测试，不能直接把 `h3` ALPN 写进 TCP 下载链路。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
 - 后续如果给 WinTLS/AppleTLS 补 ALPN 或调整 SNI override 能力，需要同步更新 2.0 能力矩阵和 XP/Win7 边界；当前 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override 且在探测到 ALPN API 时支持 ALPN，WinTLS 未声明 SNI override，基类 ALPN 默认不支持并会触发 HTTP/1.1 fallback。

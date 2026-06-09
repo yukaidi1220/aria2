@@ -166,13 +166,23 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
 
   options.clear();
   options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP3->k, A2_V_TRUE));
+#ifdef HAVE_HTTP3
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE), option.get(PREF_ENABLE_HTTP3));
+#else  // !HAVE_HTTP3
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP3));
+#endif // !HAVE_HTTP3
 
   options.clear();
   options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP3->k, ""));
+#ifdef HAVE_HTTP3
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE), option.get(PREF_ENABLE_HTTP3));
+#else  // !HAVE_HTTP3
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP3));
+#endif // !HAVE_HTTP3
 }
 
 void OptionHandlerTest::testNumberOptionHandler()
