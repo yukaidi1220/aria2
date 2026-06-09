@@ -79,10 +79,12 @@ protected:
   std::shared_ptr<BackupConnectInfo>
   createBackupConnectCommand(const std::string& hostname,
                              const std::string& ipaddr, uint16_t port,
+                             const std::vector<std::string>& resolvedAddresses,
                              Command* mainCommand);
 
   void setupBackupConnection(const std::string& hostname,
                              const std::string& addr, uint16_t port,
+                             const std::vector<std::string>& resolvedAddresses,
                              ConnectCommand* c);
 
 public:

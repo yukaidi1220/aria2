@@ -316,7 +316,7 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
         // Unreachable
         assert(0);
       }
-      setupBackupConnection(hostname, addr, port, c.get());
+      setupBackupConnection(hostname, addr, port, resolvedAddresses, c.get());
       return std::move(c);
     }
     else {
@@ -351,7 +351,7 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
                                            getFileEntry(), getRequestGroup(),
                                            getDownloadEngine(), getSocket());
       c->setControlChain(std::make_shared<HttpRequestConnectChain>());
-      setupBackupConnection(hostname, addr, port, c.get());
+      setupBackupConnection(hostname, addr, port, resolvedAddresses, c.get());
       return std::move(c);
     }
     else {

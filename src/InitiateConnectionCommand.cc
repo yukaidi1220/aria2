@@ -190,6 +190,7 @@ std::chrono::milliseconds getBackupConnectionDelay(const Option* option)
 std::shared_ptr<BackupConnectInfo>
 InitiateConnectionCommand::createBackupConnectCommand(
     const std::string& hostname, const std::string& ipaddr, uint16_t port,
+    const std::vector<std::string>& resolvedAddresses,
     Command* mainCommand)
 {
   std::shared_ptr<BackupConnectInfo> info;
@@ -199,10 +200,13 @@ InitiateConnectionCommand::createBackupConnectCommand(
   }
   A2_LOG_INFO(fmt("Searching IPv%d address for backup connection attempt",
                   backupFamily == AF_INET ? 4 : 6));
-  std::vector<std::string> addrs;
-  getDownloadEngine()->findAllCachedIPAddresses(std::back_inserter(addrs),
-                                                 hostname, port);
-  auto backupAddr = selectBackupIPAddress(addrs, ipaddr);
+  auto backupAddr = selectBackupIPAddress(resolvedAddresses, ipaddr);
+  if (backupAddr.empty()) {
+    std::vector<std::string> addrs;
+    getDownloadEngine()->findAllCachedIPAddresses(std::back_inserter(addrs),
+                                                   hostname, port);
+    backupAddr = selectBackupIPAddress(addrs, ipaddr);
+  }
   if (!backupAddr.empty()) {
     info = std::make_shared<BackupConnectInfo>();
     auto backupDelay = getBackupConnectionDelay(getOption().get());
@@ -224,10 +228,10 @@ InitiateConnectionCommand::createBackupConnectCommand(
 
 void InitiateConnectionCommand::setupBackupConnection(
     const std::string& hostname, const std::string& addr, uint16_t port,
-    ConnectCommand* c)
+    const std::vector<std::string>& resolvedAddresses, ConnectCommand* c)
 {
   std::shared_ptr<BackupConnectInfo> backupConnectInfo =
-      createBackupConnectCommand(hostname, addr, port, c);
+      createBackupConnectCommand(hostname, addr, port, resolvedAddresses, c);
   if (backupConnectInfo) {
     c->setBackupConnectInfo(backupConnectInfo);
   }

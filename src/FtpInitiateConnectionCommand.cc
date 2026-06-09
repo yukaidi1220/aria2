@@ -125,7 +125,7 @@ std::unique_ptr<Command> FtpInitiateConnectionCommand::createNextCommandProxied(
       assert(0);
       return nullptr;
     }
-    setupBackupConnection(hostname, addr, port, c.get());
+    setupBackupConnection(hostname, addr, port, resolvedAddresses, c.get());
     return std::move(c);
   }
 
@@ -199,7 +199,7 @@ std::unique_ptr<Command> FtpInitiateConnectionCommand::createNextCommandPlain(
     else {
       c->setControlChain(std::make_shared<FtpNegotiationConnectChain>());
     }
-    setupBackupConnection(hostname, addr, port, c.get());
+    setupBackupConnection(hostname, addr, port, resolvedAddresses, c.get());
     return std::move(c);
   }
 
