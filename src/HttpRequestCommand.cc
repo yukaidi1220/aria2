@@ -180,7 +180,7 @@ bool HttpRequestCommand::executeInternal()
 #endif // ENABLE_SSL
 #ifdef HAVE_LIBNGHTTP2
     if (httpProtocol == HTTP_PROTOCOL_H2) {
-      if (getSegments().size() > 1) {
+      if (!canSubmitSingleHttp2Stream(getSegments().size())) {
         A2_LOG_INFO(
             "HTTP/2 single-stream download does not support pipelined "
             "segments. Retrying with one segment.");

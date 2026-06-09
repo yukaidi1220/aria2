@@ -37,6 +37,7 @@
 
 #include "common.h"
 
+#include <cstddef>
 #include <string>
 
 namespace aria2 {
@@ -59,6 +60,8 @@ HttpProtocol decideHttpProtocolFromSelectedAlpn(const std::string& selectedAlpn,
                                                 bool enableHttp2);
 
 void validateHttpSelectedAlpnProtocol(const std::string& selectedAlpn);
+
+bool canSubmitSingleHttp2Stream(size_t numSegments);
 
 } // namespace aria2
 

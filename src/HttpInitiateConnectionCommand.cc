@@ -207,8 +207,8 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
       !proxyRequest ||
       resolveProxyMethod(getRequest()->getProtocol()) == V_TUNNEL;
   if (canReuseActiveHttp2Connection(getRequest().get(), getOption().get(),
-                                    proxyReusable) &&
-      getSegments().size() <= 1) {
+                                     proxyReusable) &&
+      canSubmitSingleHttp2Stream(getSegments().size())) {
 #  ifdef ENABLE_SSL
     auto predicate =
         createTLSSocketReusePredicate(getRequest().get(), getOption().get());

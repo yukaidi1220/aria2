@@ -15,6 +15,7 @@ class HttpProtocolTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testRequireSupportedHttpProtocolFromSelectedAlpn);
   CPPUNIT_TEST(testDecideHttpProtocolFromSelectedAlpn);
   CPPUNIT_TEST(testValidateHttpSelectedAlpnProtocol);
+  CPPUNIT_TEST(testCanSubmitSingleHttp2Stream);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -23,6 +24,7 @@ public:
   void testRequireSupportedHttpProtocolFromSelectedAlpn();
   void testDecideHttpProtocolFromSelectedAlpn();
   void testValidateHttpSelectedAlpnProtocol();
+  void testCanSubmitSingleHttp2Stream();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpProtocolTest);
@@ -93,6 +95,13 @@ void HttpProtocolTest::testValidateHttpSelectedAlpnProtocol()
   CPPUNIT_ASSERT_THROW(validateHttpSelectedAlpnProtocol(HTTP_ALPN_H2),
                        Exception);
   CPPUNIT_ASSERT_THROW(validateHttpSelectedAlpnProtocol("h3"), Exception);
+}
+
+void HttpProtocolTest::testCanSubmitSingleHttp2Stream()
+{
+  CPPUNIT_ASSERT(canSubmitSingleHttp2Stream(0));
+  CPPUNIT_ASSERT(canSubmitSingleHttp2Stream(1));
+  CPPUNIT_ASSERT(!canSubmitSingleHttp2Stream(2));
 }
 
 } // namespace aria2

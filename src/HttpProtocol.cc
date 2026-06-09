@@ -93,4 +93,9 @@ void validateHttpSelectedAlpnProtocol(const std::string& selectedAlpn)
   decideHttpProtocolFromSelectedAlpn(selectedAlpn, false);
 }
 
+bool canSubmitSingleHttp2Stream(size_t numSegments)
+{
+  return numSegments <= 1;
+}
+
 } // namespace aria2
