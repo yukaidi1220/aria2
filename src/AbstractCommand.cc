@@ -1623,9 +1623,10 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
   return ipaddr;
 }
 
-std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
-    const std::vector<dns::ServiceBindingRecord>& records,
-    const std::string& hostname, uint16_t port, const Option* option)
+namespace {
+dns::ServiceBindingSelectionConfig
+createHttpsServiceBindingSelectionConfig(uint16_t originPort,
+                                         const Option* option)
 {
   dns::ServiceBindingSelectionConfig config;
   config.defaultAlpn = HTTP_ALPN_HTTP11;
@@ -1636,18 +1637,37 @@ std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
   }
 #endif // HAVE_LIBNGHTTP2
   config.supportedAlpns.push_back(HTTP_ALPN_HTTP11);
-  config.defaultPort = port;
+  config.defaultPort = originPort;
   if (option && option->getAsBool(PREF_DISABLE_IPV6)) {
     config.addressFamily = dns::SVCB_ADDRESS_FAMILY_IPV4;
   }
+  return config;
+}
+} // namespace
 
+std::vector<dns::ServiceBindingEndpoint> getHttpsServiceBindingEndpoints(
+    const std::vector<dns::ServiceBindingRecord>& records,
+    const std::string& originHost, uint16_t originPort,
+    const Option* option)
+{
+  auto config =
+      createHttpsServiceBindingSelectionConfig(originPort, option);
+  return dns::selectServiceBindingEndpoints(records, originHost, originPort,
+                                            config);
+}
+
+std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
+    const std::vector<dns::ServiceBindingRecord>& records,
+    const std::string& hostname, uint16_t port, const Option* option)
+{
   std::vector<std::string> hints;
-  for (const auto& selected : dns::selectServiceBindings(records, config)) {
-    if (selected.targetName != hostname || selected.port != port) {
+  for (const auto& endpoint :
+       getHttpsServiceBindingEndpoints(records, hostname, port, option)) {
+    if (endpoint.serviceBindingUsed()) {
       continue;
     }
-    hints.insert(std::end(hints), std::begin(selected.addressHints),
-                 std::end(selected.addressHints));
+    hints.insert(std::end(hints), std::begin(endpoint.addressHints),
+                 std::end(endpoint.addressHints));
   }
   return hints;
 }

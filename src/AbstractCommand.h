@@ -42,6 +42,7 @@
 #include <memory>
 
 #include "DnsMessage.h"
+#include "ServiceBindingSelector.h"
 #include "TimerA2.h"
 
 namespace aria2 {
@@ -267,6 +268,13 @@ void prioritizeAndInterleaveIPAddress(std::vector<std::string>& addrs,
 std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
     const std::vector<dns::ServiceBindingRecord>& records,
     const std::string& hostname, uint16_t port, const Option* option);
+
+// Returns HTTPS/SVCB endpoints while preserving the original HTTPS origin
+// authority separately from the TCP/TLS connect target.
+std::vector<dns::ServiceBindingEndpoint> getHttpsServiceBindingEndpoints(
+    const std::vector<dns::ServiceBindingRecord>& records,
+    const std::string& originHost, uint16_t originPort,
+    const Option* option);
 
 } // namespace aria2
 

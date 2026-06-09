@@ -39,6 +39,7 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHints);
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6);
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only);
+  CPPUNIT_TEST(testGetHttpsServiceBindingEndpointsKeepsConnectTarget);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -69,6 +70,7 @@ public:
   void testGetUsableHttpsServiceBindingAddressHints();
   void testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6();
   void testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only();
+  void testGetHttpsServiceBindingEndpointsKeepsConnectTarget();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AbstractCommandTest);
@@ -543,6 +545,45 @@ void AbstractCommandTest::
                                                &option);
 
   CPPUNIT_ASSERT(hints.empty());
+}
+
+void AbstractCommandTest::testGetHttpsServiceBindingEndpointsKeepsConnectTarget()
+{
+  auto alternate = createHttpsServiceBindingRecord(
+      1, "example.org", "svc.example.org");
+  alternate.hasPort = true;
+  alternate.port = 8443;
+  alternate.ipv4hint.push_back("192.0.2.2");
+
+  auto origin = createHttpsServiceBindingRecord(
+      2, "example.org", std::string());
+  origin.ipv4hint.push_back("192.0.2.1");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(alternate);
+  records.push_back(origin);
+
+  Option option;
+  auto endpoints =
+      getHttpsServiceBindingEndpoints(records, "example.org", 443, &option);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, endpoints.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("example.org"), endpoints[0].originHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, endpoints[0].originPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example.org"),
+                       endpoints[0].connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, endpoints[0].connectPort);
+  CPPUNIT_ASSERT(endpoints[0].serviceBindingUsed());
+
+  CPPUNIT_ASSERT_EQUAL(std::string("example.org"), endpoints[1].connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, endpoints[1].connectPort);
+  CPPUNIT_ASSERT(!endpoints[1].serviceBindingUsed());
+
+  auto hints =
+      getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
+                                               &option);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, hints.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), hints[0]);
 }
 
 } // namespace aria2
