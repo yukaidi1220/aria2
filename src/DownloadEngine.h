@@ -67,6 +67,10 @@ class AuthConfigFactory;
 class Request;
 class EventPoll;
 class Command;
+class HttpsServiceBindingCache;
+namespace dns {
+struct ServiceBindingRecord;
+} // namespace dns
 #ifdef HAVE_LIBNGHTTP2
 class Http2ConnectionContext;
 class Http2MultiplexExchange;
@@ -176,6 +180,8 @@ private:
   CUIDCounter cuidCounter_;
 
   std::unique_ptr<DNSCache> dnsCache_;
+
+  std::unique_ptr<HttpsServiceBindingCache> httpsServiceBindingCache_;
 
   std::unique_ptr<AuthConfigFactory> authConfigFactory_;
 
@@ -420,6 +426,24 @@ public:
                         uint16_t port);
 
   void removeCachedIPAddress(const std::string& hostname, uint16_t port);
+
+  const std::vector<dns::ServiceBindingRecord>*
+  findCachedHttpsServiceBindingRecords(const std::string& hostname,
+                                       uint16_t port);
+
+  void cacheHttpsServiceBindingRecords(
+      const std::string& hostname, uint16_t port,
+      const std::vector<dns::ServiceBindingRecord>& records,
+      uint32_t ttl);
+
+  bool markHttpsServiceBindingResolving(const std::string& hostname,
+                                        uint16_t port);
+
+  bool isHttpsServiceBindingResolving(const std::string& hostname,
+                                      uint16_t port) const;
+
+  void finishHttpsServiceBindingResolving(const std::string& hostname,
+                                          uint16_t port);
 
   void setAuthConfigFactory(std::unique_ptr<AuthConfigFactory> factory);
 

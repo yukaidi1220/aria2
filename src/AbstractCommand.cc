@@ -35,6 +35,7 @@
 #include "AbstractCommand.h"
 
 #include <algorithm>
+#include <limits>
 
 #include "Request.h"
 #include "DownloadEngine.h"
@@ -73,6 +74,7 @@
 #ifdef ENABLE_ASYNC_DNS
 #  include "AsyncNameResolver.h"
 #  include "AsyncNameResolverMan.h"
+#  include "AsyncServiceBindingResolver.h"
 #endif // ENABLE_ASYNC_DNS
 
 namespace aria2 {
@@ -297,6 +299,126 @@ public:
   }
 };
 
+class AsyncServiceBindingDiscoveryCommand : public Command {
+private:
+  std::string hostname_;
+  uint16_t port_;
+  a2_gid_t gid_;
+  std::shared_ptr<AsyncServiceBindingResolver> resolver_;
+  DownloadEngine* e_;
+  bool checked_;
+  Timer checkPoint_;
+  std::chrono::seconds timeout_;
+
+  void addCommandSelf() { e_->addCommand(std::unique_ptr<Command>(this)); }
+
+  void deleteNameResolverCheck()
+  {
+    if (checked_) {
+      e_->deleteNameResolverCheck(resolver_, this);
+      checked_ = false;
+    }
+  }
+
+  static uint32_t getCacheTtl(
+      const std::vector<dns::ServiceBindingRecord>& records)
+  {
+    if (records.empty()) {
+      return 60;
+    }
+
+    uint32_t ttl = std::numeric_limits<uint32_t>::max();
+    for (const auto& record : records) {
+      ttl = std::min(ttl, record.ttl);
+    }
+    return ttl == std::numeric_limits<uint32_t>::max() ? 0 : ttl;
+  }
+
+  void finish()
+  {
+    deleteNameResolverCheck();
+    e_->finishHttpsServiceBindingResolving(hostname_, port_);
+  }
+
+public:
+  AsyncServiceBindingDiscoveryCommand(
+      cuid_t cuid, std::string hostname, uint16_t port, a2_gid_t gid,
+      std::shared_ptr<AsyncServiceBindingResolver> resolver, DownloadEngine* e,
+      std::chrono::seconds timeout)
+      : Command(cuid),
+        hostname_(std::move(hostname)),
+        port_(port),
+        gid_(gid),
+        resolver_(std::move(resolver)),
+        e_(e),
+        checked_(false),
+        timeout_(std::move(timeout))
+  {
+  }
+
+  ~AsyncServiceBindingDiscoveryCommand() { deleteNameResolverCheck(); }
+
+  void start()
+  {
+    resolver_->resolve(hostname_, port_);
+    if (resolver_->usable()) {
+      checked_ = e_->addNameResolverCheck(resolver_, this);
+    }
+    setStatusRealtime();
+    e_->setNoWait(true);
+  }
+
+  bool execute() CXX11_OVERRIDE
+  {
+    if (e_->isHaltRequested() ||
+        e_->getRequestGroupMan()->downloadFinished()) {
+      finish();
+      return true;
+    }
+
+    if (checkPoint_.difference(global::wallclock()) >= timeout_) {
+      A2_LOG_NETWORK(fmt("DNS: HTTPS RR discovery timed out for %s",
+                         hostname_.c_str()));
+      finish();
+      return true;
+    }
+
+    switch (resolver_->getStatus()) {
+    case AsyncResolver::STATUS_SUCCESS: {
+      const auto& records = resolver_->getServiceBindingRecords();
+      auto ttl = getCacheTtl(records);
+      if (ttl > 0) {
+        e_->cacheHttpsServiceBindingRecords(hostname_, port_, records, ttl);
+      }
+      A2_LOG_NETWORK(
+          fmt("DNS: HTTPS RR discovery for %s:%u cached %lu record(s) "
+              "with ttl=%u for GID#%s",
+              hostname_.c_str(), static_cast<unsigned int>(port_),
+              static_cast<unsigned long>(records.size()),
+              static_cast<unsigned int>(ttl),
+              GroupId::toHex(gid_).c_str()));
+      finish();
+      return true;
+    }
+    case AsyncResolver::STATUS_ERROR:
+      A2_LOG_NETWORK(fmt("DNS: HTTPS RR discovery failed for %s:%u: %s",
+                         hostname_.c_str(), static_cast<unsigned int>(port_),
+                         resolver_->getError().c_str()));
+      finish();
+      return true;
+    default:
+      break;
+    }
+
+    if (resolver_->usable() && !checked_) {
+      checked_ = e_->addNameResolverCheck(resolver_, this);
+    }
+    setStatusRealtime();
+    addCommandSelf();
+    return false;
+  }
+};
+
 bool addAsyncDnsCacheCommand(
     DownloadEngine* e, const std::string& hostname, uint16_t port,
     a2_gid_t gid,
@@ -312,6 +434,31 @@ bool addAsyncDnsCacheCommand(
   command->start();
   e->addCommand(std::move(command));
   return true;
+}
+
+void maybeStartHttpsServiceBindingDiscovery(DownloadEngine* e,
+                                            const std::string& hostname,
+                                            uint16_t port, a2_gid_t gid)
+{
+  if (!e || !e->getOption() ||
+      !e->getOption()->getAsBool(PREF_ASYNC_DNS) ||
+      e->getOption()->get(PREF_ASYNC_DNS_MODE) != V_CARES ||
+      e->findCachedHttpsServiceBindingRecords(hostname, port) ||
+      e->isHttpsServiceBindingResolving(hostname, port)) {
+    return;
+  }
+
+  if (!e->markHttpsServiceBindingResolving(hostname, port)) {
+    return;
+  }
+
+  auto resolver = std::make_shared<AsyncServiceBindingResolver>(
+      e->getOption()->get(PREF_ASYNC_DNS_SERVER));
+  auto command = make_unique<AsyncServiceBindingDiscoveryCommand>(
+      e->newCUID(), hostname, port, gid, std::move(resolver), e,
+      std::chrono::seconds(e->getOption()->getAsInt(PREF_DNS_TIMEOUT)));
+  command->start();
+  e->addCommand(std::move(command));
 }
 
 bool continueAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
@@ -1299,6 +1446,14 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     prioritizeAndInterleaveIPAddress(addrs, ipaddr);
     return ipaddr;
   }
+
+#ifdef ENABLE_ASYNC_DNS
+  if (req_ && req_->getProtocol() == V_HTTPS && hostname == req_->getHost() &&
+      port == req_->getPort()) {
+    maybeStartHttpsServiceBindingDiscovery(e_, hostname, port,
+                                           requestGroup_->getGID());
+  }
+#endif // ENABLE_ASYNC_DNS
 
   e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
   if (!addrs.empty()) {

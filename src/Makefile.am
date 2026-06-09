@@ -144,6 +144,7 @@ SRCS =  \
 	HttpServerCommand.cc HttpServerCommand.h\
 	HttpServerResponseCommand.cc HttpServerResponseCommand.h\
 	HttpSkipResponseCommand.cc HttpSkipResponseCommand.h\
+	HttpsServiceBindingCache.cc HttpsServiceBindingCache.h\
 	IndexedList.h\
 	InitiateConnectionCommand.cc InitiateConnectionCommand.h\
 	InitiateConnectionCommandFactory.cc InitiateConnectionCommandFactory.h\
@@ -450,6 +451,7 @@ endif # HAVE_LIBNGHTTP2
 
 if ENABLE_ASYNC_DNS
 SRCS += \
+	AsyncServiceBindingResolver.cc AsyncServiceBindingResolver.h\
 	AsyncNameResolver.cc AsyncNameResolver.h\
 	AsyncResolver.h\
 	AsyncNameResolverMan.cc AsyncNameResolverMan.h

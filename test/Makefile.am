@@ -30,6 +30,7 @@ aria2c_SOURCES = AllTest.cc\
 	Http2HeaderBlockTest.cc\
 	AltSvcParserTest.cc\
 	ServiceBindingSelectorTest.cc\
+	HttpsServiceBindingCacheTest.cc\
 	HttpProtocolTest.cc\
 	HttpTLSHandshakeParamsTest.cc\
 	RequestGroupManTest.cc\
@@ -254,7 +255,7 @@ aria2c_SOURCES += MetalinkerTest.cc\
 endif # ENABLE_METALINK
 
 if ENABLE_ASYNC_DNS
-aria2c_SOURCES += AsyncNameResolverTest.cc
+aria2c_SOURCES += AsyncNameResolverTest.cc AsyncServiceBindingResolverTest.cc
 if ENABLE_SSL
 aria2c_SOURCES += AsyncDotNameResolverTest.cc AsyncDohNameResolverTest.cc
 endif # ENABLE_SSL

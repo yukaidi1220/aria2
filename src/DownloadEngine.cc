@@ -66,6 +66,7 @@
 #include "BtProgressInfoFile.h"
 #include "DownloadContext.h"
 #include "fmt.h"
+#include "HttpsServiceBindingCache.h"
 #include "wallclock.h"
 #ifdef ENABLE_BITTORRENT
 #  include "BtRegistry.h"
@@ -109,6 +110,7 @@ DownloadEngine::DownloadEngine(std::unique_ptr<EventPoll> eventPoll)
       btRegistry_(make_unique<BtRegistry>()),
 #endif // ENABLE_BITTORRENT
       dnsCache_(make_unique<DNSCache>()),
+      httpsServiceBindingCache_(make_unique<HttpsServiceBindingCache>()),
       option_(nullptr)
 {
   unsigned char sessionId[20];
@@ -924,6 +926,38 @@ void DownloadEngine::removeCachedIPAddress(const std::string& hostname,
                                            uint16_t port)
 {
   dnsCache_->remove(hostname, port);
+}
+
+const std::vector<dns::ServiceBindingRecord>*
+DownloadEngine::findCachedHttpsServiceBindingRecords(
+    const std::string& hostname, uint16_t port)
+{
+  return httpsServiceBindingCache_->find(hostname, port);
+}
+
+void DownloadEngine::cacheHttpsServiceBindingRecords(
+    const std::string& hostname, uint16_t port,
+    const std::vector<dns::ServiceBindingRecord>& records, uint32_t ttl)
+{
+  httpsServiceBindingCache_->cache(hostname, port, records, ttl);
+}
+
+bool DownloadEngine::markHttpsServiceBindingResolving(
+    const std::string& hostname, uint16_t port)
+{
+  return httpsServiceBindingCache_->markResolving(hostname, port);
+}
+
+bool DownloadEngine::isHttpsServiceBindingResolving(
+    const std::string& hostname, uint16_t port) const
+{
+  return httpsServiceBindingCache_->isResolving(hostname, port);
+}
+
+void DownloadEngine::finishHttpsServiceBindingResolving(
+    const std::string& hostname, uint16_t port)
+{
+  httpsServiceBindingCache_->finishResolving(hostname, port);
 }
 
 void DownloadEngine::setAuthConfigFactory(
