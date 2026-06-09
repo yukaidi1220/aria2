@@ -68,10 +68,13 @@
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
    - 前置提交 `fed40f3e Support config discovery precedence and startup option logs` 的 GitHub Actions build 已通过，run id `27235349508`。
-   - 本报告对应的 secure-first fallback 切片尚未推送；推送前必须完成外部 review，推送后再回填 GitHub Actions run 和 artifact 链接。
+   - 本报告对应的 secure-first fallback 切片已提交为 `0e483039 Implement secure-first async DNS fallback chain`，GitHub Actions build 已通过，run id `27238331842`，耗时 `8m55s`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27238331842
 
 3. artifact：
-   - 当前阶段没有新的构建 artifact 链接；待本轮 commit 推送并 CI 生成 artifact 后补充。
+   - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521271861
+   - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521230494
+   - artifact 过期时间：`2026-09-07T21:54:20Z`。
 
 ## 47 条需求状态
 
