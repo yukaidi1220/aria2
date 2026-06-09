@@ -41,6 +41,7 @@
 #include <string>
 #include <memory>
 
+#include "DnsMessage.h"
 #include "TimerA2.h"
 
 namespace aria2 {
@@ -136,7 +137,8 @@ public:
   // arguments until resolved address is returned.  Exception is
   // thrown on error. port is used for retrieving cached addresses.
   std::string resolveHostname(std::vector<std::string>& addrs,
-                              const std::string& hostname, uint16_t port);
+                              const std::string& hostname, uint16_t port,
+                              bool directOrigin = false);
 
   void tryReserved();
 
@@ -259,6 +261,12 @@ void prioritizeIPAddress(std::vector<std::string>& addrs,
 // starting with the opposite family.
 void prioritizeAndInterleaveIPAddress(std::vector<std::string>& addrs,
                                        const std::string& ipaddr);
+
+// Returns HTTPS/SVCB address hints which can be used without changing the
+// current origin host or port.
+std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
+    const std::vector<dns::ServiceBindingRecord>& records,
+    const std::string& hostname, uint16_t port, const Option* option);
 
 } // namespace aria2
 

@@ -9,6 +9,7 @@
 #include "SocketRecvBuffer.h"
 #include "FileEntry.h"
 #include "InorderURISelector.h"
+#include "DnsMessage.h"
 
 namespace aria2 {
 
@@ -35,6 +36,9 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddress);
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress);
+  CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHints);
+  CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6);
+  CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -62,6 +66,9 @@ public:
   void testPrioritizeAndInterleaveIPAddress();
   void testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder();
   void testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress();
+  void testGetUsableHttpsServiceBindingAddressHints();
+  void testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6();
+  void testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AbstractCommandTest);
@@ -448,6 +455,94 @@ void AbstractCommandTest::
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[0]);
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[1]);
   CPPUNIT_ASSERT_EQUAL(std::string("target.example"), addrs[2]);
+}
+
+namespace {
+dns::ServiceBindingRecord createHttpsServiceBindingRecord(
+    uint16_t priority, const std::string& ownerName,
+    const std::string& targetName)
+{
+  dns::ServiceBindingRecord record;
+  record.ownerName = ownerName;
+  record.priority = priority;
+  record.targetName = targetName;
+  record.alpn.push_back("http/1.1");
+  return record;
+}
+} // namespace
+
+void AbstractCommandTest::testGetUsableHttpsServiceBindingAddressHints()
+{
+  auto usable = createHttpsServiceBindingRecord(
+      1, "example.org", std::string());
+  usable.ipv4hint.push_back("192.0.2.1");
+  usable.ipv6hint.push_back("2001:db8::1");
+
+  auto differentTarget = createHttpsServiceBindingRecord(
+      2, "example.org", "svc.example.org");
+  differentTarget.ipv4hint.push_back("192.0.2.2");
+
+  auto differentPort = createHttpsServiceBindingRecord(
+      3, "example.org", std::string());
+  differentPort.hasPort = true;
+  differentPort.port = 8443;
+  differentPort.ipv4hint.push_back("192.0.2.3");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(differentPort);
+  records.push_back(usable);
+  records.push_back(differentTarget);
+
+  Option option;
+  auto hints =
+      getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
+                                               &option);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, hints.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), hints[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), hints[1]);
+}
+
+void AbstractCommandTest::
+    testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6()
+{
+  auto usable = createHttpsServiceBindingRecord(
+      1, "example.org", std::string());
+  usable.ipv4hint.push_back("192.0.2.1");
+  usable.ipv6hint.push_back("2001:db8::1");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(usable);
+
+  Option option;
+  option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
+  auto hints =
+      getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
+                                               &option);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, hints.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), hints[0]);
+}
+
+void AbstractCommandTest::
+    testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only()
+{
+  auto h2Only = createHttpsServiceBindingRecord(
+      1, "example.org", std::string());
+  h2Only.alpn.clear();
+  h2Only.alpn.push_back("h2");
+  h2Only.noDefaultAlpn = true;
+  h2Only.ipv4hint.push_back("192.0.2.1");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(h2Only);
+
+  Option option;
+  auto hints =
+      getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
+                                               &option);
+
+  CPPUNIT_ASSERT(hints.empty());
 }
 
 } // namespace aria2

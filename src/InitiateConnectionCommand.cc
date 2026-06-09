@@ -113,7 +113,7 @@ bool InitiateConnectionCommand::executeInternal()
     port = proxyRequest->getPort();
   }
   std::vector<std::string> addrs;
-  std::string ipaddr = resolveHostname(addrs, hostname, port);
+  std::string ipaddr = resolveHostname(addrs, hostname, port, !proxyRequest);
   if (ipaddr.empty()) {
     addCommandSelf();
     return false;

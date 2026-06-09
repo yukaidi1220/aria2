@@ -69,6 +69,8 @@
 #include "NameResolver.h"
 #include "uri.h"
 #include "FileEntry.h"
+#include "HttpProtocol.h"
+#include "ServiceBindingSelector.h"
 #include "error_code.h"
 #include "SocketRecvBuffer.h"
 #include "ChecksumCheckIntegrityEntry.h"
@@ -722,6 +724,31 @@ bool continueAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
   asyncNameResolverMan->reset(e, command);
   return addAsyncDnsCacheCommand(e, hostname, port, requestGroup->getGID(),
                                  std::move(pendingResolvers));
+}
+
+bool appendHttpsServiceBindingAddressHints(std::vector<std::string>& addrs,
+                                           DownloadEngine* e,
+                                           const std::string& hostname,
+                                           uint16_t port)
+{
+  auto records = e->findCachedHttpsServiceBindingRecords(hostname, port);
+  if (!records) {
+    return false;
+  }
+
+  bool addressAdded = false;
+  for (const auto& addr :
+       getUsableHttpsServiceBindingAddressHints(*records, hostname, port,
+                                                e->getOption())) {
+    if (std::find(std::begin(addrs), std::end(addrs), addr) ==
+        std::end(addrs)) {
+      addrs.push_back(addr);
+      addressAdded = true;
+      A2_LOG_NETWORK(fmt("DNS: HTTPS RR address hint %s -> %s",
+                         hostname.c_str(), addr.c_str()));
+    }
+  }
+  return addressAdded;
 }
 
 void preserveAsyncDnsCacheFill(DownloadEngine* e, const std::string& hostname,
@@ -1596,6 +1623,35 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
   return ipaddr;
 }
 
+std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
+    const std::vector<dns::ServiceBindingRecord>& records,
+    const std::string& hostname, uint16_t port, const Option* option)
+{
+  dns::ServiceBindingSelectionConfig config;
+  config.defaultAlpn = HTTP_ALPN_HTTP11;
+#ifdef HAVE_LIBNGHTTP2
+  if (option && option->getAsBool(PREF_ENABLE_HTTP2) &&
+      !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING)) {
+    config.supportedAlpns.push_back(HTTP_ALPN_H2);
+  }
+#endif // HAVE_LIBNGHTTP2
+  config.supportedAlpns.push_back(HTTP_ALPN_HTTP11);
+  config.defaultPort = port;
+  if (option && option->getAsBool(PREF_DISABLE_IPV6)) {
+    config.addressFamily = dns::SVCB_ADDRESS_FAMILY_IPV4;
+  }
+
+  std::vector<std::string> hints;
+  for (const auto& selected : dns::selectServiceBindings(records, config)) {
+    if (selected.targetName != hostname || selected.port != port) {
+      continue;
+    }
+    hints.insert(std::end(hints), std::begin(selected.addressHints),
+                 std::end(selected.addressHints));
+  }
+  return hints;
+}
+
 namespace {
 // Returns true if proxy is defined for the given protocol. Otherwise
 // returns false.
@@ -1680,7 +1736,7 @@ std::shared_ptr<Request> AbstractCommand::createProxyRequest() const
 
 std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
                                              const std::string& hostname,
-                                             uint16_t port)
+                                             uint16_t port, bool directOrigin)
 {
   if (util::isNumericHost(hostname)) {
     addrs.push_back(hostname);
@@ -1717,14 +1773,21 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   }
 
 #ifdef ENABLE_ASYNC_DNS
-  if (req_ && req_->getProtocol() == V_HTTPS && hostname == req_->getHost() &&
-      port == req_->getPort()) {
+  auto httpsOriginRequest =
+      directOrigin && req_ && req_->getProtocol() == V_HTTPS &&
+      hostname == req_->getHost() && port == req_->getPort();
+  if (httpsOriginRequest) {
     maybeStartHttpsServiceBindingDiscovery(e_, hostname, port,
                                            requestGroup_->getGID());
   }
 #endif // ENABLE_ASYNC_DNS
 
   e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
+#ifdef ENABLE_ASYNC_DNS
+  if (httpsOriginRequest) {
+    appendHttpsServiceBindingAddressHints(addrs, e_, hostname, port);
+  }
+#endif // ENABLE_ASYNC_DNS
   if (!addrs.empty()) {
 #ifdef ENABLE_ASYNC_DNS
     if (getOption()->getAsBool(PREF_ASYNC_DNS)) {
@@ -1732,6 +1795,11 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
                                 requestGroup_, this);
       addrs.clear();
       e_->findAllCachedIPAddresses(std::back_inserter(addrs), hostname, port);
+#ifdef ENABLE_ASYNC_DNS
+      if (httpsOriginRequest) {
+        appendHttpsServiceBindingAddressHints(addrs, e_, hostname, port);
+      }
+#endif // ENABLE_ASYNC_DNS
     }
 #endif // ENABLE_ASYNC_DNS
     auto ipaddr =
@@ -1811,6 +1879,11 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   e_->findAllCachedIPAddresses(std::back_inserter(cachedAddrs), hostname,
                                 port);
   addrs.swap(cachedAddrs);
+#ifdef ENABLE_ASYNC_DNS
+  if (asyncDnsUsed && httpsOriginRequest) {
+    appendHttpsServiceBindingAddressHints(addrs, e_, hostname, port);
+  }
+#endif // ENABLE_ASYNC_DNS
   if (addrs.empty()) {
     throw DL_ABORT_EX2(fmt(MSG_NAME_RESOLUTION_FAILED, getCuid(),
                            hostname.c_str(), "No usable address returned"),
