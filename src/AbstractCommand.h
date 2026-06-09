@@ -62,6 +62,13 @@ class SocketRecvBuffer;
 #ifdef ENABLE_ASYNC_DNS
 class AsyncNameResolver;
 class AsyncNameResolverMan;
+
+enum HttpsServiceBindingDiscoveryPhase {
+  HTTPS_SERVICE_BINDING_DISCOVERY_SECURE,
+  HTTPS_SERVICE_BINDING_DISCOVERY_EXPLICIT_PLAIN,
+  HTTPS_SERVICE_BINDING_DISCOVERY_EXPLICIT_CARES,
+  HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES,
+};
 #endif // ENABLE_ASYNC_DNS
 
 class AbstractCommand : public Command {
@@ -278,6 +285,11 @@ std::vector<dns::ServiceBindingEndpoint> getHttpsServiceBindingEndpoints(
     const std::vector<dns::ServiceBindingRecord>& records,
     const std::string& originHost, uint16_t originPort,
     const Option* option);
+
+#ifdef ENABLE_ASYNC_DNS
+std::vector<HttpsServiceBindingDiscoveryPhase>
+createHttpsServiceBindingDiscoveryPhases(const Option* option);
+#endif // ENABLE_ASYNC_DNS
 
 } // namespace aria2
 

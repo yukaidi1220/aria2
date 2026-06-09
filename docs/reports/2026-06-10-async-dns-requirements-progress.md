@@ -14,8 +14,9 @@
    - 日志：network 级别打印 `DNS: async DNS disabled; secure DNS resolver config is ignored`。
 
 2. `multi` 中 DoT/DoH server 域名 bootstrap 优先复用显式 plain DNS。
-   - 落点：`src/AsyncNameResolverMan.cc::createPlainBootstrapResolverFactory()`、`src/AbstractCommand.cc::createServiceBindingDiscoveryResolvers()`
-   - 行为：`--async-dns-mode=multi --async-dns-server=udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,https://dns.example.org/dns-query` 下，HTTPS/SVCB TYPE65 discovery 创建 DoT/DoH resolver 时，其 secure server 域名 bootstrap 使用配置里的 `udp://`/`tcp://` plain server；没有显式 plain server 时仍用默认 resolver 配置。
+   - 落点：`src/AsyncNameResolverMan.cc::createPlainBootstrapResolverFactory()`、`src/AbstractCommand.cc::createHttpsServiceBindingDiscoveryPhases()`、`src/AbstractCommand.cc::createServiceBindingDiscoveryPhaseEntries()`
+   - 行为：`--async-dns-mode=multi --async-dns-server=udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,https://dns.example.org/dns-query` 下，下载域名 A/AAAA 主解析和 HTTPS/SVCB TYPE65 discovery 的 secure server 域名 bootstrap 都优先使用配置里的 `udp://`/`tcp://` plain server；没有显式 plain server 时仍用默认 resolver 配置。
+   - 行为：HTTPS/SVCB TYPE65 discovery 已改为阶段式：有 DoT/DoH 时先只启动 secure resolver；secure 阶段全失败或超时后才进入显式 plain DNS；最后进入系统 c-ares。安全 DNS 返回空 HTTPS RR 时会缓存短期空结果并终止，不再继续查 plain。
 
 3. IPv6 默认改为启用。
    - 落点：`src/OptionHandlerFactory.cc`
@@ -57,19 +58,26 @@
    - `testStartAsyncMultiStartsSecureBackendsBeforePlainFallback` 额外断言真实 `createResolvers()` 主阶段只创建 DoT/DoH resolver，不提前创建 plain resolver。
    - 既有 DoT/DoH/multi 配置校验测试显式设置 `async-dns=true`，避免新早退让测试空跑。
 
-2. `test/OptionHandlerTest.cc`
+2. `test/AbstractCommandTest.cc`
+   - `testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem` / `testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit`：覆盖 HTTPS RR discovery 在 c-ares 模式下的系统 DNS 和显式 c-ares -> 系统 c-ares 阶段。
+   - `testCreateHttpsServiceBindingDiscoveryPhasesDot` / `testCreateHttpsServiceBindingDiscoveryPhasesDoh`：覆盖纯 DoT/DoH 的 secure -> 系统 c-ares 阶段。
+   - `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly`：覆盖 `multi` 下 secure-first、secure-only、plain-only 和空 server 的 HTTPS RR discovery 阶段顺序。
+
+3. `test/OptionHandlerTest.cc`
    - `testFactoryMaxConnectionPerServerLimit`：覆盖 `-x 64` 成功、`-x 65` 失败。
 
 ## 当前验证
 
 1. 静态检查：
    - `git diff --check` 通过；只有 Windows 工作区的 LF/CRLF 提示，没有 whitespace error。
+   - HTTPS RR/TYPE65 staged fallback 切片在提交前已通过上述静态检查；本机缺少 `make`/`g++`/`clang++`/`cl`/`cmake`，尚未完成本地编译或单元测试。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
    - 前置提交 `fed40f3e Support config discovery precedence and startup option logs` 的 GitHub Actions build 已通过，run id `27235349508`。
    - 本报告对应的 secure-first fallback 切片已提交为 `0e483039 Implement secure-first async DNS fallback chain`，GitHub Actions build 已通过，run id `27238331842`，耗时 `8m55s`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27238331842
+   - HTTPS RR/TYPE65 staged fallback 切片需通过本次提交后的 GitHub Actions 验证；run 和 artifact 链接会在 CI 完成后追账。
 
 3. artifact：
    - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27238331842/artifacts/7521271861
@@ -88,7 +96,7 @@
 
 ### multi 规则（10-16）
 
-部分完成。第 11、12 条的 secure server 数值地址/域名 bootstrap 路径已有基础，且本轮让 SVCB discovery 里的 secure server 域名 bootstrap 复用显式 plain server。第 10、13、15、16 条已有主链路骨架：`multi` 下载域名先并发 DoT/DoH，secure 全失败后再用显式 plain DNS，然后系统 c-ares，最后同步 `getaddrinfo`，失败才 `NAME_RESOLVE_ERROR`；这些降级会打 network 日志。第 14 条“失败 DNS server 只影响自己”仍主要依赖各 resolver 现有 server retry 逻辑，还需要真实网络/fake server 验收。
+部分完成。第 11、12 条的 secure server 数值地址/域名 bootstrap 路径已有基础，且本轮让 SVCB discovery 里的 secure server 域名 bootstrap 复用显式 plain server。第 10、13、15、16 条已有主链路骨架：`multi` 下载域名先并发 DoT/DoH，secure 全失败后再用显式 plain DNS，然后系统 c-ares，最后同步 `getaddrinfo`，失败才 `NAME_RESOLVE_ERROR`；HTTPS RR/TYPE65 discovery 也已改成 secure -> 显式 plain -> 系统 c-ares 的后台阶段式 fallback，不再把 plain 和 secure resolver 同阶段并行启动。这些降级会打 network 日志。第 14 条“失败 DNS server 只影响自己”仍主要依赖各 resolver 现有 server retry 逻辑，还需要真实网络/fake server 验收。
 
 ### 配置校验（17-20）
 
@@ -100,7 +108,7 @@
 
 ### HTTPS RR / H2 / H3（26-30）
 
-部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，并且 DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server；但 `multi` 下它仍是后台并行 discovery，不是本轮 A/AAAA 主解析那套 secure-first 阶段式 fallback。未启用 H3/无明确能力时“不额外查 HTTPS RR”的精确开关、DoH H2 日志 `DNS: DoH using HTTP/2`、以及 HTTPS RR 在 multi 下完全遵守 plain bootstrap/fallback 规则，还需要继续补。
+部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server，并且 `multi` 下已改为 secure-first 阶段式 fallback；该 discovery 仍是后台任务，不阻塞首连。未启用 H3/无明确能力时“不额外查 HTTPS RR”的精确开关、DoH H2 日志 `DNS: DoH using HTTP/2`，以及真实网络/fake server 验收还需要继续补。
 
 ### 日志可观测性（31-35）
 
@@ -128,6 +136,6 @@
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
 
-5. HTTPS RR/H2/H3 边界：默认不额外查询不需要的 HTTPS RR；补 DoH over H2 日志；H3 继续保持默认关闭和 unsupported 快速拒绝。
+5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback；下一步默认不额外查询不需要的 HTTPS RR，补 DoH over H2 日志；H3 继续保持默认关闭和 unsupported 快速拒绝。
 
 6. 验收报告：CI 通过后补 GitHub Actions run、artifact 链接和实际功能测试结果。

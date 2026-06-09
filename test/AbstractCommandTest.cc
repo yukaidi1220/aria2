@@ -40,6 +40,18 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6);
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only);
   CPPUNIT_TEST(testGetHttpsServiceBindingEndpointsKeepsConnectTarget);
+#ifdef ENABLE_ASYNC_DNS
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit);
+#ifdef ENABLE_SSL
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDot);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDoh);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly);
+#endif // ENABLE_SSL
+#endif // ENABLE_ASYNC_DNS
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -71,6 +83,18 @@ public:
   void testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6();
   void testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only();
   void testGetHttpsServiceBindingEndpointsKeepsConnectTarget();
+#ifdef ENABLE_ASYNC_DNS
+  void testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem();
+  void testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit();
+#ifdef ENABLE_SSL
+  void testCreateHttpsServiceBindingDiscoveryPhasesDot();
+  void testCreateHttpsServiceBindingDiscoveryPhasesDoh();
+  void testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst();
+  void testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly();
+  void testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly();
+  void testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly();
+#endif // ENABLE_SSL
+#endif // ENABLE_ASYNC_DNS
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AbstractCommandTest);
@@ -471,6 +495,19 @@ dns::ServiceBindingRecord createHttpsServiceBindingRecord(
   record.alpn.push_back("http/1.1");
   return record;
 }
+
+#ifdef ENABLE_ASYNC_DNS
+void assertHttpsServiceBindingDiscoveryPhases(
+    const std::vector<HttpsServiceBindingDiscoveryPhase>& expected,
+    const Option& option)
+{
+  auto phases = createHttpsServiceBindingDiscoveryPhases(&option);
+  CPPUNIT_ASSERT_EQUAL(expected.size(), phases.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    CPPUNIT_ASSERT_EQUAL(expected[i], phases[i]);
+  }
+}
+#endif // ENABLE_ASYNC_DNS
 } // namespace
 
 void AbstractCommandTest::testGetUsableHttpsServiceBindingAddressHints()
@@ -585,5 +622,119 @@ void AbstractCommandTest::testGetHttpsServiceBindingEndpointsKeepsConnectTarget(
   CPPUNIT_ASSERT_EQUAL((size_t)1, hints.size());
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), hints[0]);
 }
+
+#ifdef ENABLE_ASYNC_DNS
+void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_CARES);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_CARES);
+  option.put(PREF_ASYNC_DNS_SERVER, "1.1.1.1");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_EXPLICIT_CARES,
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+#ifdef ENABLE_SSL
+void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesDot()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOT);
+  option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_SECURE,
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesDoh()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+  option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_SECURE,
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
+  option.put(PREF_ASYNC_DNS_SERVER,
+             "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
+             "https://dns.example.org/dns-query");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_SECURE,
+          HTTPS_SERVICE_BINDING_DISCOVERY_EXPLICIT_PLAIN,
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
+  option.put(PREF_ASYNC_DNS_SERVER,
+             "dot://dns.example.org,https://dns.example.org/dns-query");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_SECURE,
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
+  option.put(PREF_ASYNC_DNS_SERVER, "udp://1.1.1.1,tcp://1.0.0.1");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_EXPLICIT_PLAIN,
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{
+          HTTPS_SERVICE_BINDING_DISCOVERY_SYSTEM_CARES},
+      option);
+}
+#endif // ENABLE_SSL
+#endif // ENABLE_ASYNC_DNS
 
 } // namespace aria2
