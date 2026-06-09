@@ -253,7 +253,12 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
 
 // Moves ipaddr to the front while preserving the order of other addresses.
 void prioritizeIPAddress(std::vector<std::string>& addrs,
-                         const std::string& ipaddr);
+                          const std::string& ipaddr);
+
+// Moves ipaddr to the front and interleaves remaining dual-stack addresses
+// starting with the opposite family.
+void prioritizeAndInterleaveIPAddress(std::vector<std::string>& addrs,
+                                       const std::string& ipaddr);
 
 } // namespace aria2
 

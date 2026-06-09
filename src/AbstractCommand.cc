@@ -1044,7 +1044,7 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
 }
 
 void prioritizeIPAddress(std::vector<std::string>& addrs,
-                         const std::string& ipaddr)
+                          const std::string& ipaddr)
 {
   auto i = std::find(std::begin(addrs), std::end(addrs), ipaddr);
   if (i == std::end(addrs) || i == std::begin(addrs)) {
@@ -1053,6 +1053,68 @@ void prioritizeIPAddress(std::vector<std::string>& addrs,
   auto selected = std::move(*i);
   addrs.erase(i);
   addrs.insert(std::begin(addrs), std::move(selected));
+}
+
+void prioritizeAndInterleaveIPAddress(std::vector<std::string>& addrs,
+                                       const std::string& ipaddr)
+{
+  auto selectedFamily = getNumericAddressFamily(ipaddr);
+  if (!isSelectableAddressFamily(selectedFamily) ||
+      !hasNumericAddressFamily(addrs, AF_INET) ||
+      !hasNumericAddressFamily(addrs, AF_INET6)) {
+    prioritizeIPAddress(addrs, ipaddr);
+    return;
+  }
+
+  std::vector<std::string> ipv4Addrs;
+  std::vector<std::string> ipv6Addrs;
+  std::vector<std::string> otherAddrs;
+  bool foundSelected = false;
+  for (const auto& addr : addrs) {
+    if (!foundSelected && addr == ipaddr) {
+      foundSelected = true;
+      continue;
+    }
+
+    auto family = getNumericAddressFamily(addr);
+    if (family == AF_INET) {
+      ipv4Addrs.push_back(addr);
+    }
+    else if (family == AF_INET6) {
+      ipv6Addrs.push_back(addr);
+    }
+    else {
+      otherAddrs.push_back(addr);
+    }
+  }
+
+  if (!foundSelected) {
+    prioritizeIPAddress(addrs, ipaddr);
+    return;
+  }
+
+  addrs.clear();
+  addrs.push_back(ipaddr);
+
+  size_t ipv4Index = 0;
+  size_t ipv6Index = 0;
+  auto nextFamily = getOppositeAddressFamily(selectedFamily);
+  while (ipv4Index < ipv4Addrs.size() || ipv6Index < ipv6Addrs.size()) {
+    if (nextFamily == AF_INET) {
+      if (ipv4Index < ipv4Addrs.size()) {
+        addrs.push_back(ipv4Addrs[ipv4Index++]);
+      }
+      nextFamily = AF_INET6;
+    }
+    else {
+      if (ipv6Index < ipv6Addrs.size()) {
+        addrs.push_back(ipv6Addrs[ipv6Index++]);
+      }
+      nextFamily = AF_INET;
+    }
+  }
+  addrs.insert(std::end(addrs), std::begin(otherAddrs),
+               std::end(otherAddrs));
 }
 
 namespace {
@@ -1234,7 +1296,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
             strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
     auto ipaddr =
         selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
-    prioritizeIPAddress(addrs, ipaddr);
+    prioritizeAndInterleaveIPAddress(addrs, ipaddr);
     return ipaddr;
   }
 
@@ -1250,7 +1312,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
 #endif // ENABLE_ASYNC_DNS
     auto ipaddr =
         selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
-    prioritizeIPAddress(addrs, ipaddr);
+    prioritizeAndInterleaveIPAddress(addrs, ipaddr);
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
                     strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
     A2_LOG_NETWORK(
@@ -1331,7 +1393,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
                        error_code::NAME_RESOLVE_ERROR);
   }
   ipaddr = selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
-  prioritizeIPAddress(addrs, ipaddr);
+  prioritizeAndInterleaveIPAddress(addrs, ipaddr);
   return ipaddr;
 }
 

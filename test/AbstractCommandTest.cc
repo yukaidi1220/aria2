@@ -27,6 +27,9 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressIgnoresOtherActiveHostAndPort);
   CPPUNIT_TEST(testPrioritizeIPAddress);
   CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
+  CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddress);
+  CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder);
+  CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -46,6 +49,9 @@ public:
   void testSelectIPAddressIgnoresOtherActiveHostAndPort();
   void testPrioritizeIPAddress();
   void testPrioritizeIPAddressIgnoresUnknownAddress();
+  void testPrioritizeAndInterleaveIPAddress();
+  void testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder();
+  void testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AbstractCommandTest);
@@ -300,6 +306,62 @@ void AbstractCommandTest::testPrioritizeIPAddressIgnoresUnknownAddress()
 
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[0]);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[1]);
+}
+
+void AbstractCommandTest::testPrioritizeAndInterleaveIPAddress()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("192.0.2.2");
+  addrs.push_back("2001:db8::1");
+  addrs.push_back("2001:db8::2");
+  addrs.push_back("192.0.2.3");
+
+  prioritizeAndInterleaveIPAddress(addrs, "192.0.2.2");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[2]);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"), addrs[3]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.3"), addrs[4]);
+
+  prioritizeAndInterleaveIPAddress(addrs, "2001:db8::1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"), addrs[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"), addrs[2]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[3]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.3"), addrs[4]);
+}
+
+void AbstractCommandTest::
+    testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("192.0.2.2");
+  addrs.push_back("192.0.2.3");
+
+  prioritizeAndInterleaveIPAddress(addrs, "192.0.2.2");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.3"), addrs[2]);
+}
+
+void AbstractCommandTest::
+    testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("target.example");
+  addrs.push_back("2001:db8::1");
+
+  prioritizeAndInterleaveIPAddress(addrs, "192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("target.example"), addrs[2]);
 }
 
 } // namespace aria2
