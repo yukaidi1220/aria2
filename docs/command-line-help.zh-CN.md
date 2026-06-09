@@ -34,7 +34,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
 | DoT / DoH | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot`；当前直连模式要求 DNS server 连接目标是数值 IP；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
-| IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsCacheCommand.cc`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
+| IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
 | DoH over H2 | 未实现 | DoH resolver 固定发送 HTTP/1.1 `POST application/dns-message`，不会因为 `--enable-http2=true` 变成 H2 | `src/AsyncDohNameResolver.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存 | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
 | HTTP/3 / H3 / QUIC | 只有禁用占位参数 | `--enable-http3=true` 会被 `UnsupportedFeatureOptionHandler` 拒绝；源码没有 QUIC 传输、H3 command、`h3` ALPN 分发或依赖探测 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
@@ -120,6 +120,12 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 - `src/AsyncDnsServerConfig.cc` 解析和校验 DoT/DoH server 格式。
 - `src/AsyncDotNameResolver.cc` / `src/AsyncDohNameResolver.cc` 驱动网络状态机并写 `A2_LOG_NETWORK`。
 
+构建边界：
+
+- 没有 `ENABLE_ASYNC_DNS` 的构建不会注册 `--async-dns`、`--async-dns-mode`、`--async-dns-server`；这时只能走同步 `NameResolver`，也没有下面的 DoT/DoH 后端。
+- 有异步 DNS 但没有 `ENABLE_SSL` 的构建，`--async-dns-mode` 只接受 `cares`。`dot` / `doh` 不是“会降级”的值，而是参数校验阶段就不接受。
+- 因此 Windows 旧系统能不能用 DoT/DoH，先看构建依赖和 TLS 后端；仅在配置文件里填写 `mode` 不能绕过缺失的构建能力。
+
 选项：
 
 ```console
@@ -162,7 +168,7 @@ DoH 规则：
 - `AsyncDohNameResolver.cc::createDohRequest()` 发送 HTTP/1.1 `POST`，`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
 - 写了 `#TLS_HOST` 时，DoH TLS SNI、证书校验主机和 HTTP `Host:` 头都使用该主机；TCP 仍连接 URL 里的数值地址，HTTP request target 不包含 fragment。
 - 当前 DoH resolver 自己不启用 HTTP/2/ALPN，也不复用普通下载链路的 H2 连接；`--enable-http2=true` 只影响 HTTP/HTTPS 下载请求，不会把 DoH 改造成 DoH over H2。
-- 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。
+- 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。当前实现按 `Connection: close` 的单请求 HTTP/1.1 交互处理，不支持 DoH over H2/H3，也没有 DoH 连接复用。
 
 双栈解析：
 
@@ -180,6 +186,7 @@ XP/Win7 注意：
 - `configure.ac` 的 mingw 注释说明 `getaddrinfo` 依赖 `_WIN32_WINNT >= 0x0501`；源码还保留了 Windows 地址配置探测路径。
 - `SocketCore::checkAddrconfig()` 在 mingw 下使用 `GetAdaptersAddresses()`；失败时会保守假设 IPv4/IPv6 都可用。因此旧系统若 IPv6 栈坏或 AAAA 查询拖慢，建议显式加 `--disable-ipv6=true`。
 - 默认 `--min-tls-version=TLSv1.2`。老 XP/Win7 的原生 TLS 栈可能不满足现代 TLS/ALPN/SNI 需求；需要兼容时优先考虑 OpenSSL/GnuTLS 构建；涉及 H2 时还必须确认 OpenSSL ALPN 或 GnuTLS ALPN 可用，或只在受控环境降低 TLS 版本。
+- DoT/DoH 在旧 Windows 上没有额外的系统 DNS 魔法：DoT/DoH server 连接仍走普通 socket + TLS。数值 DNS server 写法能避免“先解析 DNS server 自己”的递归问题，但证书校验、TLS 版本、IPv6 可达性仍受构建和系统环境影响。
 
 ### 2.4 HTTP/2 / `--enable-http2`
 
@@ -218,6 +225,7 @@ XP/Win7 注意：
 - HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 时会优雅退回 HTTP/1.1，不应因为 ALPN 缺失直接中断 HTTPS 下载。
 - 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用带 OpenSSL ALPN 或 GnuTLS ALPN 的构建；如果目标环境只要求能下载，HTTP/1.1 fallback 能保持可用。
 - `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端 SNI override 能力限制，见 2.1。
+- 当前源码没有 WinTLS/AppleTLS 的 ALPN 接线；这不是“操作系统新一点就一定能 H2”的问题，而是 `TLSSession` 后端能力声明决定的。后续若给这些后端补 ALPN，必须同步改这里。
 
 文档状态：
 
@@ -254,10 +262,12 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 ### 2.7 XP/Win7 兼容边界
 
 - 旧 Windows 能不能用这些新网络能力，首先取决于构建使用的 TLS 后端和依赖库，不是单看命令行参数名。
+- XP/Win7 的安全底线应按“HTTP/1.1 能正常回退、IPv4 可用、证书校验可用”来设计；HTTP/2、FakeSNI override、DoT/DoH 属于依赖构建能力的增强项，不要把它们写成旧系统必然可用。
 - HTTP/2 需要 libnghttp2、HTTPS、TLS ALPN 三个条件同时满足。缺 libnghttp2 时 `--enable-http2=true` 会被拒绝；TLS 后端不支持 ALPN 时，`SocketCore::tlsHandshake()` 会清空 ALPN 并继续握手，最终走 HTTP/1.1。
 - FakeSNI override 需要 TLS 后端允许“发送的 SNI”和“证书校验主机”不同。OpenSSL/GnuTLS 当前源码声明支持；WinTLS/AppleTLS 没声明，遇到 override 会提前失败。普通 SNI 与证书校验主机一致时不属于 FakeSNI override。
 - DoT/DoH 依赖 SSL 构建和可用的数值 DNS server。老系统如果 IPv6 支持不稳，建议显式 `--disable-ipv6=true`，避免 AAAA 查询或 IPv6 server 连接拖慢。
 - 默认最低 TLS 版本是 `TLSv1.2`。为了兼容旧系统降低 TLS 版本只适合受控环境；公网下载优先换带 OpenSSL/GnuTLS 的构建，比关证书校验靠谱得多。
+- 没有异步 DNS 的构建不存在 `--async-dns-mode=doh|dot` 这条路；无 SSL 构建即使有异步 DNS 也只接受 `cares`。旧系统兼容文档里要把这点写死，别让用户以为 DoH/DoT 会自动降级成普通 DNS。
 
 ## 3. 选项总览
 
