@@ -1,9 +1,24 @@
 #include "HttpInitiateConnectionCommand.h"
 
+#include <chrono>
+#include <memory>
+#include <string>
+#include <utility>
+#include <vector>
+
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "A2STR.h"
+#include "DownloadEngine.h"
+#include "GroupId.h"
+#include "Option.h"
+#include "RequestGroup.h"
 #include "Request.h"
+#include "SelectEventPoll.h"
 #include "ServiceBindingSelector.h"
+#include "SocketCore.h"
+#include "a2functional.h"
+#include "prefs.h"
 
 namespace aria2 {
 
@@ -14,6 +29,9 @@ class HttpInitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityUsesSvcbEndpoint);
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityIgnoresHttpEndpoint);
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityIgnoresMismatchedEndpoint);
+  CPPUNIT_TEST(testSelectConnectionAuthorityUsesCachedSvcbEndpoint);
+  CPPUNIT_TEST(testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint);
+  CPPUNIT_TEST(testCreateNextCommandReusesSvcbConnectPortPooledSocket);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -22,6 +40,9 @@ public:
   void testSelectHttpConnectionAuthorityUsesSvcbEndpoint();
   void testSelectHttpConnectionAuthorityIgnoresHttpEndpoint();
   void testSelectHttpConnectionAuthorityIgnoresMismatchedEndpoint();
+  void testSelectConnectionAuthorityUsesCachedSvcbEndpoint();
+  void testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint();
+  void testCreateNextCommandReusesSvcbConnectPortPooledSocket();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpInitiateConnectionCommandTest);
@@ -45,6 +66,54 @@ dns::ServiceBindingEndpoint makeEndpoint(
   endpoint.connectPort = connectPort;
   return endpoint;
 }
+
+dns::ServiceBindingRecord makeSvcbRecord()
+{
+  dns::ServiceBindingRecord record;
+  record.ownerName = "origin.example";
+  record.priority = 1;
+  record.targetName = "svc.example";
+  record.hasPort = true;
+  record.port = 8443;
+  record.alpn.push_back("http/1.1");
+  record.ipv4hint.push_back("192.0.2.10");
+  return record;
+}
+
+std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>
+createSocketPair()
+{
+  SocketCore server;
+  server.bind(0);
+  server.beginListen();
+  server.setBlockingMode();
+
+  auto endpoint = server.getAddrInfo();
+  auto client = std::make_shared<SocketCore>();
+  client->establishConnection("localhost", endpoint.port);
+  CPPUNIT_ASSERT(client->isWritable(5));
+
+  auto inbound = server.acceptConnection();
+  inbound->setBlockingMode();
+
+  return std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>(
+      client, inbound);
+}
+
+class TestHttpInitiateConnectionCommand
+    : public HttpInitiateConnectionCommand {
+public:
+  using HttpInitiateConnectionCommand::createNextCommand;
+  using HttpInitiateConnectionCommand::selectConnectionAuthority;
+
+  TestHttpInitiateConnectionCommand(
+      const std::shared_ptr<Request>& request,
+      const std::shared_ptr<RequestGroup>& requestGroup, DownloadEngine* e)
+      : HttpInitiateConnectionCommand(1, request, nullptr,
+                                      requestGroup.get(), e)
+  {
+  }
+};
 } // namespace
 
 void HttpInitiateConnectionCommandTest::
@@ -119,6 +188,88 @@ void HttpInitiateConnectionCommandTest::
 
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), authority.hostname);
   CPPUNIT_ASSERT_EQUAL((uint16_t)443, authority.port);
+}
+
+void HttpInitiateConnectionCommandTest::
+    testSelectConnectionAuthorityUsesCachedSvcbEndpoint()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(makeSvcbRecord());
+  e.cacheHttpsServiceBindingRecords("origin.example", 443, records, 60);
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto authority = command.selectConnectionAuthority(nullptr);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example"), authority.hostname);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, authority.port);
+  CPPUNIT_ASSERT(!authority.directOrigin);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.10"),
+                       e.findCachedIPAddress("svc.example", 8443));
+  CPPUNIT_ASSERT(e.findCachedIPAddress("origin.example", 443).empty());
+}
+
+void HttpInitiateConnectionCommandTest::
+    testSelectConnectionAuthorityUsesProxyWithCachedSvcbEndpoint()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  auto proxyRequest = makeRequest("http://proxy.example:8080/");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(makeSvcbRecord());
+  e.cacheHttpsServiceBindingRecords("origin.example", 443, records, 60);
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto authority = command.selectConnectionAuthority(proxyRequest);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("proxy.example"), authority.hostname);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8080, authority.port);
+  CPPUNIT_ASSERT(!authority.directOrigin);
+  CPPUNIT_ASSERT(e.findCachedIPAddress("svc.example", 8443).empty());
+}
+
+void HttpInitiateConnectionCommandTest::
+    testCreateNextCommandReusesSvcbConnectPortPooledSocket()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  auto sockets = createSocketPair();
+  auto peerInfo = sockets.first->getPeerInfo();
+  const uint16_t connectPort = peerInfo.port == 8443 ? 8444 : 8443;
+  e.poolSocket("192.0.2.10", connectPort, A2STR::NIL, 0, sockets.first,
+               std::chrono::seconds(60));
+  std::vector<std::string> resolvedAddresses;
+  resolvedAddresses.push_back("192.0.2.10");
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto nextCommand =
+      command.createNextCommand("svc.example", "192.0.2.10", connectPort,
+                                resolvedAddresses, nullptr);
+
+  CPPUNIT_ASSERT(nextCommand);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example"),
+                       request->getConnectedHostname());
+  CPPUNIT_ASSERT_EQUAL(peerInfo.addr, request->getConnectedAddr());
+  CPPUNIT_ASSERT_EQUAL(peerInfo.port, request->getConnectedPort());
 }
 
 } // namespace aria2

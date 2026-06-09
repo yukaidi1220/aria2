@@ -108,6 +108,32 @@ HttpConnectionAuthority selectHttpConnectionAuthority(
 
 namespace {
 
+void cacheHttpConnectionAuthorityAddressHints(
+    DownloadEngine* e, const dns::ServiceBindingEndpoint& endpoint)
+{
+  for (const auto& addr : endpoint.addressHints) {
+    if (e->cacheIPAddress(endpoint.connectHost, addr, endpoint.connectPort)) {
+      A2_LOG_NETWORK(fmt("DNS: HTTPS RR address hint %s -> %s",
+                         endpoint.connectHost.c_str(), addr.c_str()));
+    }
+  }
+}
+
+std::vector<dns::ServiceBindingEndpoint> getCachedHttpsServiceBindingEndpoints(
+    DownloadEngine* e, const Request* request, const Option* option)
+{
+  std::vector<dns::ServiceBindingEndpoint> endpoints;
+  auto records =
+      e->findCachedHttpsServiceBindingRecords(request->getHost(),
+                                              request->getPort());
+  if (!records) {
+    return endpoints;
+  }
+
+  return getHttpsServiceBindingEndpoints(*records, request->getHost(),
+                                         request->getPort(), option);
+}
+
 #ifdef ENABLE_SSL
 std::function<bool(const std::shared_ptr<SocketCore>&)>
 createTLSSocketReusePredicate(const Request* request, const Option* option)
@@ -194,18 +220,18 @@ popReusablePooledSocket(DownloadEngine* e, const Request* request,
 std::shared_ptr<SocketCore>
 popReusablePooledSocket(DownloadEngine* e, const Request* request,
                         const Option* option,
-                        const std::vector<std::string>& resolvedAddresses)
+                        const std::vector<std::string>& resolvedAddresses,
+                        uint16_t connectPort)
 {
 #ifdef ENABLE_SSL
   auto predicate = createTLSSocketReusePredicate(request, option);
   if (predicate) {
-    return e->popPooledSocket(resolvedAddresses, request->getPort(),
-                              predicate);
+    return e->popPooledSocket(resolvedAddresses, connectPort, predicate);
   }
 #else  // !ENABLE_SSL
   (void)option;
 #endif // ENABLE_SSL
-  return e->popPooledSocket(resolvedAddresses, request->getPort());
+  return e->popPooledSocket(resolvedAddresses, connectPort);
 }
 
 #ifdef HAVE_LIBNGHTTP2
@@ -231,6 +257,43 @@ HttpInitiateConnectionCommand::HttpInitiateConnectionCommand(
 }
 
 HttpInitiateConnectionCommand::~HttpInitiateConnectionCommand() = default;
+
+ConnectionAuthority HttpInitiateConnectionCommand::selectConnectionAuthority(
+    const std::shared_ptr<Request>& proxyRequest) const
+{
+  if (proxyRequest) {
+    return InitiateConnectionCommand::selectConnectionAuthority(proxyRequest);
+  }
+
+  auto endpoints = getCachedHttpsServiceBindingEndpoints(
+      getDownloadEngine(), getRequest().get(), getOption().get());
+  auto httpAuthority =
+      selectHttpConnectionAuthority(getRequest().get(), nullptr, endpoints);
+
+  ConnectionAuthority authority;
+  authority.hostname = std::move(httpAuthority.hostname);
+  authority.port = httpAuthority.port;
+  authority.directOrigin =
+      authority.hostname == getRequest()->getHost() &&
+      authority.port == getRequest()->getPort();
+
+  if (!authority.directOrigin) {
+    for (const auto& endpoint : endpoints) {
+      if (endpoint.connectHost == authority.hostname &&
+          endpoint.connectPort == authority.port) {
+        cacheHttpConnectionAuthorityAddressHints(getDownloadEngine(),
+                                                 endpoint);
+        A2_LOG_NETWORK(fmt("HTTPS RR: connect target %s:%u for origin %s:%u",
+                           authority.hostname.c_str(), authority.port,
+                           getRequest()->getHost().c_str(),
+                           getRequest()->getPort()));
+        break;
+      }
+    }
+  }
+
+  return authority;
+}
 
 std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
     const std::string& hostname, const std::string& addr, uint16_t port,
@@ -380,7 +443,7 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
   else {
     std::shared_ptr<SocketCore> pooledSocket =
         popReusablePooledSocket(getDownloadEngine(), getRequest().get(),
-                                getOption().get(), resolvedAddresses);
+                                getOption().get(), resolvedAddresses, port);
     if (!pooledSocket) {
       A2_LOG_INFO(fmt(MSG_CONNECTING_TO_SERVER, getCuid(), addr.c_str(), port));
       A2_LOG_NETWORK(

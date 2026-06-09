@@ -38,6 +38,7 @@
 #include "AbstractCommand.h"
 
 #include <chrono>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
@@ -45,6 +46,12 @@ namespace aria2 {
 
 struct BackupConnectInfo;
 class ConnectCommand;
+
+struct ConnectionAuthority {
+  std::string hostname;
+  uint16_t port = 0;
+  bool directOrigin = false;
+};
 
 std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
                                   const std::string& ipaddr);
@@ -71,6 +78,9 @@ protected:
                     uint16_t port,
                     const std::vector<std::string>& resolvedAddresses,
                     const std::shared_ptr<Request>& proxyRequest) = 0;
+
+  virtual ConnectionAuthority
+  selectConnectionAuthority(const std::shared_ptr<Request>& proxyRequest) const;
 
   void setConnectedAddrInfo(const std::shared_ptr<Request>& req,
                             const std::string& hostname,

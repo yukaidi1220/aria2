@@ -78,6 +78,9 @@ HttpConnectionAuthority selectHttpConnectionAuthority(
 // calling execute() returns true.
 class HttpInitiateConnectionCommand : public InitiateConnectionCommand {
 protected:
+  virtual ConnectionAuthority selectConnectionAuthority(
+      const std::shared_ptr<Request>& proxyRequest) const CXX11_OVERRIDE;
+
   virtual std::unique_ptr<Command> createNextCommand(
       const std::string& hostname, const std::string& addr, uint16_t port,
       const std::vector<std::string>& resolvedAddresses,

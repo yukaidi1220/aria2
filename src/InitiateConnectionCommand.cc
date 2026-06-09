@@ -101,19 +101,13 @@ InitiateConnectionCommand::~InitiateConnectionCommand() = default;
 
 bool InitiateConnectionCommand::executeInternal()
 {
-  std::string hostname;
-  uint16_t port;
   std::shared_ptr<Request> proxyRequest = createProxyRequest();
-  if (!proxyRequest) {
-    hostname = getRequest()->getHost();
-    port = getRequest()->getPort();
-  }
-  else {
-    hostname = proxyRequest->getHost();
-    port = proxyRequest->getPort();
-  }
+  auto authority = selectConnectionAuthority(proxyRequest);
+  auto& hostname = authority.hostname;
+  auto port = authority.port;
   std::vector<std::string> addrs;
-  std::string ipaddr = resolveHostname(addrs, hostname, port, !proxyRequest);
+  std::string ipaddr =
+      resolveHostname(addrs, hostname, port, authority.directOrigin);
   if (ipaddr.empty()) {
     addCommandSelf();
     return false;
@@ -148,6 +142,22 @@ bool InitiateConnectionCommand::executeInternal()
     }
     throw;
   }
+}
+
+ConnectionAuthority InitiateConnectionCommand::selectConnectionAuthority(
+    const std::shared_ptr<Request>& proxyRequest) const
+{
+  ConnectionAuthority authority;
+  if (proxyRequest) {
+    authority.hostname = proxyRequest->getHost();
+    authority.port = proxyRequest->getPort();
+    return authority;
+  }
+
+  authority.hostname = getRequest()->getHost();
+  authority.port = getRequest()->getPort();
+  authority.directOrigin = true;
+  return authority;
 }
 
 void InitiateConnectionCommand::setConnectedAddrInfo(
