@@ -41,6 +41,7 @@
 #include "fmt.h"
 #include "LogFactory.h"
 #include "DownloadEngine.h"
+#include "FileEntry.h"
 #include "Request.h"
 #include "prefs.h"
 #include "SocketRecvBuffer.h"

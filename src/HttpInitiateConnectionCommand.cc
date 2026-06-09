@@ -39,6 +39,7 @@
 #include "Request.h"
 #include "RequestGroup.h"
 #include "DownloadEngine.h"
+#include "FileEntry.h"
 #include "HttpConnection.h"
 #include "HttpRequest.h"
 #ifdef HAVE_LIBNGHTTP2
