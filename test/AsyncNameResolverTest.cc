@@ -2,6 +2,7 @@
 #ifdef ENABLE_SSL
 #  include "AsyncDohNameResolver.h"
 #  include "AsyncDotNameResolver.h"
+#  include "PlainBootstrapResolver.h"
 #endif // ENABLE_SSL
 #include "AsyncNameResolverMan.h"
 
@@ -54,9 +55,11 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testValidateConfigAcceptsMultiServers);
   CPPUNIT_TEST(testValidateConfigRejectsMultiPlainDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsMultiBadPlainPort);
+  CPPUNIT_TEST(testPlainBootstrapFactoryUsesConfiguredPlainServers);
   CPPUNIT_TEST(testConfigureAcceptsDotIpServers);
   CPPUNIT_TEST(testConfigureAcceptsDotDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDotEmptyServerList);
+  CPPUNIT_TEST(testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled);
   CPPUNIT_TEST(testConfigureAcceptsDohIpServers);
   CPPUNIT_TEST(testConfigureAcceptsDohDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDohEmptyServerList);
@@ -98,9 +101,11 @@ public:
   void testValidateConfigAcceptsMultiServers();
   void testValidateConfigRejectsMultiPlainDomainServer();
   void testValidateConfigRejectsMultiBadPlainPort();
+  void testPlainBootstrapFactoryUsesConfiguredPlainServers();
   void testConfigureAcceptsDotIpServers();
   void testConfigureAcceptsDotDomainServer();
   void testConfigureRejectsDotEmptyServerList();
+  void testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled();
   void testConfigureAcceptsDohIpServers();
   void testConfigureAcceptsDohDomainServer();
   void testConfigureRejectsDohEmptyServerList();
@@ -545,6 +550,7 @@ void AsyncNameResolverTest::testValidateConfigRejectsMultiBadPlainPort()
 void AsyncNameResolverTest::testConfigureAcceptsDotIpServers()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOT);
   option.put(PREF_ASYNC_DNS_SERVER, "1.1.1.1");
   AsyncNameResolverMan resolverMan;
@@ -555,6 +561,7 @@ void AsyncNameResolverTest::testConfigureAcceptsDotIpServers()
 void AsyncNameResolverTest::testConfigureAcceptsDotDomainServer()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOT);
   option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
   AsyncNameResolverMan resolverMan;
@@ -565,6 +572,7 @@ void AsyncNameResolverTest::testConfigureAcceptsDotDomainServer()
 void AsyncNameResolverTest::testConfigureRejectsDotEmptyServerList()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOT);
   option.put(PREF_ASYNC_DNS_SERVER, "");
   AsyncNameResolverMan resolverMan;
@@ -573,9 +581,33 @@ void AsyncNameResolverTest::testConfigureRejectsDotEmptyServerList()
                        Exception);
 }
 
+void AsyncNameResolverTest::testPlainBootstrapFactoryUsesConfiguredPlainServers()
+{
+  auto config =
+      parseAsyncDnsMultiServerConfigList("udp://1.1.1.1,tcp://1.0.0.1");
+  auto factory = createPlainBootstrapResolverFactory(config);
+
+  auto resolver = factory(AF_INET);
+
+  CPPUNIT_ASSERT(dynamic_cast<PlainBootstrapResolver*>(resolver.get()));
+}
+
+void AsyncNameResolverTest::
+    testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+  AsyncNameResolverMan resolverMan;
+
+  configureAsyncNameResolverMan(&resolverMan, &option);
+}
+
 void AsyncNameResolverTest::testConfigureAcceptsDohIpServers()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "https://1.1.1.1/dns-query");
   AsyncNameResolverMan resolverMan;
@@ -586,6 +618,7 @@ void AsyncNameResolverTest::testConfigureAcceptsDohIpServers()
 void AsyncNameResolverTest::testConfigureAcceptsDohDomainServer()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
   AsyncNameResolverMan resolverMan;
@@ -596,6 +629,7 @@ void AsyncNameResolverTest::testConfigureAcceptsDohDomainServer()
 void AsyncNameResolverTest::testConfigureRejectsDohEmptyServerList()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "");
   AsyncNameResolverMan resolverMan;
@@ -607,6 +641,7 @@ void AsyncNameResolverTest::testConfigureRejectsDohEmptyServerList()
 void AsyncNameResolverTest::testConfigureAcceptsMultiServers()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
   option.put(PREF_ASYNC_DNS_SERVER,
              "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
@@ -619,6 +654,7 @@ void AsyncNameResolverTest::testConfigureAcceptsMultiServers()
 void AsyncNameResolverTest::testConfigureRejectsMultiPlainDomainServer()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
   option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
   AsyncNameResolverMan resolverMan;

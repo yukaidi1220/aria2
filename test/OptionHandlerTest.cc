@@ -26,6 +26,7 @@ class OptionHandlerTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testParameterOptionHandler);
   CPPUNIT_TEST(testAsyncDnsModeOptionHandler);
   CPPUNIT_TEST(testDefaultOptionHandler);
+  CPPUNIT_TEST(testFactoryMaxConnectionPerServerLimit);
   CPPUNIT_TEST(testFloatNumberOptionHandler);
   CPPUNIT_TEST(testFloatNumberOptionHandler_min);
   CPPUNIT_TEST(testFloatNumberOptionHandler_max);
@@ -46,6 +47,7 @@ public:
   void testParameterOptionHandler();
   void testAsyncDnsModeOptionHandler();
   void testDefaultOptionHandler();
+  void testFactoryMaxConnectionPerServerLimit();
   void testFloatNumberOptionHandler();
   void testFloatNumberOptionHandler_min();
   void testFloatNumberOptionHandler_max();
@@ -363,6 +365,25 @@ void OptionHandlerTest::testDefaultOptionHandler()
   CPPUNIT_ASSERT(handler.hasTag(TAG_ADVANCED));
   CPPUNIT_ASSERT(handler.hasTag(TAG_BASIC));
   CPPUNIT_ASSERT(!handler.hasTag(TAG_HTTP));
+}
+
+void OptionHandlerTest::testFactoryMaxConnectionPerServerLimit()
+{
+  OptionParser parser;
+  parser.setOptionHandlers(OptionHandlerFactory::createOptionHandlers());
+  Option option;
+  KeyVals options;
+
+  options.push_back(
+      KeyVals::value_type(PREF_MAX_CONNECTION_PER_SERVER->k, "64"));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string("64"),
+                       option.get(PREF_MAX_CONNECTION_PER_SERVER));
+
+  options.clear();
+  options.push_back(
+      KeyVals::value_type(PREF_MAX_CONNECTION_PER_SERVER->k, "65"));
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
 }
 
 void OptionHandlerTest::testFloatNumberOptionHandler()

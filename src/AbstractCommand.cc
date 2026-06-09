@@ -643,6 +643,8 @@ createServiceBindingDiscoveryResolvers(const Option* option)
     auto config = parseAsyncDnsMultiServerConfigList(servers);
     auto hasSecureServers =
         !config.dotServers.empty() || !config.dohServers.empty();
+    auto plainBootstrapResolverFactory =
+        createPlainBootstrapResolverFactory(config);
     if (!config.udpServers.empty()) {
       appendServiceBindingResolver(
           resolvers,
@@ -664,7 +666,7 @@ createServiceBindingDiscoveryResolvers(const Option* option)
           resolvers, std::make_shared<AsyncDotNameResolver>(
                          AF_UNSPEC, std::move(config.dotServers),
                          AsyncDotTransportFactory(),
-                         AsyncDotBootstrapResolverFactory(), bootstrapFamily));
+                         plainBootstrapResolverFactory, bootstrapFamily));
     }
     if (!config.dohServers.empty()) {
       appendServiceBindingResolver(
@@ -672,7 +674,7 @@ createServiceBindingDiscoveryResolvers(const Option* option)
                          AF_UNSPEC, std::move(config.dohServers),
                          AsyncDohTransportFactory(),
                          isDohHttp2Enabled(option),
-                         AsyncDohBootstrapResolverFactory(), bootstrapFamily));
+                         plainBootstrapResolverFactory, bootstrapFamily));
     }
   }
 #endif // ENABLE_SSL

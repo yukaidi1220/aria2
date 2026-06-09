@@ -37,6 +37,7 @@
 
 #include "common.h"
 
+#include <functional>
 #include <vector>
 #include <string>
 #include <memory>
@@ -154,6 +155,9 @@ void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
 #ifdef ENABLE_SSL
 AsyncDnsMultiServerConfig
 parseAsyncDnsMultiServerConfigList(const std::string& value);
+
+std::function<std::unique_ptr<AsyncResolver>(int)>
+createPlainBootstrapResolverFactory(const AsyncDnsMultiServerConfig& config);
 #endif // ENABLE_SSL
 
 } // namespace aria2

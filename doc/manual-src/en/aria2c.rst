@@ -183,7 +183,7 @@ HTTP/FTP/SFTP Options
 .. option:: -x, --max-connection-per-server=<NUM>
 
   The maximum number of connections to one server for each download.
-  Default: ``1``
+  Possible Values: ``1`` - ``64`` Default: ``1``
 
 .. option:: --max-file-not-found=<NUM>
 
@@ -491,8 +491,9 @@ HTTP Specific Options
 
   Set a base64 encoded binary ECHConfigList.  Supplying this option also
   enables required ECH for HTTPS.  This first stage only supports manual
-  ECHConfigList input; HTTPS/SVCB discovery and cache are available, but
-  automatic ECH configuration, retry configs, target switching, and HTTP/3
+  ECHConfigList input; HTTPS/SVCB discovery and cache are available, and a
+  cached HTTPS/SVCB endpoint can change the direct TCP connect target/port and
+  narrow TLS ALPN. Automatic ECH configuration, retry configs, and HTTP/3
   discovery/use are not implemented yet.
 
   This option cannot be combined with :option:`--tls-sni-host` overrides.
@@ -1352,7 +1353,8 @@ Advanced Options
   Background HTTPS/SVCB TYPE65 discovery follows the selected backend: c-ares
   for ``cares``, DoT for ``dot``, DoH for ``doh``, and the configured backends
   for ``multi``. Discovery results are cached for later connection decisions,
-  but they do not yet automatically change the download target, ALPN, ECH, or
+  and a cached direct HTTPS endpoint can change the TCP connect target/port and
+  narrow TLS ALPN. Discovery results do not yet automatically configure ECH or
   HTTP/3 behavior.
   Default: ``cares``
 

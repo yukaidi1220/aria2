@@ -219,30 +219,6 @@ std::string normalizePlainDnsServer(const std::string& value)
   return server;
 }
 
-std::function<std::unique_ptr<AsyncResolver>(int)>
-createPlainBootstrapResolverFactory(const AsyncDnsMultiServerConfig& config)
-{
-  const auto udpServers = config.udpServers;
-  const auto tcpServers = config.tcpServers;
-  if (udpServers.empty() && tcpServers.empty()) {
-    return [](int family) {
-      return make_unique<AsyncNameResolver>(family, std::string());
-    };
-  }
-  return [udpServers, tcpServers](int family) {
-    std::vector<std::shared_ptr<AsyncResolver>> resolvers;
-    if (!udpServers.empty()) {
-      resolvers.push_back(
-          std::make_shared<AsyncNameResolver>(family, udpServers));
-    }
-    if (!tcpServers.empty()) {
-      resolvers.push_back(
-          std::make_shared<AsyncNameResolver>(family, tcpServers, true));
-    }
-    return make_unique<PlainBootstrapResolver>(family, std::move(resolvers));
-  };
-}
-
 } // namespace
 
 AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
@@ -286,6 +262,30 @@ AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
     }
   }
   return config;
+}
+
+std::function<std::unique_ptr<AsyncResolver>(int)>
+createPlainBootstrapResolverFactory(const AsyncDnsMultiServerConfig& config)
+{
+  const auto udpServers = config.udpServers;
+  const auto tcpServers = config.tcpServers;
+  if (udpServers.empty() && tcpServers.empty()) {
+    return [](int family) {
+      return make_unique<AsyncNameResolver>(family, std::string());
+    };
+  }
+  return [udpServers, tcpServers](int family) {
+    std::vector<std::shared_ptr<AsyncResolver>> resolvers;
+    if (!udpServers.empty()) {
+      resolvers.push_back(
+          std::make_shared<AsyncNameResolver>(family, udpServers));
+    }
+    if (!tcpServers.empty()) {
+      resolvers.push_back(
+          std::make_shared<AsyncNameResolver>(family, tcpServers, true));
+    }
+    return make_unique<PlainBootstrapResolver>(family, std::move(resolvers));
+  };
 }
 #endif // ENABLE_SSL
 
@@ -608,6 +608,12 @@ void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
 void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
                                    Option* option)
 {
+  if (!option->getAsBool(PREF_ASYNC_DNS)) {
+    A2_LOG_NETWORK(
+        "DNS: async DNS disabled; secure DNS resolver config is ignored");
+    return;
+  }
+
   // Currently, aria2 checks configured addresses at the startup. But
   // there are chances that interfaces are not setup at that
   // moment. For example, if aria2 is used as daemon, it may start
