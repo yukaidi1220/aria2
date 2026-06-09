@@ -142,6 +142,26 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP2));
 #endif // !HAVE_LIBNGHTTP2
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP3->k, A2_V_FALSE));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP3));
+
+  Option defaultOption;
+  parser.parseDefaultValues(defaultOption);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       defaultOption.get(PREF_ENABLE_HTTP3));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP3->k, A2_V_TRUE));
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP3));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTP3->k, ""));
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP3));
 }
 
 void OptionHandlerTest::testNumberOptionHandler()

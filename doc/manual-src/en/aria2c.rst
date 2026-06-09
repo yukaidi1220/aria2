@@ -504,6 +504,15 @@ HTTP Specific Options
 
   Default: ``false``
 
+.. option:: --enable-http3 [false]
+
+  Reserve the HTTP/3 over QUIC option name for future use. HTTP/3 is not
+  implemented in this aria2 build and no QUIC library is linked. Setting this
+  option to ``true`` fails during option parsing instead of silently falling
+  back to HTTP/1.1 or HTTP/2.
+
+  Default: ``false``
+
 .. option:: --hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>
 
   Set host mappings for HTTP and HTTPS requests. Entries are comma separated

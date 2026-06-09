@@ -564,6 +564,11 @@
     "                              builds reject true. HTTP/2 uses ALPN, can\n" \
     "                              reuse active or idle connections, and is\n" \
     "                              disabled when HTTP pipelining is enabled.")
+#define TEXT_ENABLE_HTTP3                                               \
+  _(" --enable-http3[=false]\n"                                         \
+    "                              Reserve the HTTP/3 over QUIC option name for\n" \
+    "                              future use. HTTP/3 is not implemented; setting\n" \
+    "                              true fails during option parsing.")
 #define TEXT_HOSTS_MAPPING                                              \
   _(" --hosts-mapping=HOST:IPADDR[,IPADDR:HOST]...\n"                   \
     "                              Set host mappings. HOST:IPADDR connects HOST\n" \
