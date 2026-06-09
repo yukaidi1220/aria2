@@ -11,6 +11,7 @@ class DNSCacheTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(DNSCacheTest);
   CPPUNIT_TEST(testFind);
   CPPUNIT_TEST(testFindAll);
+  CPPUNIT_TEST(testPutReturnsWhetherAddressAdded);
   CPPUNIT_TEST(testMarkBad);
   CPPUNIT_TEST(testPutBadAddr);
   CPPUNIT_TEST(testRemove);
@@ -30,6 +31,7 @@ public:
 
   void testFind();
   void testFindAll();
+  void testPutReturnsWhetherAddressAdded();
   void testMarkBad();
   void testPutBadAddr();
   void testRemove();
@@ -61,6 +63,14 @@ void DNSCacheTest::testFindAll()
 
   CPPUNIT_ASSERT_EQUAL((size_t)1, addrs.size());
   CPPUNIT_ASSERT_EQUAL(std::string("::1"), addrs[0]);
+}
+
+void DNSCacheTest::testPutReturnsWhetherAddressAdded()
+{
+  CPPUNIT_ASSERT(!cache_.put("www", "192.168.0.1", 80));
+  CPPUNIT_ASSERT(cache_.put("www", "192.168.0.2", 80));
+  CPPUNIT_ASSERT(!cache_.put("www", "192.168.0.2", 80));
+  CPPUNIT_ASSERT(cache_.put("www", "192.168.0.2", 443));
 }
 
 void DNSCacheTest::testMarkBad()

@@ -901,10 +901,10 @@ DownloadEngine::findCachedIPAddress(const std::string& hostname,
   return dnsCache_->find(hostname, port);
 }
 
-void DownloadEngine::cacheIPAddress(const std::string& hostname,
+bool DownloadEngine::cacheIPAddress(const std::string& hostname,
                                     const std::string& ipaddr, uint16_t port)
 {
-  dnsCache_->put(hostname, ipaddr, port);
+  return dnsCache_->put(hostname, ipaddr, port);
 }
 
 void DownloadEngine::markBadIPAddress(const std::string& hostname,

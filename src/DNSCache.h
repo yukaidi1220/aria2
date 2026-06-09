@@ -122,7 +122,7 @@ public:
     }
   }
 
-  void put(const std::string& hostname, const std::string& ipaddr,
+  bool put(const std::string& hostname, const std::string& ipaddr,
            uint16_t port);
 
   void markBad(const std::string& hostname, const std::string& ipaddr,

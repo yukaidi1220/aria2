@@ -260,11 +260,12 @@ public:
       switch (entry.resolver->getStatus()) {
       case AsyncResolver::STATUS_SUCCESS:
         for (const auto& addr : entry.resolver->getResolvedAddresses()) {
-          e_->cacheIPAddress(hostname_, addr, port_);
-          addressCached = true;
-          A2_LOG_NETWORK(
-              fmt("DNS: background cache fill %s -> %s", hostname_.c_str(),
-                  addr.c_str()));
+          if (e_->cacheIPAddress(hostname_, addr, port_)) {
+            addressCached = true;
+            A2_LOG_NETWORK(
+                fmt("DNS: background cache fill %s -> %s", hostname_.c_str(),
+                    addr.c_str()));
+          }
         }
         deleteNameResolverCheck(entry);
         entry.resolver.reset();

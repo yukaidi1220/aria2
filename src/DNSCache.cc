@@ -173,17 +173,18 @@ const std::string& DNSCache::find(const std::string& hostname,
   }
 }
 
-void DNSCache::put(const std::string& hostname, const std::string& ipaddr,
+bool DNSCache::put(const std::string& hostname, const std::string& ipaddr,
                    uint16_t port)
 {
   auto target = std::make_shared<CacheEntry>(hostname, port);
   auto i = entries_.lower_bound(target);
   if (i != entries_.end() && *(*i) == *target) {
-    (*i)->add(ipaddr);
+    return (*i)->add(ipaddr);
   }
   else {
     target->add(ipaddr);
     entries_.insert(i, target);
+    return true;
   }
 }
 

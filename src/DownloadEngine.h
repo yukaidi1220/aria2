@@ -403,7 +403,7 @@ public:
     dnsCache_->findAll(out, hostname, port);
   }
 
-  void cacheIPAddress(const std::string& hostname, const std::string& ipaddr,
+  bool cacheIPAddress(const std::string& hostname, const std::string& ipaddr,
                       uint16_t port);
 
   void markBadIPAddress(const std::string& hostname, const std::string& ipaddr,
