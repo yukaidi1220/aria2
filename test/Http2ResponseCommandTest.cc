@@ -40,6 +40,7 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testWaitsForSelectedStreamHeaders);
   CPPUNIT_TEST(testCanSkipConnectionAccounting);
   CPPUNIT_TEST(testZeroLengthResponseCompletes);
+  CPPUNIT_TEST(testResponseKeepsSinglePipelinedRequest);
   CPPUNIT_TEST(testBodyDownloadCommandCreationDoesNotThrow);
   CPPUNIT_TEST(testDownloadCommandCompletesKnownLengthBody);
   CPPUNIT_TEST(testDownloadCommandWaitsForEndStreamAfterBody);
@@ -64,6 +65,7 @@ public:
   void testWaitsForSelectedStreamHeaders();
   void testCanSkipConnectionAccounting();
   void testZeroLengthResponseCompletes();
+  void testResponseKeepsSinglePipelinedRequest();
   void testBodyDownloadCommandCreationDoesNotThrow();
   void testDownloadCommandCompletesKnownLengthBody();
   void testDownloadCommandWaitsForEndStreamAfterBody();
@@ -397,6 +399,20 @@ void Http2ResponseCommandTest::testZeroLengthResponseCompletes()
   fixture.submitResponseHeaders(createHeaders(200, 0));
 
   CPPUNIT_ASSERT(command->executeInternal());
+}
+
+void Http2ResponseCommandTest::testResponseKeepsSinglePipelinedRequest()
+{
+  CommandFixture fixture;
+  fixture.option->put(PREF_MAX_HTTP_PIPELINING, "4");
+  fixture.request->setPipeliningHint(true);
+  fixture.request->setMaxPipelinedRequest(4);
+  auto command = fixture.makeCommand();
+  fixture.submitResponseHeaders(createHeaders(200, 0));
+
+  CPPUNIT_ASSERT(command->executeInternal());
+  CPPUNIT_ASSERT(!fixture.request->isPipeliningHint());
+  CPPUNIT_ASSERT_EQUAL(1, fixture.request->getMaxPipelinedRequest());
 }
 
 void Http2ResponseCommandTest::testBodyDownloadCommandCreationDoesNotThrow()

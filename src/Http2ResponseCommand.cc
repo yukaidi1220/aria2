@@ -114,6 +114,7 @@ bool Http2ResponseCommand::executeInternal()
   }
   httpResponse->setCuid(getCuid());
   httpResponse->setHttpRequest(std::move(httpRequest_));
+  getRequest()->setPipeliningHint(false);
   return processHttpResponse(std::move(httpResponse));
 }
 
