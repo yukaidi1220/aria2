@@ -48,7 +48,13 @@ namespace aria2 {
 namespace {
 const char* familyToString(int family)
 {
-  return family == AF_INET6 ? "AAAA" : "A";
+  if (family == AF_INET6) {
+    return "AAAA";
+  }
+  if (family == AF_INET) {
+    return "A";
+  }
+  return "A/AAAA";
 }
 
 const char* socketTypeToString(int type)

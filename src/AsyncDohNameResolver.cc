@@ -42,6 +42,7 @@
 #include <utility>
 
 #include "A2STR.h"
+#include "AsyncNameResolver.h"
 #include "DlAbortEx.h"
 #include "DnsMessage.h"
 #include "EventPoll.h"
@@ -605,19 +606,29 @@ createSocketCoreDohTransport(const AsyncDohServerConfig&)
 
 AsyncDohNameResolver::AsyncDohNameResolver(
     int family, std::vector<AsyncDohServerConfig> servers,
-    AsyncDohTransportFactory transportFactory, bool enableHttp2)
+    AsyncDohTransportFactory transportFactory, bool enableHttp2,
+    AsyncDohBootstrapResolverFactory bootstrapResolverFactory,
+    int bootstrapFamily)
     : family_(family),
+      bootstrapFamily_(bootstrapFamily),
       servers_(std::move(servers)),
       enableHttp2_(enableHttp2),
       transportFactory_(std::move(transportFactory)),
+      bootstrapResolverFactory_(std::move(bootstrapResolverFactory)),
       exchange_(make_unique<AsyncDohHttp1Exchange>()),
       status_(STATUS_READY),
       state_(DOH_IDLE),
       serverIndex_(0),
+      currentEndpointIndex_(0),
       queryId_(0)
 {
   if (!transportFactory_) {
     transportFactory_ = createSocketCoreDohTransport;
+  }
+  if (!bootstrapResolverFactory_) {
+    bootstrapResolverFactory_ = [](int family) {
+      return make_unique<AsyncNameResolver>(family, std::string());
+    };
   }
 }
 
@@ -629,8 +640,11 @@ void AsyncDohNameResolver::resolve(const std::string& name)
   resolvedAddresses_.clear();
   error_.clear();
   socks_.clear();
+  bootstrapResolver_.reset();
   transport_.reset();
   serverIndex_ = 0;
+  currentEndpoints_.clear();
+  currentEndpointIndex_ = 0;
   exchange_->reset();
   status_ = STATUS_QUERYING;
   state_ = DOH_IDLE;
@@ -658,8 +672,9 @@ void AsyncDohNameResolver::resolve(const std::string& name)
 
 bool AsyncDohNameResolver::usable() const
 {
-  return status_ == STATUS_QUERYING && transport_ &&
-         transport_->getSocket() != badSocket();
+  return status_ == STATUS_QUERYING &&
+         ((bootstrapResolver_ && bootstrapResolver_->usable()) ||
+          (transport_ && transport_->getSocket() != badSocket()));
 }
 
 bool AsyncDohNameResolver::startCurrentServer()
@@ -668,17 +683,11 @@ bool AsyncDohNameResolver::startCurrentServer()
     const auto& server = servers_[serverIndex_];
     try {
       exchange_->reset();
-      transport_ = transportFactory_(server);
-      if (!transport_) {
-        throw DL_ABORT_EX("DoH transport factory returned null");
-      }
-      transport_->startConnect(server.connectHost, server.port);
-      state_ = DOH_CONNECTING;
-      A2_LOG_NETWORK(fmt("DNS: DoH connecting to %s for %s %s",
-                         formatDohServer(server).c_str(),
-                         familyToString(family_), hostname_.c_str()));
-      updateSocketEvents();
-      return true;
+      transport_.reset();
+      bootstrapResolver_.reset();
+      currentEndpoints_.clear();
+      currentEndpointIndex_ = 0;
+      return prepareCurrentServerEndpoints();
     }
     catch (Exception& e) {
       error_ = e.what();
@@ -692,6 +701,99 @@ bool AsyncDohNameResolver::startCurrentServer()
   return false;
 }
 
+bool AsyncDohNameResolver::prepareCurrentServerEndpoints()
+{
+  const auto& server = servers_[serverIndex_];
+  if (!util::isNumericHost(server.connectHost)) {
+    return startBootstrapResolver();
+  }
+
+  currentEndpoints_.push_back(server.connectHost);
+  currentEndpointIndex_ = 0;
+  return startCurrentEndpoint();
+}
+
+bool AsyncDohNameResolver::startBootstrapResolver()
+{
+  const auto& server = servers_[serverIndex_];
+  bootstrapResolver_ = bootstrapResolverFactory_(bootstrapFamily_);
+  if (!bootstrapResolver_) {
+    throw DL_ABORT_EX("DoH bootstrap resolver factory returned null");
+  }
+  bootstrapResolver_->resolve(server.connectHost);
+  state_ = DOH_BOOTSTRAP_RESOLVING;
+  A2_LOG_NETWORK(fmt("DNS: DoH bootstrap resolving %s for %s %s",
+                     server.connectHost.c_str(), familyToString(family_),
+                     hostname_.c_str()));
+  if (bootstrapResolver_->getStatus() == STATUS_SUCCESS) {
+    currentEndpoints_ = bootstrapResolver_->getResolvedAddresses();
+    bootstrapResolver_.reset();
+    currentEndpointIndex_ = 0;
+    if (currentEndpoints_.empty()) {
+      throw DL_ABORT_EX("DoH bootstrap returned no address");
+    }
+    return startCurrentEndpoint();
+  }
+  if (bootstrapResolver_->getStatus() == STATUS_ERROR) {
+    auto error = bootstrapResolver_->getError();
+    bootstrapResolver_.reset();
+    throw DL_ABORT_EX(
+        fmt("DoH bootstrap failed for %s: %s", server.connectHost.c_str(),
+            error.c_str()));
+  }
+  updateBootstrapSocketEvents();
+  return true;
+}
+
+bool AsyncDohNameResolver::startCurrentEndpoint()
+{
+  const auto& server = servers_[serverIndex_];
+  while (currentEndpointIndex_ < currentEndpoints_.size()) {
+    const auto& connectHost = currentEndpoints_[currentEndpointIndex_];
+    try {
+      exchange_->reset();
+      transport_ = transportFactory_(server);
+      if (!transport_) {
+        throw DL_ABORT_EX("DoH transport factory returned null");
+      }
+      transport_->startConnect(connectHost, server.port);
+      state_ = DOH_CONNECTING;
+      A2_LOG_NETWORK(fmt("DNS: DoH connecting to %s via %s for %s %s",
+                         formatDohServer(server).c_str(),
+                         formatHost(connectHost).c_str(),
+                         familyToString(family_), hostname_.c_str()));
+      updateSocketEvents();
+      return true;
+    }
+    catch (Exception& e) {
+      error_ = e.what();
+      A2_LOG_NETWORK(fmt("DNS: DoH endpoint %s for server %s failed: %s",
+                         formatHost(connectHost).c_str(),
+                         formatDohServer(server).c_str(), error_.c_str()));
+      ++currentEndpointIndex_;
+      transport_.reset();
+    }
+  }
+  return failCurrentServerOrRetry(
+      error_.empty() ? "DoH server connection failed" : error_);
+}
+
+bool AsyncDohNameResolver::failCurrentEndpointOrServer(std::string error)
+{
+  const auto& server = servers_[serverIndex_];
+  if (currentEndpointIndex_ + 1 < currentEndpoints_.size()) {
+    A2_LOG_NETWORK(fmt("DNS: DoH endpoint %s for server %s failed: %s",
+                       formatHost(currentEndpoints_[currentEndpointIndex_])
+                           .c_str(),
+                       formatDohServer(server).c_str(), error.c_str()));
+    ++currentEndpointIndex_;
+    transport_.reset();
+    state_ = DOH_IDLE;
+    return startCurrentEndpoint();
+  }
+  return failCurrentServerOrRetry(std::move(error));
+}
+
 bool AsyncDohNameResolver::failCurrentServerOrRetry(std::string error)
 {
   if (serverIndex_ + 1 < servers_.size()) {
@@ -699,7 +801,10 @@ bool AsyncDohNameResolver::failCurrentServerOrRetry(std::string error)
     A2_LOG_NETWORK(fmt("DNS: DoH server %s failed: %s",
                        formatDohServer(server).c_str(), error.c_str()));
     ++serverIndex_;
+    bootstrapResolver_.reset();
     transport_.reset();
+    currentEndpoints_.clear();
+    currentEndpointIndex_ = 0;
     state_ = DOH_IDLE;
     return startCurrentServer();
   }
@@ -714,6 +819,7 @@ void AsyncDohNameResolver::fail(std::string error)
   status_ = STATUS_ERROR;
   state_ = DOH_FAILED;
   socks_.clear();
+  bootstrapResolver_.reset();
   transport_.reset();
   A2_LOG_NETWORK(fmt("DNS: DoH %s %s failed: %s", familyToString(family_),
                      hostname_.empty() ? "(pending)" : hostname_.c_str(),
@@ -738,6 +844,10 @@ int AsyncDohNameResolver::getEventsForWantDirection(int defaultEvent) const
 void AsyncDohNameResolver::updateSocketEvents()
 {
   socks_.clear();
+  if (state_ == DOH_BOOTSTRAP_RESOLVING) {
+    updateBootstrapSocketEvents();
+    return;
+  }
   if (!transport_) {
     return;
   }
@@ -769,6 +879,17 @@ void AsyncDohNameResolver::updateSocketEvents()
   }
 }
 
+void AsyncDohNameResolver::updateBootstrapSocketEvents()
+{
+  socks_.clear();
+  if (!bootstrapResolver_) {
+    return;
+  }
+  const auto& bootstrapSocks = bootstrapResolver_->getsock();
+  socks_.insert(std::end(socks_), std::begin(bootstrapSocks),
+                std::end(bootstrapSocks));
+}
+
 bool AsyncDohNameResolver::eventReady(sock_t readfd, sock_t writefd) const
 {
   if (!transport_) {
@@ -776,6 +897,21 @@ bool AsyncDohNameResolver::eventReady(sock_t readfd, sock_t writefd) const
   }
   const auto fd = transport_->getSocket();
   return readfd == fd || writefd == fd;
+}
+
+bool AsyncDohNameResolver::bootstrapEventReady(sock_t readfd,
+                                               sock_t writefd) const
+{
+  if (!bootstrapResolver_) {
+    return false;
+  }
+  const auto& bootstrapSocks = bootstrapResolver_->getsock();
+  for (const auto& sock : bootstrapSocks) {
+    if (readfd == sock.fd || writefd == sock.fd) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool AsyncDohNameResolver::canProcessBufferedRead() const
@@ -811,7 +947,7 @@ void AsyncDohNameResolver::processBufferedRead()
       }
     }
     catch (Exception& e) {
-      failCurrentServerOrRetry(e.what());
+      failCurrentEndpointOrServer(e.what());
       break;
     }
   }
@@ -853,6 +989,16 @@ void AsyncDohNameResolver::prepareExchangeForSelectedProtocol()
 
 void AsyncDohNameResolver::process(sock_t readfd, sock_t writefd)
 {
+  if (status_ == STATUS_QUERYING && state_ == DOH_BOOTSTRAP_RESOLVING) {
+    if (bootstrapEventReady(readfd, writefd) ||
+        (readfd == badSocket() && writefd == badSocket())) {
+      processBootstrapResolver(readfd, writefd);
+      return;
+    }
+    updateSocketEvents();
+    return;
+  }
+
   if (status_ != STATUS_QUERYING || !transport_ ||
       !eventReady(readfd, writefd)) {
     processBufferedRead();
@@ -882,21 +1028,56 @@ void AsyncDohNameResolver::process(sock_t readfd, sock_t writefd)
     }
   }
   catch (Exception& e) {
-    failCurrentServerOrRetry(e.what());
+    failCurrentEndpointOrServer(e.what());
   }
   updateSocketEvents();
 }
 
 void AsyncDohNameResolver::processTimeout()
 {
+  if (status_ == STATUS_QUERYING && state_ == DOH_BOOTSTRAP_RESOLVING) {
+    processBootstrapResolver(badSocket(), badSocket());
+    return;
+  }
   processBufferedRead();
+}
+
+void AsyncDohNameResolver::processBootstrapResolver(sock_t readfd,
+                                                    sock_t writefd)
+{
+  if (!bootstrapResolver_) {
+    updateSocketEvents();
+    return;
+  }
+  bootstrapResolver_->process(readfd, writefd);
+  if (bootstrapResolver_->getStatus() == STATUS_SUCCESS) {
+    const auto& addrs = bootstrapResolver_->getResolvedAddresses();
+    currentEndpoints_.assign(std::begin(addrs), std::end(addrs));
+    bootstrapResolver_.reset();
+    currentEndpointIndex_ = 0;
+    if (currentEndpoints_.empty()) {
+      failCurrentServerOrRetry("DoH bootstrap returned no address");
+      return;
+    }
+    startCurrentEndpoint();
+    return;
+  }
+  if (bootstrapResolver_->getStatus() == STATUS_ERROR) {
+    auto error = fmt("DoH bootstrap failed for %s: %s",
+                     servers_[serverIndex_].connectHost.c_str(),
+                     bootstrapResolver_->getError().c_str());
+    bootstrapResolver_.reset();
+    failCurrentServerOrRetry(error);
+    return;
+  }
+  updateSocketEvents();
 }
 
 void AsyncDohNameResolver::processConnecting()
 {
   auto error = transport_->getSocketError();
   if (!error.empty()) {
-    failCurrentServerOrRetry(
+    failCurrentEndpointOrServer(
         fmt("DoH connection failed: %s", error.c_str()));
     return;
   }

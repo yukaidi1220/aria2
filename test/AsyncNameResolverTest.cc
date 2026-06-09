@@ -18,6 +18,7 @@
 #include "Exception.h"
 #include "Option.h"
 #include "prefs.h"
+#include "SelectEventPoll.h"
 #include "SocketCore.h"
 
 namespace aria2 {
@@ -30,25 +31,29 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails);
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv6SucceedsAndIPv4IsPending);
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPending);
+  CPPUNIT_TEST(testAsyncResolverWriteEventUsesExceptFd);
+  CPPUNIT_TEST(testAsyncResolverExceptFdIsProcessedAsWriteReady);
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testCreateDotResolver);
-  CPPUNIT_TEST(testCreateDotResolverRejectsDomainServer);
+  CPPUNIT_TEST(testCreateDotResolverAcceptsDomainServer);
+  CPPUNIT_TEST(testCreateDotResolverUsesIPv4BootstrapWhenIPv6Disabled);
   CPPUNIT_TEST(testCreateDotResolverRejectsEmptyServerList);
   CPPUNIT_TEST(testCreateDohResolver);
-  CPPUNIT_TEST(testCreateDohResolverRejectsDomainServer);
+  CPPUNIT_TEST(testCreateDohResolverAcceptsDomainServer);
+  CPPUNIT_TEST(testCreateDohResolverUsesUnspecBootstrapForDualStack);
   CPPUNIT_TEST(testCreateDohResolverRejectsEmptyServerList);
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
-  CPPUNIT_TEST(testValidateConfigRejectsDotDomainServer);
+  CPPUNIT_TEST(testValidateConfigAcceptsDotDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
   CPPUNIT_TEST(testValidateConfigAcceptsDohIpServers);
-  CPPUNIT_TEST(testValidateConfigRejectsDohDomainServer);
+  CPPUNIT_TEST(testValidateConfigAcceptsDohDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDohEmptyServerList);
   CPPUNIT_TEST(testConfigureAcceptsDotIpServers);
-  CPPUNIT_TEST(testConfigureRejectsDotDomainServer);
+  CPPUNIT_TEST(testConfigureAcceptsDotDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDotEmptyServerList);
   CPPUNIT_TEST(testConfigureAcceptsDohIpServers);
-  CPPUNIT_TEST(testConfigureRejectsDohDomainServer);
+  CPPUNIT_TEST(testConfigureAcceptsDohDomainServer);
   CPPUNIT_TEST(testConfigureRejectsDohEmptyServerList);
 #endif // ENABLE_SSL
   CPPUNIT_TEST_SUITE_END();
@@ -63,25 +68,29 @@ public:
   void testGetStatusSucceedsWhenIPv6SucceedsAndIPv4Fails();
   void testGetStatusSucceedsWhenIPv6SucceedsAndIPv4IsPending();
   void testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPending();
+  void testAsyncResolverWriteEventUsesExceptFd();
+  void testAsyncResolverExceptFdIsProcessedAsWriteReady();
   void testValidateConfigLeavesCaresServersUnchanged();
 #ifdef ENABLE_SSL
   void testCreateDotResolver();
-  void testCreateDotResolverRejectsDomainServer();
+  void testCreateDotResolverAcceptsDomainServer();
+  void testCreateDotResolverUsesIPv4BootstrapWhenIPv6Disabled();
   void testCreateDotResolverRejectsEmptyServerList();
   void testCreateDohResolver();
-  void testCreateDohResolverRejectsDomainServer();
+  void testCreateDohResolverAcceptsDomainServer();
+  void testCreateDohResolverUsesUnspecBootstrapForDualStack();
   void testCreateDohResolverRejectsEmptyServerList();
   void testValidateConfigAcceptsDotIpServers();
-  void testValidateConfigRejectsDotDomainServer();
+  void testValidateConfigAcceptsDotDomainServer();
   void testValidateConfigRejectsDotEmptyServerList();
   void testValidateConfigAcceptsDohIpServers();
-  void testValidateConfigRejectsDohDomainServer();
+  void testValidateConfigAcceptsDohDomainServer();
   void testValidateConfigRejectsDohEmptyServerList();
   void testConfigureAcceptsDotIpServers();
-  void testConfigureRejectsDotDomainServer();
+  void testConfigureAcceptsDotDomainServer();
   void testConfigureRejectsDotEmptyServerList();
   void testConfigureAcceptsDohIpServers();
-  void testConfigureRejectsDohDomainServer();
+  void testConfigureAcceptsDohDomainServer();
   void testConfigureRejectsDohEmptyServerList();
 #endif // ENABLE_SSL
 };
@@ -270,6 +279,44 @@ void AsyncNameResolverTest::testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPendin
   CPPUNIT_ASSERT_EQUAL(AF_INET6, pendingResolvers[0]->getFamily());
 }
 
+void AsyncNameResolverTest::testAsyncResolverWriteEventUsesExceptFd()
+{
+  fd_set rfds;
+  fd_set wfds;
+  fd_set efds;
+  FD_ZERO(&rfds);
+  FD_ZERO(&wfds);
+  FD_ZERO(&efds);
+  AsyncResolverSocketEntry ent{77, EventPoll::EVENT_WRITE};
+
+  auto nfds = addAsyncResolverSocketEntryFdSet(ent, &rfds, &wfds, &efds);
+
+  CPPUNIT_ASSERT_EQUAL(static_cast<sock_t>(78), nfds);
+  CPPUNIT_ASSERT(!FD_ISSET(ent.fd, &rfds));
+  CPPUNIT_ASSERT(FD_ISSET(ent.fd, &wfds));
+  CPPUNIT_ASSERT(FD_ISSET(ent.fd, &efds));
+}
+
+void AsyncNameResolverTest::testAsyncResolverExceptFdIsProcessedAsWriteReady()
+{
+  fd_set rfds;
+  fd_set wfds;
+  fd_set efds;
+  FD_ZERO(&rfds);
+  FD_ZERO(&wfds);
+  FD_ZERO(&efds);
+  AsyncResolverSocketEntry ent{77, EventPoll::EVENT_WRITE};
+  FD_SET(ent.fd, &efds);
+  auto readfd = AsyncResolver::badSocket();
+  auto writefd = AsyncResolver::badSocket();
+
+  getReadyAsyncResolverSocketEntryFds(ent, &rfds, &wfds, &efds, readfd,
+                                      writefd);
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::badSocket(), readfd);
+  CPPUNIT_ASSERT_EQUAL(ent.fd, writefd);
+}
+
 void AsyncNameResolverTest::testValidateConfigLeavesCaresServersUnchanged()
 {
   validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_CARES,
@@ -289,13 +336,30 @@ void AsyncNameResolverTest::testCreateDotResolver()
   CPPUNIT_ASSERT_EQUAL(AF_INET, resolver->getFamily());
 }
 
-void AsyncNameResolverTest::testCreateDotResolverRejectsDomainServer()
+void AsyncNameResolverTest::testCreateDotResolverAcceptsDomainServer()
 {
   AsyncNameResolverMan resolverMan;
   resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOT);
   resolverMan.setServers("dns.example.org");
 
-  CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
+  auto resolver = resolverMan.createResolver(AF_INET);
+
+  CPPUNIT_ASSERT(dynamic_cast<AsyncDotNameResolver*>(resolver.get()));
+  CPPUNIT_ASSERT_EQUAL(AF_INET, resolver->getFamily());
+}
+
+void AsyncNameResolverTest::testCreateDotResolverUsesIPv4BootstrapWhenIPv6Disabled()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOT);
+  resolverMan.setServers("dns.example.org");
+  resolverMan.setIPv6(false);
+
+  auto resolver = resolverMan.createResolver(AF_INET);
+
+  auto dotResolver = dynamic_cast<AsyncDotNameResolver*>(resolver.get());
+  CPPUNIT_ASSERT(dotResolver);
+  CPPUNIT_ASSERT_EQUAL(AF_INET, dotResolver->getBootstrapFamily());
 }
 
 void AsyncNameResolverTest::testCreateDotResolverRejectsEmptyServerList()
@@ -318,13 +382,29 @@ void AsyncNameResolverTest::testCreateDohResolver()
   CPPUNIT_ASSERT_EQUAL(AF_INET, resolver->getFamily());
 }
 
-void AsyncNameResolverTest::testCreateDohResolverRejectsDomainServer()
+void AsyncNameResolverTest::testCreateDohResolverAcceptsDomainServer()
 {
   AsyncNameResolverMan resolverMan;
   resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOH);
   resolverMan.setServers("https://dns.example.org/dns-query");
 
-  CPPUNIT_ASSERT_THROW(resolverMan.createResolver(AF_INET), Exception);
+  auto resolver = resolverMan.createResolver(AF_INET);
+
+  CPPUNIT_ASSERT(dynamic_cast<AsyncDohNameResolver*>(resolver.get()));
+  CPPUNIT_ASSERT_EQUAL(AF_INET, resolver->getFamily());
+}
+
+void AsyncNameResolverTest::testCreateDohResolverUsesUnspecBootstrapForDualStack()
+{
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_DOH);
+  resolverMan.setServers("https://dns.example.org/dns-query");
+
+  auto resolver = resolverMan.createResolver(AF_INET);
+
+  auto dohResolver = dynamic_cast<AsyncDohNameResolver*>(resolver.get());
+  CPPUNIT_ASSERT(dohResolver);
+  CPPUNIT_ASSERT_EQUAL(AF_UNSPEC, dohResolver->getBootstrapFamily());
 }
 
 void AsyncNameResolverTest::testCreateDohResolverRejectsEmptyServerList()
@@ -342,12 +422,10 @@ void AsyncNameResolverTest::testValidateConfigAcceptsDotIpServers()
       "1.1.1.1,[2606:4700:4700::1111]:853");
 }
 
-void AsyncNameResolverTest::testValidateConfigRejectsDotDomainServer()
+void AsyncNameResolverTest::testValidateConfigAcceptsDotDomainServer()
 {
-  CPPUNIT_ASSERT_THROW(
-      validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOT,
-                                      "dns.example.org"),
-      Exception);
+  validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOT,
+                                  "dns.example.org");
 }
 
 void AsyncNameResolverTest::testValidateConfigRejectsDotEmptyServerList()
@@ -365,12 +443,10 @@ void AsyncNameResolverTest::testValidateConfigAcceptsDohIpServers()
       "https://[2606:4700:4700::1111]:443/dns-query");
 }
 
-void AsyncNameResolverTest::testValidateConfigRejectsDohDomainServer()
+void AsyncNameResolverTest::testValidateConfigAcceptsDohDomainServer()
 {
-  CPPUNIT_ASSERT_THROW(
-      validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOH,
-                                      "https://dns.example.org/dns-query"),
-      Exception);
+  validateAsyncNameResolverConfig(AsyncNameResolverMan::RESOLVER_DOH,
+                                  "https://dns.example.org/dns-query");
 }
 
 void AsyncNameResolverTest::testValidateConfigRejectsDohEmptyServerList()
@@ -390,15 +466,14 @@ void AsyncNameResolverTest::testConfigureAcceptsDotIpServers()
   configureAsyncNameResolverMan(&resolverMan, &option);
 }
 
-void AsyncNameResolverTest::testConfigureRejectsDotDomainServer()
+void AsyncNameResolverTest::testConfigureAcceptsDotDomainServer()
 {
   Option option;
   option.put(PREF_ASYNC_DNS_MODE, V_DOT);
   option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
   AsyncNameResolverMan resolverMan;
 
-  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
-                       Exception);
+  configureAsyncNameResolverMan(&resolverMan, &option);
 }
 
 void AsyncNameResolverTest::testConfigureRejectsDotEmptyServerList()
@@ -422,15 +497,14 @@ void AsyncNameResolverTest::testConfigureAcceptsDohIpServers()
   configureAsyncNameResolverMan(&resolverMan, &option);
 }
 
-void AsyncNameResolverTest::testConfigureRejectsDohDomainServer()
+void AsyncNameResolverTest::testConfigureAcceptsDohDomainServer()
 {
   Option option;
   option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
   AsyncNameResolverMan resolverMan;
 
-  CPPUNIT_ASSERT_THROW(configureAsyncNameResolverMan(&resolverMan, &option),
-                       Exception);
+  configureAsyncNameResolverMan(&resolverMan, &option);
 }
 
 void AsyncNameResolverTest::testConfigureRejectsDohEmptyServerList()

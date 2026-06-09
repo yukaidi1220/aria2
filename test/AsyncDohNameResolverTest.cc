@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <cstring>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include <cppunit/extensions/HelperMacros.h>
@@ -53,6 +54,10 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testRejectBodyLargerThanContentLength);
   CPPUNIT_TEST(testResponseIdMismatchFails);
   CPPUNIT_TEST(testRetryNextServerOnConnectError);
+  CPPUNIT_TEST(testDomainServerUsesBootstrapAddress);
+  CPPUNIT_TEST(testDomainServerUsesAsyncBootstrapAddress);
+  CPPUNIT_TEST(testDomainServerRetriesNextBootstrapAddress);
+  CPPUNIT_TEST(testDomainServerRetriesNextServerOnBootstrapError);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -84,6 +89,10 @@ public:
   void testRejectBodyLargerThanContentLength();
   void testResponseIdMismatchFails();
   void testRetryNextServerOnConnectError();
+  void testDomainServerUsesBootstrapAddress();
+  void testDomainServerUsesAsyncBootstrapAddress();
+  void testDomainServerRetriesNextBootstrapAddress();
+  void testDomainServerRetriesNextServerOnBootstrapError();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AsyncDohNameResolverTest);
@@ -289,6 +298,9 @@ public:
     connectHost = host;
     connectPort = port;
     started = true;
+    if (connectHost == "198.51.100.1") {
+      socketError = "connection refused";
+    }
   }
 
   virtual sock_t getSocket() const CXX11_OVERRIDE { return fd_; }
@@ -393,9 +405,7 @@ public:
   {
     auto transport = make_unique<FakeDohTransport>(nextFd++);
     transports.push_back(transport.get());
-    if (server.connectHost == "198.51.100.1") {
-      transport->socketError = "connection refused";
-    }
+    (void)server;
     std::unique_ptr<AsyncDohTransport> baseTransport(std::move(transport));
     return baseTransport;
   }
@@ -404,11 +414,116 @@ public:
   std::vector<FakeDohTransport*> transports;
 };
 
+class FakeBootstrapResolver : public AsyncResolver {
+public:
+  FakeBootstrapResolver(std::vector<std::string> addrs,
+                        STATUS status = STATUS_SUCCESS,
+                        std::string error = std::string(),
+                        std::vector<std::string>* hostnames = nullptr)
+      : addrs_(std::move(addrs)),
+        error_(std::move(error)),
+        status_(status),
+        hostnames_(hostnames),
+        fd_(800)
+  {
+    if (status_ == STATUS_QUERYING) {
+      socks_.push_back(AsyncResolverSocketEntry{fd_, EventPoll::EVENT_READ});
+    }
+  }
+
+  virtual void resolve(const std::string& name) CXX11_OVERRIDE
+  {
+    hostname_ = name;
+    if (hostnames_) {
+      hostnames_->push_back(name);
+    }
+  }
+
+  virtual const std::vector<std::string>& getResolvedAddresses() const
+      CXX11_OVERRIDE
+  {
+    return addrs_;
+  }
+
+  virtual const std::string& getError() const CXX11_OVERRIDE { return error_; }
+
+  virtual STATUS getStatus() const CXX11_OVERRIDE { return status_; }
+
+  virtual bool usable() const CXX11_OVERRIDE
+  {
+    return status_ == STATUS_QUERYING;
+  }
+
+  virtual int getFamily() const CXX11_OVERRIDE { return AF_UNSPEC; }
+
+  virtual const std::vector<AsyncResolverSocketEntry>& getsock() const
+      CXX11_OVERRIDE
+  {
+    return socks_;
+  }
+
+  virtual void process(sock_t readfd, sock_t writefd) CXX11_OVERRIDE
+  {
+    (void)writefd;
+    if (readfd == fd_ || readfd == badSocket()) {
+      status_ = nextStatus_;
+      socks_.clear();
+    }
+  }
+
+  virtual const std::string& getHostname() const CXX11_OVERRIDE
+  {
+    return hostname_;
+  }
+
+  STATUS nextStatus_ = STATUS_SUCCESS;
+
+private:
+  std::vector<std::string> addrs_;
+  std::string error_;
+  STATUS status_;
+  std::vector<std::string>* hostnames_;
+  std::string hostname_;
+  std::vector<AsyncResolverSocketEntry> socks_;
+  sock_t fd_;
+};
+
+class FakeBootstrapResolverFactory {
+public:
+  std::unique_ptr<AsyncResolver> operator()(int family)
+  {
+    CPPUNIT_ASSERT(index < results.size());
+    CPPUNIT_ASSERT(index < statuses.size());
+    CPPUNIT_ASSERT(index < errors.size());
+    families.push_back(family);
+    auto resolver = make_unique<FakeBootstrapResolver>(
+        results[index], statuses[index], errors[index], &hostnames);
+    if (index + 1 < results.size()) {
+      ++index;
+    }
+    std::unique_ptr<AsyncResolver> baseResolver(std::move(resolver));
+    return baseResolver;
+  }
+
+  size_t index = 0;
+  std::vector<std::vector<std::string>> results;
+  std::vector<AsyncResolver::STATUS> statuses;
+  std::vector<std::string> errors;
+  std::vector<std::string> hostnames;
+  std::vector<int> families;
+};
+
 AsyncDohTransportFactory makeTransportFactory(FakeDohTransportFactory& factory)
 {
   return [&factory](const AsyncDohServerConfig& server) {
     return factory(server);
   };
+}
+
+AsyncDohBootstrapResolverFactory
+makeBootstrapResolverFactory(FakeBootstrapResolverFactory& factory)
+{
+  return [&factory](int family) { return factory(family); };
 }
 
 void driveOnce(AsyncDohNameResolver& resolver, FakeDohTransport* transport)
@@ -1033,6 +1148,131 @@ void AsyncDohNameResolverTest::testRetryNextServerOnConnectError()
   CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
   CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.9"),
                        resolver.getResolvedAddresses()[0]);
+}
+
+void AsyncDohNameResolverTest::testDomainServerUsesBootstrapAddress()
+{
+  FakeDohTransportFactory factory;
+  FakeBootstrapResolverFactory bootstrapFactory;
+  bootstrapFactory.results.push_back({"203.0.113.8"});
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_SUCCESS);
+  bootstrapFactory.errors.push_back(std::string());
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"dns.example.org", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      makeBootstrapResolverFactory(bootstrapFactory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteRequestDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, bootstrapFactory.hostnames.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       bootstrapFactory.hostnames[0]);
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("203.0.113.8"), transport->connectHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       transport->tlsParams.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       transport->tlsParams.verifyHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       getHeaderValue(transport->written, "Host: "));
+}
+
+void AsyncDohNameResolverTest::testDomainServerUsesAsyncBootstrapAddress()
+{
+  FakeDohTransportFactory factory;
+  FakeBootstrapResolverFactory bootstrapFactory;
+  bootstrapFactory.results.push_back({"203.0.113.8"});
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_QUERYING);
+  bootstrapFactory.errors.push_back(std::string());
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"dns.example.org", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      makeBootstrapResolverFactory(bootstrapFactory), AF_INET);
+
+  resolver.resolve("www.example.com");
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_QUERYING, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL(AsyncDohNameResolver::DOH_BOOTSTRAP_RESOLVING,
+                       resolver.getDohState());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, bootstrapFactory.hostnames.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       bootstrapFactory.hostnames[0]);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, bootstrapFactory.families.size());
+  CPPUNIT_ASSERT_EQUAL(AF_INET, bootstrapFactory.families[0]);
+  CPPUNIT_ASSERT(factory.transports.empty());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getsock().size());
+  CPPUNIT_ASSERT_EQUAL((int)EventPoll::EVENT_READ,
+                       resolver.getsock()[0].events);
+
+  resolver.process(resolver.getsock()[0].fd, AsyncResolver::badSocket());
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, factory.transports.size());
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("203.0.113.8"), transport->connectHost);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getsock().size());
+  CPPUNIT_ASSERT_EQUAL(transport->getSocket(), resolver.getsock()[0].fd);
+  CPPUNIT_ASSERT_EQUAL((int)EventPoll::EVENT_WRITE,
+                       resolver.getsock()[0].events);
+  driveUntilWriteRequestDone(resolver, factory);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       transport->tlsParams.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       transport->tlsParams.verifyHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       getHeaderValue(transport->written, "Host: "));
+}
+
+void AsyncDohNameResolverTest::testDomainServerRetriesNextBootstrapAddress()
+{
+  FakeDohTransportFactory factory;
+  FakeBootstrapResolverFactory bootstrapFactory;
+  bootstrapFactory.results.push_back({"198.51.100.1", "203.0.113.8"});
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_SUCCESS);
+  bootstrapFactory.errors.push_back(std::string());
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"dns.example.org", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      makeBootstrapResolverFactory(bootstrapFactory));
+
+  resolver.resolve("www.example.com");
+  CPPUNIT_ASSERT_EQUAL((size_t)1, factory.transports.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.1"),
+                       factory.transports.back()->connectHost);
+
+  driveOnce(resolver, factory.transports.back());
+  CPPUNIT_ASSERT_EQUAL((size_t)2, factory.transports.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("203.0.113.8"),
+                       factory.transports.back()->connectHost);
+}
+
+void AsyncDohNameResolverTest::testDomainServerRetriesNextServerOnBootstrapError()
+{
+  FakeDohTransportFactory factory;
+  FakeBootstrapResolverFactory bootstrapFactory;
+  bootstrapFactory.results.push_back(std::vector<std::string>());
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_ERROR);
+  bootstrapFactory.errors.push_back("NXDOMAIN");
+  bootstrapFactory.results.push_back({"203.0.113.8"});
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_SUCCESS);
+  bootstrapFactory.errors.push_back(std::string());
+  AsyncDohNameResolver resolver(
+      AF_INET,
+      {{"bad.example.org", 443, "bad.example.org", "/dns-query"},
+       {"dns.example.org", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      makeBootstrapResolverFactory(bootstrapFactory));
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteRequestDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, bootstrapFactory.hostnames.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("bad.example.org"),
+                       bootstrapFactory.hostnames[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"),
+                       bootstrapFactory.hostnames[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("203.0.113.8"),
+                       factory.transports.back()->connectHost);
 }
 
 } // namespace aria2

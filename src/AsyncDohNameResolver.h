@@ -85,10 +85,14 @@ using AsyncDohTransportFactory =
     std::function<std::unique_ptr<AsyncDohTransport>(
         const AsyncDohServerConfig& server)>;
 
+using AsyncDohBootstrapResolverFactory =
+    std::function<std::unique_ptr<AsyncResolver>(int family)>;
+
 class AsyncDohNameResolver : public AsyncResolver {
 public:
   enum DohState {
     DOH_IDLE,
+    DOH_BOOTSTRAP_RESOLVING,
     DOH_CONNECTING,
     DOH_TLS_HANDSHAKING,
     DOH_WRITING_REQUEST,
@@ -101,7 +105,11 @@ public:
   AsyncDohNameResolver(int family, std::vector<AsyncDohServerConfig> servers,
                        AsyncDohTransportFactory transportFactory =
                            AsyncDohTransportFactory(),
-                       bool enableHttp2 = false);
+                        bool enableHttp2 = false,
+                        AsyncDohBootstrapResolverFactory
+                            bootstrapResolverFactory =
+                                AsyncDohBootstrapResolverFactory(),
+                        int bootstrapFamily = AF_UNSPEC);
 
   virtual ~AsyncDohNameResolver();
 
@@ -137,18 +145,26 @@ public:
   }
 
   DohState getDohState() const { return state_; }
+  int getBootstrapFamily() const { return bootstrapFamily_; }
 
 private:
   bool startCurrentServer();
+  bool startBootstrapResolver();
+  bool prepareCurrentServerEndpoints();
+  bool startCurrentEndpoint();
+  bool failCurrentEndpointOrServer(std::string error);
   bool failCurrentServerOrRetry(std::string error);
   void fail(std::string error);
   void updateSocketEvents();
+  void updateBootstrapSocketEvents();
   int getEventsForWantDirection(int defaultEvent) const;
   bool canProcessBufferedRead() const;
   void processBufferedRead();
   bool eventReady(sock_t readfd, sock_t writefd) const;
+  bool bootstrapEventReady(sock_t readfd, sock_t writefd) const;
   TLSHandshakeParams createTLSHandshakeParams() const;
   void prepareExchangeForSelectedProtocol();
+  void processBootstrapResolver(sock_t readfd, sock_t writefd);
   void processConnecting();
   void processTlsHandshake();
   void processWriteRequest();
@@ -157,15 +173,20 @@ private:
   void finishResponse();
 
   int family_;
+  int bootstrapFamily_;
   std::vector<AsyncDohServerConfig> servers_;
   bool enableHttp2_;
   AsyncDohTransportFactory transportFactory_;
+  AsyncDohBootstrapResolverFactory bootstrapResolverFactory_;
+  std::unique_ptr<AsyncResolver> bootstrapResolver_;
   std::unique_ptr<AsyncDohTransport> transport_;
   std::unique_ptr<AsyncDohExchange> exchange_;
   std::vector<AsyncResolverSocketEntry> socks_;
   STATUS status_;
   DohState state_;
   size_t serverIndex_;
+  std::vector<std::string> currentEndpoints_;
+  size_t currentEndpointIndex_;
   std::vector<std::string> resolvedAddresses_;
   std::string error_;
   std::string hostname_;

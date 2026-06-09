@@ -42,6 +42,7 @@
 #include <utility>
 
 #include "A2STR.h"
+#include "AsyncNameResolver.h"
 #include "DlAbortEx.h"
 #include "DnsMessage.h"
 #include "EventPoll.h"
@@ -76,18 +77,21 @@ const char* familyToString(int family)
   return family == AF_INET6 ? "AAAA" : "A";
 }
 
+std::string formatHost(const std::string& host)
+{
+  if (host.find(':') != std::string::npos &&
+      host.find(']') == std::string::npos) {
+    std::string result = "[";
+    result += host;
+    result += "]";
+    return result;
+  }
+  return host;
+}
+
 std::string formatDotServer(const AsyncDnsServerConfig& server)
 {
-  std::string result;
-  if (server.connectHost.find(':') != std::string::npos &&
-      server.connectHost.find(']') == std::string::npos) {
-    result += "[";
-    result += server.connectHost;
-    result += "]";
-  }
-  else {
-    result += server.connectHost;
-  }
+  auto result = formatHost(server.connectHost);
   result += ":";
   result += util::uitos(server.port);
   if (!server.tlsHost.empty() && server.tlsHost != server.connectHost) {
@@ -159,13 +163,18 @@ createSocketCoreDotTransport(const AsyncDnsServerConfig&)
 
 AsyncDotNameResolver::AsyncDotNameResolver(
     int family, std::vector<AsyncDnsServerConfig> servers,
-    AsyncDotTransportFactory transportFactory)
+    AsyncDotTransportFactory transportFactory,
+    AsyncDotBootstrapResolverFactory bootstrapResolverFactory,
+    int bootstrapFamily)
     : family_(family),
+      bootstrapFamily_(bootstrapFamily),
       servers_(std::move(servers)),
       transportFactory_(std::move(transportFactory)),
+      bootstrapResolverFactory_(std::move(bootstrapResolverFactory)),
       status_(STATUS_READY),
       state_(DOT_IDLE),
       serverIndex_(0),
+      currentEndpointIndex_(0),
       queryId_(0),
       writeOffset_(0),
       responseLengthBuffer_{0, 0},
@@ -174,6 +183,11 @@ AsyncDotNameResolver::AsyncDotNameResolver(
 {
   if (!transportFactory_) {
     transportFactory_ = createSocketCoreDotTransport;
+  }
+  if (!bootstrapResolverFactory_) {
+    bootstrapResolverFactory_ = [](int family) {
+      return make_unique<AsyncNameResolver>(family, std::string());
+    };
   }
 }
 
@@ -185,8 +199,11 @@ void AsyncDotNameResolver::resolve(const std::string& name)
   resolvedAddresses_.clear();
   error_.clear();
   socks_.clear();
+  bootstrapResolver_.reset();
   transport_.reset();
   serverIndex_ = 0;
+  currentEndpoints_.clear();
+  currentEndpointIndex_ = 0;
   writeOffset_ = 0;
   responseLengthOffset_ = 0;
   responseOffset_ = 0;
@@ -222,8 +239,9 @@ void AsyncDotNameResolver::resolve(const std::string& name)
 
 bool AsyncDotNameResolver::usable() const
 {
-  return status_ == STATUS_QUERYING && transport_ &&
-         transport_->getSocket() != badSocket();
+  return status_ == STATUS_QUERYING &&
+         ((bootstrapResolver_ && bootstrapResolver_->usable()) ||
+          (transport_ && transport_->getSocket() != badSocket()));
 }
 
 bool AsyncDotNameResolver::startCurrentServer()
@@ -235,17 +253,11 @@ bool AsyncDotNameResolver::startCurrentServer()
       responseLengthOffset_ = 0;
       responseOffset_ = 0;
       responseBuffer_.clear();
-      transport_ = transportFactory_(server);
-      if (!transport_) {
-        throw DL_ABORT_EX("DoT transport factory returned null");
-      }
-      transport_->startConnect(server.connectHost, server.port);
-      state_ = DOT_CONNECTING;
-      A2_LOG_NETWORK(fmt("DNS: DoT connecting to %s for %s %s",
-                         formatDotServer(server).c_str(),
-                         familyToString(family_), hostname_.c_str()));
-      updateSocketEvents();
-      return true;
+      transport_.reset();
+      bootstrapResolver_.reset();
+      currentEndpoints_.clear();
+      currentEndpointIndex_ = 0;
+      return prepareCurrentServerEndpoints();
     }
     catch (Exception& e) {
       error_ = e.what();
@@ -259,6 +271,102 @@ bool AsyncDotNameResolver::startCurrentServer()
   return false;
 }
 
+bool AsyncDotNameResolver::prepareCurrentServerEndpoints()
+{
+  const auto& server = servers_[serverIndex_];
+  if (!util::isNumericHost(server.connectHost)) {
+    return startBootstrapResolver();
+  }
+
+  currentEndpoints_.push_back(server.connectHost);
+  currentEndpointIndex_ = 0;
+  return startCurrentEndpoint();
+}
+
+bool AsyncDotNameResolver::startBootstrapResolver()
+{
+  const auto& server = servers_[serverIndex_];
+  bootstrapResolver_ = bootstrapResolverFactory_(bootstrapFamily_);
+  if (!bootstrapResolver_) {
+    throw DL_ABORT_EX("DoT bootstrap resolver factory returned null");
+  }
+  bootstrapResolver_->resolve(server.connectHost);
+  state_ = DOT_BOOTSTRAP_RESOLVING;
+  A2_LOG_NETWORK(fmt("DNS: DoT bootstrap resolving %s for %s %s",
+                     server.connectHost.c_str(), familyToString(family_),
+                     hostname_.c_str()));
+  if (bootstrapResolver_->getStatus() == STATUS_SUCCESS) {
+    currentEndpoints_ = bootstrapResolver_->getResolvedAddresses();
+    bootstrapResolver_.reset();
+    currentEndpointIndex_ = 0;
+    if (currentEndpoints_.empty()) {
+      throw DL_ABORT_EX("DoT bootstrap returned no address");
+    }
+    return startCurrentEndpoint();
+  }
+  if (bootstrapResolver_->getStatus() == STATUS_ERROR) {
+    auto error = bootstrapResolver_->getError();
+    bootstrapResolver_.reset();
+    throw DL_ABORT_EX(
+        fmt("DoT bootstrap failed for %s: %s", server.connectHost.c_str(),
+            error.c_str()));
+  }
+  updateBootstrapSocketEvents();
+  return true;
+}
+
+bool AsyncDotNameResolver::startCurrentEndpoint()
+{
+  const auto& server = servers_[serverIndex_];
+  while (currentEndpointIndex_ < currentEndpoints_.size()) {
+    const auto& connectHost = currentEndpoints_[currentEndpointIndex_];
+    try {
+      writeOffset_ = 0;
+      responseLengthOffset_ = 0;
+      responseOffset_ = 0;
+      responseBuffer_.clear();
+      transport_ = transportFactory_(server);
+      if (!transport_) {
+        throw DL_ABORT_EX("DoT transport factory returned null");
+      }
+      transport_->startConnect(connectHost, server.port);
+      state_ = DOT_CONNECTING;
+      A2_LOG_NETWORK(fmt("DNS: DoT connecting to %s via %s for %s %s",
+                         formatDotServer(server).c_str(),
+                         formatHost(connectHost).c_str(),
+                         familyToString(family_), hostname_.c_str()));
+      updateSocketEvents();
+      return true;
+    }
+    catch (Exception& e) {
+      error_ = e.what();
+      A2_LOG_NETWORK(fmt("DNS: DoT endpoint %s for server %s failed: %s",
+                         formatHost(connectHost).c_str(),
+                         formatDotServer(server).c_str(), error_.c_str()));
+      ++currentEndpointIndex_;
+      transport_.reset();
+    }
+  }
+  return failCurrentServerOrRetry(
+      error_.empty() ? "DoT server connection failed" : error_);
+}
+
+bool AsyncDotNameResolver::failCurrentEndpointOrServer(std::string error)
+{
+  const auto& server = servers_[serverIndex_];
+  if (currentEndpointIndex_ + 1 < currentEndpoints_.size()) {
+    A2_LOG_NETWORK(fmt("DNS: DoT endpoint %s for server %s failed: %s",
+                       formatHost(currentEndpoints_[currentEndpointIndex_])
+                           .c_str(),
+                       formatDotServer(server).c_str(), error.c_str()));
+    ++currentEndpointIndex_;
+    transport_.reset();
+    state_ = DOT_IDLE;
+    return startCurrentEndpoint();
+  }
+  return failCurrentServerOrRetry(std::move(error));
+}
+
 bool AsyncDotNameResolver::failCurrentServerOrRetry(std::string error)
 {
   if (serverIndex_ + 1 < servers_.size()) {
@@ -266,7 +374,10 @@ bool AsyncDotNameResolver::failCurrentServerOrRetry(std::string error)
     A2_LOG_NETWORK(fmt("DNS: DoT server %s failed: %s",
                        formatDotServer(server).c_str(), error.c_str()));
     ++serverIndex_;
+    bootstrapResolver_.reset();
     transport_.reset();
+    currentEndpoints_.clear();
+    currentEndpointIndex_ = 0;
     state_ = DOT_IDLE;
     return startCurrentServer();
   }
@@ -281,6 +392,7 @@ void AsyncDotNameResolver::fail(std::string error)
   status_ = STATUS_ERROR;
   state_ = DOT_FAILED;
   socks_.clear();
+  bootstrapResolver_.reset();
   transport_.reset();
   A2_LOG_NETWORK(fmt("DNS: DoT %s %s failed: %s", familyToString(family_),
                      hostname_.empty() ? "(pending)" : hostname_.c_str(),
@@ -305,6 +417,10 @@ int AsyncDotNameResolver::getEventsForWantDirection(int defaultEvent) const
 void AsyncDotNameResolver::updateSocketEvents()
 {
   socks_.clear();
+  if (state_ == DOT_BOOTSTRAP_RESOLVING) {
+    updateBootstrapSocketEvents();
+    return;
+  }
   if (!transport_) {
     return;
   }
@@ -336,6 +452,17 @@ void AsyncDotNameResolver::updateSocketEvents()
   }
 }
 
+void AsyncDotNameResolver::updateBootstrapSocketEvents()
+{
+  socks_.clear();
+  if (!bootstrapResolver_) {
+    return;
+  }
+  const auto& bootstrapSocks = bootstrapResolver_->getsock();
+  socks_.insert(std::end(socks_), std::begin(bootstrapSocks),
+                std::end(bootstrapSocks));
+}
+
 bool AsyncDotNameResolver::eventReady(sock_t readfd, sock_t writefd) const
 {
   if (!transport_) {
@@ -343,6 +470,21 @@ bool AsyncDotNameResolver::eventReady(sock_t readfd, sock_t writefd) const
   }
   const auto fd = transport_->getSocket();
   return readfd == fd || writefd == fd;
+}
+
+bool AsyncDotNameResolver::bootstrapEventReady(sock_t readfd,
+                                               sock_t writefd) const
+{
+  if (!bootstrapResolver_) {
+    return false;
+  }
+  const auto& bootstrapSocks = bootstrapResolver_->getsock();
+  for (const auto& sock : bootstrapSocks) {
+    if (readfd == sock.fd || writefd == sock.fd) {
+      return true;
+    }
+  }
+  return false;
 }
 
 bool AsyncDotNameResolver::canProcessBufferedRead() const
@@ -376,7 +518,7 @@ void AsyncDotNameResolver::processBufferedRead()
       }
     }
     catch (Exception& e) {
-      failCurrentServerOrRetry(e.what());
+      failCurrentEndpointOrServer(e.what());
       break;
     }
   }
@@ -393,6 +535,16 @@ TLSHandshakeParams AsyncDotNameResolver::createTLSHandshakeParams() const
 
 void AsyncDotNameResolver::process(sock_t readfd, sock_t writefd)
 {
+  if (status_ == STATUS_QUERYING && state_ == DOT_BOOTSTRAP_RESOLVING) {
+    if (bootstrapEventReady(readfd, writefd) ||
+        (readfd == badSocket() && writefd == badSocket())) {
+      processBootstrapResolver(readfd, writefd);
+      return;
+    }
+    updateSocketEvents();
+    return;
+  }
+
   if (status_ != STATUS_QUERYING || !transport_ ||
       !eventReady(readfd, writefd)) {
     processBufferedRead();
@@ -422,21 +574,56 @@ void AsyncDotNameResolver::process(sock_t readfd, sock_t writefd)
     }
   }
   catch (Exception& e) {
-    failCurrentServerOrRetry(e.what());
+    failCurrentEndpointOrServer(e.what());
   }
   updateSocketEvents();
 }
 
 void AsyncDotNameResolver::processTimeout()
 {
+  if (status_ == STATUS_QUERYING && state_ == DOT_BOOTSTRAP_RESOLVING) {
+    processBootstrapResolver(badSocket(), badSocket());
+    return;
+  }
   processBufferedRead();
+}
+
+void AsyncDotNameResolver::processBootstrapResolver(sock_t readfd,
+                                                    sock_t writefd)
+{
+  if (!bootstrapResolver_) {
+    updateSocketEvents();
+    return;
+  }
+  bootstrapResolver_->process(readfd, writefd);
+  if (bootstrapResolver_->getStatus() == STATUS_SUCCESS) {
+    const auto& addrs = bootstrapResolver_->getResolvedAddresses();
+    currentEndpoints_.assign(std::begin(addrs), std::end(addrs));
+    bootstrapResolver_.reset();
+    currentEndpointIndex_ = 0;
+    if (currentEndpoints_.empty()) {
+      failCurrentServerOrRetry("DoT bootstrap returned no address");
+      return;
+    }
+    startCurrentEndpoint();
+    return;
+  }
+  if (bootstrapResolver_->getStatus() == STATUS_ERROR) {
+    auto error = fmt("DoT bootstrap failed for %s: %s",
+                     servers_[serverIndex_].connectHost.c_str(),
+                     bootstrapResolver_->getError().c_str());
+    bootstrapResolver_.reset();
+    failCurrentServerOrRetry(error);
+    return;
+  }
+  updateSocketEvents();
 }
 
 void AsyncDotNameResolver::processConnecting()
 {
   auto error = transport_->getSocketError();
   if (!error.empty()) {
-    failCurrentServerOrRetry(
+    failCurrentEndpointOrServer(
         fmt("DoT connection failed: %s", error.c_str()));
     return;
   }

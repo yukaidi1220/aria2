@@ -47,6 +47,18 @@
 
 namespace aria2 {
 
+#ifdef ENABLE_ASYNC_DNS
+sock_t addAsyncResolverSocketEntryFdSet(const AsyncResolverSocketEntry& ent,
+                                        fd_set* rfdsPtr, fd_set* wfdsPtr,
+                                        fd_set* efdsPtr);
+
+void getReadyAsyncResolverSocketEntryFds(const AsyncResolverSocketEntry& ent,
+                                         const fd_set* rfdsPtr,
+                                         const fd_set* wfdsPtr,
+                                         const fd_set* efdsPtr,
+                                         sock_t& readfd, sock_t& writefd);
+#endif // ENABLE_ASYNC_DNS
+
 class SelectEventPoll : public EventPoll {
 private:
   class CommandEvent {
@@ -142,9 +154,9 @@ private:
               command_ < entry.command_);
     }
 
-    sock_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr);
+    sock_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr, fd_set* efdsPtr);
 
-    void process(fd_set* rfdsPtr, fd_set* wfdsPtr);
+    void process(fd_set* rfdsPtr, fd_set* wfdsPtr, fd_set* efdsPtr);
   };
 #endif // ENABLE_ASYNC_DNS
 

@@ -61,7 +61,7 @@ AsyncDnsServerConfig parseAsyncDnsDotServerConfig(const std::string& value);
 std::vector<AsyncDnsServerConfig>
 parseAsyncDnsDotServerConfigList(const std::string& value);
 
-void validateAsyncDnsDotServerConfigForDirectConnect(
+void validateAsyncDnsDotServerConfig(
     const std::vector<AsyncDnsServerConfig>& configs);
 
 AsyncDohServerConfig parseAsyncDnsDohServerConfig(const std::string& value);
@@ -69,7 +69,7 @@ AsyncDohServerConfig parseAsyncDnsDohServerConfig(const std::string& value);
 std::vector<AsyncDohServerConfig>
 parseAsyncDnsDohServerConfigList(const std::string& value);
 
-void validateAsyncDnsDohServerConfigForDirectConnect(
+void validateAsyncDnsDohServerConfig(
     const std::vector<AsyncDohServerConfig>& configs);
 
 } // namespace aria2

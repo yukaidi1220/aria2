@@ -148,13 +148,12 @@ splitServerAndTLSHost(const std::string& entry, const std::string& value,
   return std::make_pair(std::move(server), std::move(tlsHost));
 }
 
-void validateDirectConnectHost(const std::string& scheme,
-                               const std::string& host)
+void validateServerHost(const std::string& scheme, const std::string& host)
 {
-  if (!util::isNumericHost(host)) {
+  if (!util::isNumericHost(host) && !isAsyncDnsTLSHost(host)) {
     throw DL_ABORT_EX(
-        fmt("Bad async DNS %s server '%s': direct connect requires a "
-            "numeric host",
+        fmt("Bad async DNS %s server '%s': expected a numeric address or "
+            "DNS name",
             scheme.c_str(), host.c_str()));
   }
 }
@@ -225,14 +224,14 @@ parseAsyncDnsDotServerConfigList(const std::string& value)
   return result;
 }
 
-void validateAsyncDnsDotServerConfigForDirectConnect(
+void validateAsyncDnsDotServerConfig(
     const std::vector<AsyncDnsServerConfig>& configs)
 {
   if (configs.empty()) {
     throw DL_ABORT_EX("No async DNS DoT server configured");
   }
   for (const auto& config : configs) {
-    validateDirectConnectHost("DoT", config.connectHost);
+    validateServerHost("DoT", config.connectHost);
   }
 }
 
@@ -289,14 +288,14 @@ parseAsyncDnsDohServerConfigList(const std::string& value)
   return result;
 }
 
-void validateAsyncDnsDohServerConfigForDirectConnect(
+void validateAsyncDnsDohServerConfig(
     const std::vector<AsyncDohServerConfig>& configs)
 {
   if (configs.empty()) {
     throw DL_ABORT_EX("No async DNS DoH server configured");
   }
   for (const auto& config : configs) {
-    validateDirectConnectHost("DoH", config.connectHost);
+    validateServerHost("DoH", config.connectHost);
   }
 }
 

@@ -1332,33 +1332,38 @@ Advanced Options
 .. option:: --async-dns-mode=<cares|dot|doh>
 
   Select asynchronous DNS resolver backend. ``cares`` uses the c-ares
-  resolver. ``dot`` uses DNS over TLS with numeric
-  :option:`--async-dns-server` entries. ``doh`` uses DNS over HTTPS over
-  HTTP/1.1 with numeric HTTPS :option:`--async-dns-server` URLs. ``dot`` and
-  ``doh`` are available only when aria2 is built with SSL/TLS support.
-  Numeric DoT/DoH entries can append ``#TLS_HOST`` to use ``TLS_HOST`` as the
-  TLS SNI, certificate verification hostname, and DoH HTTP ``Host`` header without
-  resolving the resolver hostname through DNS first.
-  The ``doh`` backend currently uses HTTP/1.1 and does not enable HTTP/2 or
-  ALPN negotiation.
+  resolver. ``dot`` uses DNS over TLS. ``doh`` uses DNS over HTTPS.
+  ``dot`` and ``doh`` are available only when aria2 is built with SSL/TLS
+  support. DoT/DoH server hostnames are first resolved through plain c-ares
+  using the default resolver configuration and the address families enabled for
+  asynchronous DNS, so :option:`--disable-ipv6=true` also disables IPv6
+  bootstrap lookups. aria2 then connects to the resolved IP address. DoT/DoH
+  entries can append ``#TLS_HOST`` to use ``TLS_HOST`` as the TLS SNI,
+  certificate verification hostname, and DoH HTTP ``Host`` header. The DoH
+  backend can use HTTP/2 when aria2 is built with nghttp2 and
+  :option:`--enable-http2=true` is enabled and
+  :option:`--enable-http-pipelining=false`; otherwise it uses HTTP/1.1.
   Default: ``cares``
 
 .. option:: --async-dns-server=<SERVER>[,...]
 
   Comma separated list of DNS server address used in asynchronous DNS
   resolver. With the default ``cares`` backend, specify DNS server IP
-  addresses. With ``dot``, specify numeric DoT servers as ``IP``, ``IP:PORT``,
-  ``[IPv6]``, or ``[IPv6]:PORT``; the default port is 853. With ``doh``,
-  specify numeric HTTPS URLs such as ``https://1.1.1.1/dns-query`` or
+  addresses. With ``dot``, specify DoT servers as ``HOST``, ``HOST:PORT``,
+  ``IP``, ``IP:PORT``, ``[IPv6]``, or ``[IPv6]:PORT``; the default port is
+  853. With ``doh``, specify HTTPS URLs such as
+  ``https://dns.example/dns-query``, ``https://1.1.1.1/dns-query``, or
   ``https://[2606:4700:4700::1111]/dns-query``. For DoT/DoH, append
-  ``#TLS_HOST`` to a numeric entry to connect to the numeric address while using
-  ``TLS_HOST`` for TLS SNI, certificate verification, and the DoH HTTP ``Host``
-  header, for example ``1.1.1.1#cloudflare-dns.com`` or
-  ``https://1.1.1.1/dns-query#cloudflare-dns.com``. Usually asynchronous DNS
-  resolver reads DNS server addresses from ``/etc/resolv.conf``. When this
-  option is used, it uses DNS servers specified in this option instead of ones
-  in ``/etc/resolv.conf``. This option is useful when the system does not have
-  ``/etc/resolv.conf`` and user does not have the permission to create it.
+  ``#TLS_HOST`` to connect to the configured or bootstrap-resolved address
+  while using ``TLS_HOST`` for TLS SNI, certificate verification, and the DoH
+  HTTP ``Host`` header, for example ``1.1.1.1#cloudflare-dns.com`` or
+  ``https://1.1.1.1/dns-query#cloudflare-dns.com``. For the ``cares`` backend,
+  the resolver normally reads DNS server addresses from the system resolver
+  configuration, such as ``/etc/resolv.conf``; this option overrides that
+  server list. ``dot`` and ``doh`` require explicit servers. If a DoT/DoH
+  server host is a hostname, aria2 bootstraps it through plain c-ares using the
+  default resolver configuration and the address families enabled for
+  asynchronous DNS.
 
 .. option:: --auto-file-renaming [true|false]
 

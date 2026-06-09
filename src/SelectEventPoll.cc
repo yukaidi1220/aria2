@@ -123,6 +123,49 @@ int SelectEventPoll::SocketEntry::getEvents()
 
 #ifdef ENABLE_ASYNC_DNS
 
+sock_t addAsyncResolverSocketEntryFdSet(const AsyncResolverSocketEntry& ent,
+                                        fd_set* rfdsPtr, fd_set* wfdsPtr,
+                                        fd_set* efdsPtr)
+{
+  sock_t nfds = 0;
+  if (ent.events & EventPoll::EVENT_READ) {
+    FD_SET(ent.fd, rfdsPtr);
+    nfds = std::max(nfds, ent.fd + static_cast<sock_t>(1));
+  }
+
+  if (ent.events & EventPoll::EVENT_WRITE) {
+    FD_SET(ent.fd, wfdsPtr);
+    if (efdsPtr) {
+      FD_SET(ent.fd, efdsPtr);
+    }
+    nfds = std::max(nfds, ent.fd + static_cast<sock_t>(1));
+  }
+  return nfds;
+}
+
+void getReadyAsyncResolverSocketEntryFds(const AsyncResolverSocketEntry& ent,
+                                         const fd_set* rfdsPtr,
+                                         const fd_set* wfdsPtr,
+                                         const fd_set* efdsPtr,
+                                         sock_t& readfd, sock_t& writefd)
+{
+  readfd = AsyncResolver::badSocket();
+  writefd = AsyncResolver::badSocket();
+
+  if (FD_ISSET(ent.fd, rfdsPtr) && (ent.events & EventPoll::EVENT_READ)) {
+    readfd = ent.fd;
+  }
+
+  if (FD_ISSET(ent.fd, wfdsPtr) && (ent.events & EventPoll::EVENT_WRITE)) {
+    writefd = ent.fd;
+  }
+
+  if (efdsPtr && FD_ISSET(ent.fd, efdsPtr) &&
+      (ent.events & EventPoll::EVENT_WRITE)) {
+    writefd = ent.fd;
+  }
+}
+
 SelectEventPoll::AsyncNameResolverEntry::AsyncNameResolverEntry(
     const std::shared_ptr<AsyncResolver>& nameResolver, Command* command)
     : nameResolver_(nameResolver), command_(command)
@@ -130,37 +173,26 @@ SelectEventPoll::AsyncNameResolverEntry::AsyncNameResolverEntry(
 }
 
 sock_t SelectEventPoll::AsyncNameResolverEntry::getFds(fd_set* rfdsPtr,
-                                                       fd_set* wfdsPtr)
+                                                       fd_set* wfdsPtr,
+                                                       fd_set* efdsPtr)
 {
   sock_t nfds = 0;
   for (const auto& ent : nameResolver_->getsock()) {
-    if (ent.events & EventPoll::EVENT_READ) {
-      FD_SET(ent.fd, rfdsPtr);
-      nfds = std::max(nfds, ent.fd + static_cast<sock_t>(1));
-    }
-
-    if (ent.events & EventPoll::EVENT_WRITE) {
-      FD_SET(ent.fd, wfdsPtr);
-      nfds = std::max(nfds, ent.fd + static_cast<sock_t>(1));
-    }
+    nfds = std::max(nfds, addAsyncResolverSocketEntryFdSet(
+                              ent, rfdsPtr, wfdsPtr, efdsPtr));
   }
   return nfds;
 }
 
 void SelectEventPoll::AsyncNameResolverEntry::process(fd_set* rfdsPtr,
-                                                      fd_set* wfdsPtr)
+                                                      fd_set* wfdsPtr,
+                                                      fd_set* efdsPtr)
 {
   for (const auto& ent : nameResolver_->getsock()) {
     auto readfd = AsyncResolver::badSocket();
     auto writefd = AsyncResolver::badSocket();
-
-    if (FD_ISSET(ent.fd, rfdsPtr) && (ent.events & EventPoll::EVENT_READ)) {
-      readfd = ent.fd;
-    }
-
-    if (FD_ISSET(ent.fd, wfdsPtr) && (ent.events & EventPoll::EVENT_WRITE)) {
-      writefd = ent.fd;
-    }
+    getReadyAsyncResolverSocketEntryFds(ent, rfdsPtr, wfdsPtr, efdsPtr, readfd,
+                                        writefd);
 
     if (readfd != AsyncResolver::badSocket() ||
         writefd != AsyncResolver::badSocket()) {
@@ -212,7 +244,13 @@ void SelectEventPoll::poll(const struct timeval& tv)
 
   for (auto& i : nameResolverEntries_) {
     auto& entry = i.second;
-    auto fd = entry.getFds(&rfds, &wfds);
+    auto fd = entry.getFds(&rfds, &wfds,
+#  ifdef __MINGW32__
+                           &efds
+#  else  // !__MINGW32__
+                           nullptr
+#  endif // !__MINGW32__
+    );
     // TODO force error if fd == 0
     if (fdmax_ < fd) {
       fdmax_ = fd;
@@ -257,7 +295,13 @@ void SelectEventPoll::poll(const struct timeval& tv)
 #ifdef ENABLE_ASYNC_DNS
 
   for (auto& i : nameResolverEntries_) {
-    i.second.process(&rfds, &wfds);
+    i.second.process(&rfds, &wfds,
+#  ifdef __MINGW32__
+                     &efds
+#  else  // !__MINGW32__
+                     nullptr
+#  endif // !__MINGW32__
+    );
   }
 
 #endif // ENABLE_ASYNC_DNS

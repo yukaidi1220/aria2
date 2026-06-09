@@ -454,9 +454,10 @@
 #ifdef ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares|dot|doh Select asynchronous DNS resolver backend.\n" \
-    "                              DoT requires numeric --async-dns-server.\n" \
-    "                              DoH requires numeric HTTPS --async-dns-server URL.\n" \
-    "                              Append #TLS_HOST to set TLS/HTTP names.")
+    "                              DoT/DoH server names are bootstrapped with\n" \
+    "                              plain c-ares using default resolver config\n" \
+    "                              and enabled address families. Append\n" \
+    "                              #TLS_HOST to set TLS/HTTP names.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
@@ -867,17 +868,18 @@
   _(" --async-dns-server=SERVER[,...] Comma separated list of DNS server entries\n" \
     "                              used in asynchronous DNS resolver. With cares,\n" \
     "                              specify DNS server IP addresses. With dot,\n" \
-    "                              specify numeric DoT servers as IP, IP:PORT,\n" \
-    "                              [IPv6], or [IPv6]:PORT, optionally followed\n" \
-    "                              by #TLS_HOST. With doh, specify numeric HTTPS\n" \
-    "                              URLs such as https://1.1.1.1/dns-query#TLS_HOST.\n" \
-    "                              Usually asynchronous DNS resolver reads DNS server\n" \
-    "                              addresses from /etc/resolv.conf. When this option\n" \
-    "                              is used, it uses DNS servers specified in this\n" \
-    "                              option instead of ones in /etc/resolv.conf. This\n" \
-    "                              option is useful when the system does not have\n" \
-    "                              /etc/resolv.conf and user does not have the\n" \
-    "                              permission to create it.")
+    "                              specify DoT servers as HOST, HOST:PORT,\n" \
+    "                              IP, IP:PORT, [IPv6], or [IPv6]:PORT,\n" \
+    "                              optionally followed by #TLS_HOST. With doh,\n" \
+    "                              specify HTTPS URLs such as\n" \
+    "                              https://dns.example/dns-query#TLS_HOST.\n" \
+    "                              For cares, the resolver normally reads server\n" \
+    "                              addresses from the system resolver configuration,\n" \
+    "                              such as /etc/resolv.conf. This option overrides\n" \
+    "                              that server list. DoT/DoH require explicit\n" \
+    "                              servers; server hostnames are bootstrapped through\n" \
+    "                              plain c-ares using the default resolver\n" \
+    "                              configuration and enabled address families.")
 #define TEXT_ENABLE_RPC                                               \
   _(" --enable-rpc[=true|false]    Enable JSON-RPC/XML-RPC server.\n" \
     "                              It is strongly recommended to set secret\n" \

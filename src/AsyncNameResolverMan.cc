@@ -93,6 +93,20 @@ const char* resolverModeToString(AsyncNameResolverMan::ResolverMode mode)
   abort();
 }
 
+int getBootstrapFamily(bool ipv4, bool ipv6)
+{
+  if (ipv4 && ipv6) {
+    return AF_UNSPEC;
+  }
+  if (ipv6) {
+    return AF_INET6;
+  }
+  if (ipv4) {
+    return AF_INET;
+  }
+  return AF_UNSPEC;
+}
+
 AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
 {
   const auto& mode = option->get(PREF_ASYNC_DNS_MODE);
@@ -170,15 +184,17 @@ std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
 #ifdef ENABLE_SSL
   case RESOLVER_DOT: {
     auto dotServers = parseAsyncDnsDotServerConfigList(servers_);
-    validateAsyncDnsDotServerConfigForDirectConnect(dotServers);
-    return std::make_shared<AsyncDotNameResolver>(family,
-                                                  std::move(dotServers));
+    validateAsyncDnsDotServerConfig(dotServers);
+    return std::make_shared<AsyncDotNameResolver>(
+        family, std::move(dotServers), AsyncDotTransportFactory(),
+        AsyncDotBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_));
   }
   case RESOLVER_DOH: {
     auto dohServers = parseAsyncDnsDohServerConfigList(servers_);
-    validateAsyncDnsDohServerConfigForDirectConnect(dohServers);
+    validateAsyncDnsDohServerConfig(dohServers);
     return std::make_shared<AsyncDohNameResolver>(
-        family, std::move(dohServers), AsyncDohTransportFactory(), dohHttp2_);
+        family, std::move(dohServers), AsyncDohTransportFactory(), dohHttp2_,
+        AsyncDohBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_));
   }
 #endif // ENABLE_SSL
   }
@@ -353,12 +369,12 @@ void validateAsyncNameResolverConfig(AsyncNameResolverMan::ResolverMode mode,
 #ifdef ENABLE_SSL
   case AsyncNameResolverMan::RESOLVER_DOT: {
     auto dotServers = parseAsyncDnsDotServerConfigList(servers);
-    validateAsyncDnsDotServerConfigForDirectConnect(dotServers);
+    validateAsyncDnsDotServerConfig(dotServers);
     break;
   }
   case AsyncNameResolverMan::RESOLVER_DOH: {
     auto dohServers = parseAsyncDnsDohServerConfigList(servers);
-    validateAsyncDnsDohServerConfigForDirectConnect(dohServers);
+    validateAsyncDnsDohServerConfig(dohServers);
     break;
   }
 #endif // ENABLE_SSL

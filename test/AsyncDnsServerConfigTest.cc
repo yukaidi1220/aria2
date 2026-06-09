@@ -11,22 +11,22 @@ class AsyncDnsServerConfigTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testParseDotServerConfig);
   CPPUNIT_TEST(testParseDotServerConfigList);
   CPPUNIT_TEST(testParseDotServerConfig_badInput);
-  CPPUNIT_TEST(testValidateDotServerConfigForDirectConnect);
+  CPPUNIT_TEST(testValidateDotServerConfig);
   CPPUNIT_TEST(testParseDohServerConfig);
   CPPUNIT_TEST(testParseDohServerConfigList);
   CPPUNIT_TEST(testParseDohServerConfig_badInput);
-  CPPUNIT_TEST(testValidateDohServerConfigForDirectConnect);
+  CPPUNIT_TEST(testValidateDohServerConfig);
   CPPUNIT_TEST_SUITE_END();
 
 public:
   void testParseDotServerConfig();
   void testParseDotServerConfigList();
   void testParseDotServerConfig_badInput();
-  void testValidateDotServerConfigForDirectConnect();
+  void testValidateDotServerConfig();
   void testParseDohServerConfig();
   void testParseDohServerConfigList();
   void testParseDohServerConfig_badInput();
-  void testValidateDohServerConfigForDirectConnect();
+  void testValidateDohServerConfig();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AsyncDnsServerConfigTest);
@@ -132,29 +132,30 @@ void AsyncDnsServerConfigTest::testParseDotServerConfig_badInput()
                        Exception);
 }
 
-void AsyncDnsServerConfigTest::testValidateDotServerConfigForDirectConnect()
+void AsyncDnsServerConfigTest::testValidateDotServerConfig()
 {
   auto configs =
       parseAsyncDnsDotServerConfigList("1.1.1.1,[2606:4700:4700::1111]:853");
-  validateAsyncDnsDotServerConfigForDirectConnect(configs);
+  validateAsyncDnsDotServerConfig(configs);
 
   configs = parseAsyncDnsDotServerConfigList(
       "1.1.1.1#cloudflare-dns.com,"
       "[2606:4700:4700::1111]:853#cloudflare-dns.com");
-  validateAsyncDnsDotServerConfigForDirectConnect(configs);
+  validateAsyncDnsDotServerConfig(configs);
 
   configs = parseAsyncDnsDotServerConfigList("dns.example.org");
   CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"), configs[0].connectHost);
-  CPPUNIT_ASSERT_THROW(
-      validateAsyncDnsDotServerConfigForDirectConnect(configs), Exception);
+  validateAsyncDnsDotServerConfig(configs);
 
   configs = parseAsyncDnsDotServerConfigList("1.1.1.1,dns.example.org");
+  validateAsyncDnsDotServerConfig(configs);
+
+  configs = parseAsyncDnsDotServerConfigList("host");
   CPPUNIT_ASSERT_THROW(
-      validateAsyncDnsDotServerConfigForDirectConnect(configs), Exception);
+      validateAsyncDnsDotServerConfig(configs), Exception);
 
   CPPUNIT_ASSERT_THROW(
-      validateAsyncDnsDotServerConfigForDirectConnect(
-          std::vector<AsyncDnsServerConfig>()),
+      validateAsyncDnsDotServerConfig(std::vector<AsyncDnsServerConfig>()),
       Exception);
 }
 
@@ -293,30 +294,31 @@ void AsyncDnsServerConfigTest::testParseDohServerConfig_badInput()
       Exception);
 }
 
-void AsyncDnsServerConfigTest::testValidateDohServerConfigForDirectConnect()
+void AsyncDnsServerConfigTest::testValidateDohServerConfig()
 {
   auto configs = parseAsyncDnsDohServerConfigList(
       "https://1.1.1.1/dns-query,https://[2606:4700:4700::1111]/dns-query");
-  validateAsyncDnsDohServerConfigForDirectConnect(configs);
+  validateAsyncDnsDohServerConfig(configs);
 
   configs = parseAsyncDnsDohServerConfigList(
       "https://1.1.1.1/dns-query#cloudflare-dns.com,"
       "https://[2606:4700:4700::1111]/dns-query#cloudflare-dns.com");
-  validateAsyncDnsDohServerConfigForDirectConnect(configs);
+  validateAsyncDnsDohServerConfig(configs);
 
   configs = parseAsyncDnsDohServerConfigList("https://dns.example.org/dns-query");
   CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"), configs[0].connectHost);
-  CPPUNIT_ASSERT_THROW(
-      validateAsyncDnsDohServerConfigForDirectConnect(configs), Exception);
+  validateAsyncDnsDohServerConfig(configs);
 
   configs = parseAsyncDnsDohServerConfigList(
       "https://1.1.1.1/dns-query,https://dns.example.org/dns-query");
+  validateAsyncDnsDohServerConfig(configs);
+
+  configs = parseAsyncDnsDohServerConfigList("https://host/dns-query");
   CPPUNIT_ASSERT_THROW(
-      validateAsyncDnsDohServerConfigForDirectConnect(configs), Exception);
+      validateAsyncDnsDohServerConfig(configs), Exception);
 
   CPPUNIT_ASSERT_THROW(
-      validateAsyncDnsDohServerConfigForDirectConnect(
-          std::vector<AsyncDohServerConfig>()),
+      validateAsyncDnsDohServerConfig(std::vector<AsyncDohServerConfig>()),
       Exception);
 }
 

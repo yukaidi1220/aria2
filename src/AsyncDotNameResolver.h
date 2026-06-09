@@ -78,10 +78,14 @@ using AsyncDotTransportFactory =
     std::function<std::unique_ptr<AsyncDotTransport>(
         const AsyncDnsServerConfig& server)>;
 
+using AsyncDotBootstrapResolverFactory =
+    std::function<std::unique_ptr<AsyncResolver>(int family)>;
+
 class AsyncDotNameResolver : public AsyncResolver {
 public:
   enum DotState {
     DOT_IDLE,
+    DOT_BOOTSTRAP_RESOLVING,
     DOT_CONNECTING,
     DOT_TLS_HANDSHAKING,
     DOT_WRITING_QUERY,
@@ -92,8 +96,12 @@ public:
   };
 
   AsyncDotNameResolver(int family, std::vector<AsyncDnsServerConfig> servers,
-                       AsyncDotTransportFactory transportFactory =
-                           AsyncDotTransportFactory());
+                        AsyncDotTransportFactory transportFactory =
+                            AsyncDotTransportFactory(),
+                        AsyncDotBootstrapResolverFactory
+                            bootstrapResolverFactory =
+                                AsyncDotBootstrapResolverFactory(),
+                        int bootstrapFamily = AF_UNSPEC);
 
   virtual ~AsyncDotNameResolver();
 
@@ -129,17 +137,25 @@ public:
   }
 
   DotState getDotState() const { return state_; }
+  int getBootstrapFamily() const { return bootstrapFamily_; }
 
 private:
   bool startCurrentServer();
+  bool startBootstrapResolver();
+  bool prepareCurrentServerEndpoints();
+  bool startCurrentEndpoint();
+  bool failCurrentEndpointOrServer(std::string error);
   bool failCurrentServerOrRetry(std::string error);
   void fail(std::string error);
   void updateSocketEvents();
+  void updateBootstrapSocketEvents();
   int getEventsForWantDirection(int defaultEvent) const;
   bool canProcessBufferedRead() const;
   void processBufferedRead();
   bool eventReady(sock_t readfd, sock_t writefd) const;
+  bool bootstrapEventReady(sock_t readfd, sock_t writefd) const;
   TLSHandshakeParams createTLSHandshakeParams() const;
+  void processBootstrapResolver(sock_t readfd, sock_t writefd);
   void processConnecting();
   void processTlsHandshake();
   void processWriteQuery();
@@ -148,13 +164,18 @@ private:
   void finishResponse();
 
   int family_;
+  int bootstrapFamily_;
   std::vector<AsyncDnsServerConfig> servers_;
   AsyncDotTransportFactory transportFactory_;
+  AsyncDotBootstrapResolverFactory bootstrapResolverFactory_;
+  std::unique_ptr<AsyncResolver> bootstrapResolver_;
   std::unique_ptr<AsyncDotTransport> transport_;
   std::vector<AsyncResolverSocketEntry> socks_;
   STATUS status_;
   DotState state_;
   size_t serverIndex_;
+  std::vector<std::string> currentEndpoints_;
+  size_t currentEndpointIndex_;
   std::vector<std::string> resolvedAddresses_;
   std::string error_;
   std::string hostname_;
