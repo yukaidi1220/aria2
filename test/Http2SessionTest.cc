@@ -5,6 +5,7 @@
 #  include "Http2Session.h"
 #  include "Http2TestUtil.h"
 
+#  include <cstdint>
 #  include <string>
 
 #  include <cppunit/extensions/HelperMacros.h>
@@ -15,6 +16,7 @@ namespace aria2 {
 class Http2SessionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2SessionTest);
   CPPUNIT_TEST(testSubmitRequestHeadersProducesClientBytes);
+  CPPUNIT_TEST(testSubmitRequestWithBodyProducesDataFrame);
   CPPUNIT_TEST(testDrainOutboundDataClearsBuffer);
   CPPUNIT_TEST(testFeedInboundDataFlushesSettingsAck);
   CPPUNIT_TEST(testFeedInboundDataUpdatesRemoteMaxConcurrentStreams);
@@ -27,6 +29,7 @@ class Http2SessionTest : public CppUnit::TestFixture {
 
 public:
   void testSubmitRequestHeadersProducesClientBytes();
+  void testSubmitRequestWithBodyProducesDataFrame();
   void testDrainOutboundDataClearsBuffer();
   void testFeedInboundDataFlushesSettingsAck();
   void testFeedInboundDataUpdatesRemoteMaxConcurrentStreams();
@@ -38,6 +41,45 @@ public:
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(Http2SessionTest);
+
+namespace {
+bool findFramePayload(const std::string& data, unsigned char frameType,
+                      int32_t streamId, std::string& payload,
+                      uint8_t& flags)
+{
+  size_t offset = 0;
+  if (data.size() >= 24 &&
+      data.substr(0, 24) == "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+    offset = 24;
+  }
+
+  while (offset + 9 <= data.size()) {
+    auto length = (static_cast<unsigned char>(data[offset]) << 16) |
+                  (static_cast<unsigned char>(data[offset + 1]) << 8) |
+                  static_cast<unsigned char>(data[offset + 2]);
+    auto type = static_cast<unsigned char>(data[offset + 3]);
+    flags = static_cast<uint8_t>(data[offset + 4]);
+    auto sid = ((static_cast<uint32_t>(
+                     static_cast<unsigned char>(data[offset + 5])) << 24) |
+                (static_cast<uint32_t>(
+                     static_cast<unsigned char>(data[offset + 6])) << 16) |
+                (static_cast<uint32_t>(
+                     static_cast<unsigned char>(data[offset + 7])) << 8) |
+                static_cast<uint32_t>(
+                    static_cast<unsigned char>(data[offset + 8]))) &
+               0x7fffffffu;
+    if (offset + 9 + length > data.size()) {
+      return false;
+    }
+    if (type == frameType && static_cast<int32_t>(sid) == streamId) {
+      payload.assign(data, offset + 9, length);
+      return true;
+    }
+    offset += 9 + length;
+  }
+  return false;
+}
+} // namespace
 
 void Http2SessionTest::testSubmitRequestHeadersProducesClientBytes()
 {
@@ -52,6 +94,27 @@ void Http2SessionTest::testSubmitRequestHeadersProducesClientBytes()
   CPPUNIT_ASSERT_EQUAL(std::string("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"),
                        data.substr(0, 24));
   CPPUNIT_ASSERT(http2test::containsFrameType(data, NGHTTP2_SETTINGS));
+}
+
+void Http2SessionTest::testSubmitRequestWithBodyProducesDataFrame()
+{
+  Http2Session session;
+  auto headers = http2test::createRequestHeaders();
+  headers[0].value = "POST";
+  headers.emplace_back("content-type", "application/dns-message");
+  headers.emplace_back("content-length", "5");
+
+  auto streamId = session.submitRequest(headers, "query");
+  auto data = session.drainOutboundData();
+  std::string payload;
+  uint8_t flags = 0;
+
+  CPPUNIT_ASSERT(streamId > 0);
+  CPPUNIT_ASSERT(http2test::containsFrameType(data, NGHTTP2_DATA));
+  CPPUNIT_ASSERT(findFramePayload(data, NGHTTP2_DATA, streamId, payload,
+                                  flags));
+  CPPUNIT_ASSERT_EQUAL(std::string("query"), payload);
+  CPPUNIT_ASSERT(flags & NGHTTP2_FLAG_END_STREAM);
 }
 
 void Http2SessionTest::testDrainOutboundDataClearsBuffer()

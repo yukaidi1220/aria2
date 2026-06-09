@@ -72,6 +72,8 @@ public:
   Http2Transaction& operator=(const Http2Transaction&) = delete;
 
   int32_t submitRequest(const Http2HeaderBlock& headers);
+  int32_t submitRequest(const Http2HeaderBlock& headers,
+                        const std::string& body);
   std::string drainOutboundData();
   void feedInboundData(const std::string& data);
   Http2Connection& getConnection();

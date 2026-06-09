@@ -54,6 +54,16 @@ int32_t Http2Transaction::submitRequest(const Http2HeaderBlock& headers)
   return streamId_;
 }
 
+int32_t Http2Transaction::submitRequest(const Http2HeaderBlock& headers,
+                                        const std::string& body)
+{
+  if (streamId_ != 0) {
+    throw DL_ABORT_EX("HTTP/2 transaction already has an active stream");
+  }
+  streamId_ = connection_.submitRequest(headers, body);
+  return streamId_;
+}
+
 std::string Http2Transaction::drainOutboundData()
 {
   return connection_.drainOutboundData();

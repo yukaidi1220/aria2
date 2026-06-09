@@ -62,6 +62,8 @@ public:
   Http2Connection& operator=(const Http2Connection&) = delete;
 
   int32_t submitRequest(const Http2HeaderBlock& headers);
+  int32_t submitRequest(const Http2HeaderBlock& headers,
+                        const std::string& body);
   std::string drainOutboundData();
   void feedInboundData(const std::string& data);
   size_t getRemoteMaxConcurrentStreams() const;

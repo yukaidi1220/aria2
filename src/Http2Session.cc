@@ -37,7 +37,9 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include <algorithm>
+#  include <cstring>
 #  include <iterator>
+#  include <list>
 #  include <map>
 #  include <memory>
 #  include <utility>
@@ -75,6 +77,17 @@ void checkNghttp2Result(ssize_t rv, const char* context)
 }
 } // namespace
 
+struct Http2RequestBodySource {
+  explicit Http2RequestBodySource(std::string body)
+      : body(std::move(body)), offset(0), streamId(0)
+  {
+  }
+
+  std::string body;
+  size_t offset;
+  int32_t streamId;
+};
+
 struct Http2Session::Impl {
   nghttp2_session* session = nullptr;
   std::string outbound;
@@ -82,6 +95,7 @@ struct Http2Session::Impl {
   bool callbackFailed = false;
   std::string callbackError;
   std::map<int32_t, Http2ResponseEvent> responses;
+  std::list<Http2RequestBodySource> requestBodies;
 
   Impl()
   {
@@ -89,6 +103,7 @@ struct Http2Session::Impl {
     checkNghttp2Result(nghttp2_session_callbacks_new(&callbacks),
                        "nghttp2_session_callbacks_new");
     nghttp2_session_callbacks_set_send_callback(callbacks, sendCallback);
+    nghttp2_session_callbacks_set_read_callback(callbacks, readCallback);
     nghttp2_session_callbacks_set_on_frame_recv_callback(
         callbacks, onFrameRecvCallback);
     nghttp2_session_callbacks_set_on_header_callback(
@@ -129,6 +144,13 @@ struct Http2Session::Impl {
     return response;
   }
 
+  void releaseRequestBody(int32_t streamId)
+  {
+    requestBodies.remove_if([streamId](const Http2RequestBodySource& source) {
+      return source.streamId == streamId;
+    });
+  }
+
   void sendPendingData(const char* context)
   {
     sendFailed = false;
@@ -153,6 +175,27 @@ struct Http2Session::Impl {
       return NGHTTP2_ERR_CALLBACK_FAILURE;
     }
     return static_cast<ssize_t>(length);
+  }
+
+  static ssize_t readCallback(nghttp2_session* session, int32_t streamId,
+                              uint8_t* buf, size_t length,
+                              uint32_t* dataFlags,
+                              nghttp2_data_source* source, void* userData)
+  {
+    (void)session;
+    (void)streamId;
+    (void)userData;
+    auto body = static_cast<Http2RequestBodySource*>(source->ptr);
+    auto remaining = body->body.size() - body->offset;
+    auto chunkLength = std::min(length, remaining);
+    if (chunkLength > 0) {
+      std::memcpy(buf, body->body.data() + body->offset, chunkLength);
+      body->offset += chunkLength;
+    }
+    if (body->offset == body->body.size()) {
+      *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
+    }
+    return static_cast<ssize_t>(chunkLength);
   }
 
   static int onFrameRecvCallback(nghttp2_session* session,
@@ -245,6 +288,7 @@ struct Http2Session::Impl {
       response.streamClosed = true;
       response.errorCode = errorCode;
       response.body.close(errorCode);
+      impl->releaseRequestBody(streamId);
     }
     catch (...) {
       impl->setCallbackFailure("nghttp2 stream close callback failed");
@@ -260,15 +304,36 @@ Http2Session::~Http2Session() { delete impl_; }
 
 int32_t Http2Session::submitRequestHeaders(const Http2HeaderBlock& headers)
 {
+  return submitRequest(headers, std::string());
+}
+
+int32_t Http2Session::submitRequest(const Http2HeaderBlock& headers,
+                                    const std::string& body)
+{
   std::vector<nghttp2_nv> nva;
   nva.reserve(headers.size());
   std::transform(std::begin(headers), std::end(headers),
                  std::back_inserter(nva), makeNV);
 
+  nghttp2_data_provider dataProvider;
+  nghttp2_data_provider* dataProviderPtr = nullptr;
+  if (!body.empty()) {
+    impl_->requestBodies.emplace_back(body);
+    dataProvider.source.ptr = &impl_->requestBodies.back();
+    dataProvider.read_callback = Impl::readCallback;
+    dataProviderPtr = &dataProvider;
+  }
+
   auto streamId =
       nghttp2_submit_request(impl_->session, nullptr, nva.data(), nva.size(),
-                             nullptr, nullptr);
+                             dataProviderPtr, nullptr);
+  if (streamId < 0 && dataProviderPtr) {
+    impl_->requestBodies.pop_back();
+  }
   checkNghttp2Result(streamId, "nghttp2_submit_request");
+  if (dataProviderPtr) {
+    impl_->requestBodies.back().streamId = streamId;
+  }
   impl_->sendPendingData("nghttp2_session_send");
   return streamId;
 }

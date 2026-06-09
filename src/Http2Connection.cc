@@ -50,6 +50,12 @@ int32_t Http2Connection::submitRequest(const Http2HeaderBlock& headers)
   return session_.submitRequestHeaders(headers);
 }
 
+int32_t Http2Connection::submitRequest(const Http2HeaderBlock& headers,
+                                       const std::string& body)
+{
+  return session_.submitRequest(headers, body);
+}
+
 std::string Http2Connection::drainOutboundData()
 {
   return session_.drainOutboundData();
