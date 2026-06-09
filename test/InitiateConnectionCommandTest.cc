@@ -19,6 +19,7 @@ class InitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectBackupIPAddressReturnsEmptyForHostname);
   CPPUNIT_TEST(testSelectBackupIPAddressUsesResolvedOrder);
   CPPUNIT_TEST(testSelectBackupIPAddressPrefersGlobalIPv6);
+  CPPUNIT_TEST(testSelectBackupIPAddressSkipsScopedIPv6Backup);
 #ifdef ENABLE_ASYNC_DNS
   CPPUNIT_TEST(testGetBackupConnectionDelayKeepsDefaultWithoutAsyncDns);
   CPPUNIT_TEST(testGetBackupConnectionDelayUsesZeroWithAsyncDns);
@@ -33,6 +34,7 @@ public:
   void testSelectBackupIPAddressReturnsEmptyForHostname();
   void testSelectBackupIPAddressUsesResolvedOrder();
   void testSelectBackupIPAddressPrefersGlobalIPv6();
+  void testSelectBackupIPAddressSkipsScopedIPv6Backup();
 #ifdef ENABLE_ASYNC_DNS
   void testGetBackupConnectionDelayKeepsDefaultWithoutAsyncDns();
   void testGetBackupConnectionDelayUsesZeroWithAsyncDns();
@@ -108,6 +110,18 @@ void InitiateConnectionCommandTest::testSelectBackupIPAddressPrefersGlobalIPv6()
   addrs.push_back("192.0.2.1");
 
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectBackupIPAddress(addrs, "192.0.2.10"));
+}
+
+void InitiateConnectionCommandTest::
+    testSelectBackupIPAddressSkipsScopedIPv6Backup()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("fd00::1");
+  addrs.push_back("fe80::1");
+  addrs.push_back("192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string(),
                        selectBackupIPAddress(addrs, "192.0.2.10"));
 }
 

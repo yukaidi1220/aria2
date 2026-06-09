@@ -53,6 +53,11 @@
    - 行为：HTTP response status 的 network 日志追加实际 remote IP:port，便于把 `Response received` 和本次请求连接端点关联起来。
    - 行为：TLS 握手成功后打印实际 remote IP:port、SNI、证书校验 host、TLS version 和 ALPN。无 SSL 构建不受影响；TLS 日志复用握手成功路径已有的 peer endpoint，HTTP response 日志读取 remote endpoint 失败时不会中断下载。
 
+10. 双栈 backup 连接避让第一阶段。
+    - 落点：`src/InitiateConnectionCommand.cc`
+    - 行为：主连接使用 IPv4 时，backup 连接只选择公网 IPv6 地址；如果候选里只有 ULA、link-local、site-local、loopback 等非公网 IPv6，则不再发起 IPv6 backup，避免内网 IPv6 存在但公网不可达时额外拖慢首连。
+    - 行为：主连接使用 IPv6 时，IPv4 backup 保持原有选择逻辑。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
@@ -72,12 +77,16 @@
 3. `test/OptionHandlerTest.cc`
    - `testFactoryMaxConnectionPerServerLimit`：覆盖 `-x 64` 成功、`-x 65` 失败。
 
+4. `test/InitiateConnectionCommandTest.cc`
+   - `testSelectBackupIPAddressSkipsScopedIPv6Backup`：覆盖 IPv4 主连接时不会把 ULA/link-local IPv6 选作 backup 连接地址。
+
 ## 当前验证
 
 1. 静态检查：
    - `git diff --check` 通过；只有 Windows 工作区的 LF/CRLF 提示，没有 whitespace error。
    - HTTPS RR/TYPE65 staged fallback 切片在提交前已通过上述静态检查；本机缺少 `make`/`g++`/`clang++`/`cl`/`cmake`，尚未完成本地编译或单元测试。
-   - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc`；本机仍缺少 C++ 构建工具，等待外部 review 和 GitHub Actions 编译验证。
+   - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc` 和外部 review；本机仍缺少 C++ 构建工具，GitHub Actions run `27242784981` 正在验证。
+   - 双栈 backup 避让第一阶段切片已通过 `git diff --check -- src/InitiateConnectionCommand.cc test/InitiateConnectionCommandTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；本机仍缺少 C++ 构建工具，等待 GitHub Actions 编译验证。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -117,7 +126,7 @@
 
 ### IPv4 / IPv6（21-25）
 
-部分完成。第 21 条已实现：32-bit MinGW 不再默认 `disable-ipv6=true`。第 22-25 条仍需继续做运行期地址能力、坏 IPv6 快速避让、v4/v6 混合并发下载和同 hostname 连接数约束的端到端验证。现有双栈 first-success 与后台 DNS cache fill 是基础，但不能宣称完整覆盖 RFC 8305 行为。
+部分完成。第 21 条已实现：32-bit MinGW 不再默认 `disable-ipv6=true`。第 23 条先补了 backup 连接避让：IPv4 主连时不会把非公网 IPv6 地址选作 backup，减少内网 IPv6 存在但公网不可达时的额外拖慢。第 22、24、25 条仍需继续做运行期地址能力、坏 IPv6 快速避让、v4/v6 混合并发下载和同 hostname 连接数约束的端到端验证。现有双栈 first-success 与后台 DNS cache fill 是基础，但不能宣称完整覆盖 RFC 8305 行为。
 
 ### HTTPS RR / H2 / H3（26-30）
 
@@ -149,6 +158,7 @@
    - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。下一刀继续补 resolver server/protocol/bootstrap 明细、失败 IP 和临时避让 IP。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
+   - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。下一刀继续评估本机公网 IPv6 能力判断、family penalty 和同 host 并发限制测试。
 
 5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback；下一步默认不额外查询不需要的 HTTPS RR，补 DoH over H2 日志；H3 继续保持默认关闭和 unsupported 快速拒绝。
 

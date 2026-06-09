@@ -181,19 +181,15 @@ std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
   if (backupFamily == 0) {
     return std::string();
   }
-  std::string scopedIPv6Backup;
   for (auto i = addrs.begin(), eoi = addrs.end(); i != eoi; ++i) {
     if (isNumericAddressFamily(*i, backupFamily)) {
       if (backupFamily == AF_INET6 && !isIPv6GlobalUnicastAddress(*i)) {
-        if (scopedIPv6Backup.empty()) {
-          scopedIPv6Backup = *i;
-        }
         continue;
       }
       return *i;
     }
   }
-  return scopedIPv6Backup;
+  return std::string();
 }
 
 std::chrono::milliseconds getBackupConnectionDelay(const Option* option)
