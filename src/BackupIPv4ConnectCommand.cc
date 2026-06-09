@@ -50,7 +50,8 @@ BackupConnectInfo::BackupConnectInfo() : cancel(false) {}
 BackupIPv4ConnectCommand::BackupIPv4ConnectCommand(
     cuid_t cuid, const std::string& ipaddr, uint16_t port,
     const std::shared_ptr<BackupConnectInfo>& info, Command* mainCommand,
-    RequestGroup* requestGroup, DownloadEngine* e)
+    RequestGroup* requestGroup, DownloadEngine* e,
+    std::chrono::milliseconds backupDelay)
     : Command(cuid),
       ipaddr_(ipaddr),
       port_(port),
@@ -60,6 +61,7 @@ BackupIPv4ConnectCommand::BackupIPv4ConnectCommand(
       e_(e),
       startTime_(global::wallclock()),
       timeoutCheck_(global::wallclock()),
+      backupDelay_(backupDelay),
       timeout_(requestGroup_->getOption()->getAsInt(PREF_CONNECT_TIMEOUT))
 {
   requestGroup_->increaseStreamCommand();
@@ -121,11 +123,8 @@ bool BackupIPv4ConnectCommand::execute()
     }
   }
   else if (!socket_) {
-    // TODO Although we check 300ms initial timeout as described in
-    // RFC 6555, the interval will be much longer and around 1 second
-    // due to the refresh interval mechanism in DownloadEngine.
     if (startTime_.difference(global::wallclock()) >=
-        std::chrono::milliseconds(300)) {
+        backupDelay_) {
       socket_ = std::make_shared<SocketCore>();
       try {
         A2_LOG_NETWORK(

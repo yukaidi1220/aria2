@@ -92,12 +92,17 @@ bool ConnectCommand::executeInternal()
     A2_LOG_NETWORK(
         fmt("CUID#%" PRId64 " - Using backup connection address %s",
             getCuid(), backupConnectionInfo_->ipaddr.c_str()));
-    getDownloadEngine()->markBadIPAddress(getRequest()->getConnectedHostname(),
-                                          getRequest()->getConnectedAddr(),
-                                          getRequest()->getConnectedPort());
-    A2_LOG_NETWORK(
-        fmt("CUID#%" PRId64 " - Marking IP %s as bad",
-            getCuid(), getRequest()->getConnectedAddr().c_str()));
+
+    auto mainSocketError = getSocket()->getSocketError();
+    if (!mainSocketError.empty()) {
+      getDownloadEngine()->markBadIPAddress(
+          getRequest()->getConnectedHostname(), getRequest()->getConnectedAddr(),
+          getRequest()->getConnectedPort());
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64 " - Marking IP %s as bad: %s",
+              getCuid(), getRequest()->getConnectedAddr().c_str(),
+              mainSocketError.c_str()));
+    }
 
     getRequest()->setConnectedAddrInfo(getRequest()->getConnectedHostname(),
                                        backupConnectionInfo_->ipaddr,

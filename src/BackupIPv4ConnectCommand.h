@@ -37,6 +37,7 @@
 
 #include "Command.h"
 
+#include <chrono>
 #include <string>
 #include <memory>
 
@@ -67,7 +68,8 @@ public:
                            uint16_t port,
                            const std::shared_ptr<BackupConnectInfo>& info,
                            Command* mainCommand, RequestGroup* requestGroup,
-                           DownloadEngine* e);
+                           DownloadEngine* e,
+                           std::chrono::milliseconds backupDelay);
   ~BackupIPv4ConnectCommand();
   virtual bool execute() CXX11_OVERRIDE;
 
@@ -81,6 +83,7 @@ private:
   DownloadEngine* e_;
   Timer startTime_;
   Timer timeoutCheck_;
+  std::chrono::milliseconds backupDelay_;
   std::chrono::seconds timeout_;
 };
 

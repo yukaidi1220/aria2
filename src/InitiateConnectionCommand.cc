@@ -174,6 +174,19 @@ std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
   return std::string();
 }
 
+std::chrono::milliseconds getBackupConnectionDelay(const Option* option)
+{
+#ifdef ENABLE_ASYNC_DNS
+  if (option && option->getAsBool(PREF_ASYNC_DNS) &&
+      !option->getAsBool(PREF_DISABLE_IPV6)) {
+    return std::chrono::milliseconds(0);
+  }
+#else  // !ENABLE_ASYNC_DNS
+  (void)option;
+#endif // !ENABLE_ASYNC_DNS
+  return std::chrono::milliseconds(300);
+}
+
 std::shared_ptr<BackupConnectInfo>
 InitiateConnectionCommand::createBackupConnectCommand(
     const std::string& hostname, const std::string& ipaddr, uint16_t port,
@@ -192,12 +205,17 @@ InitiateConnectionCommand::createBackupConnectCommand(
   auto backupAddr = selectBackupIPAddress(addrs, ipaddr);
   if (!backupAddr.empty()) {
     info = std::make_shared<BackupConnectInfo>();
+    auto backupDelay = getBackupConnectionDelay(getOption().get());
     auto command = make_unique<BackupIPv4ConnectCommand>(
         getDownloadEngine()->newCUID(), backupAddr, port, info, mainCommand,
-        getRequestGroup(), getDownloadEngine());
+        getRequestGroup(), getDownloadEngine(), backupDelay);
     A2_LOG_INFO(fmt("Issue backup connection command CUID#%" PRId64
                     ", addr=%s",
                     command->getCuid(), backupAddr.c_str()));
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - Scheduling backup connection to %s:%u after %ld ms",
+                       command->getCuid(), backupAddr.c_str(), port,
+                       static_cast<long>(backupDelay.count())));
     getDownloadEngine()->addCommand(std::move(command));
     return info;
   }

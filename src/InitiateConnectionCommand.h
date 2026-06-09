@@ -37,6 +37,7 @@
 
 #include "AbstractCommand.h"
 
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,7 @@ class ConnectCommand;
 
 std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
                                   const std::string& ipaddr);
+std::chrono::milliseconds getBackupConnectionDelay(const Option* option);
 
 class InitiateConnectionCommand : public AbstractCommand {
 protected:

@@ -5,6 +5,10 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "A2STR.h"
+#include "Option.h"
+#include "prefs.h"
+
 namespace aria2 {
 
 class InitiateConnectionCommandTest : public CppUnit::TestFixture {
@@ -13,6 +17,11 @@ class InitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectBackupIPAddressChoosesIPv4ForIPv6Main);
   CPPUNIT_TEST(testSelectBackupIPAddressReturnsEmptyWithoutOppositeFamily);
   CPPUNIT_TEST(testSelectBackupIPAddressReturnsEmptyForHostname);
+#ifdef ENABLE_ASYNC_DNS
+  CPPUNIT_TEST(testGetBackupConnectionDelayKeepsDefaultWithoutAsyncDns);
+  CPPUNIT_TEST(testGetBackupConnectionDelayUsesZeroWithAsyncDns);
+  CPPUNIT_TEST(testGetBackupConnectionDelayKeepsDefaultWhenIPv6Disabled);
+#endif // ENABLE_ASYNC_DNS
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -20,6 +29,11 @@ public:
   void testSelectBackupIPAddressChoosesIPv4ForIPv6Main();
   void testSelectBackupIPAddressReturnsEmptyWithoutOppositeFamily();
   void testSelectBackupIPAddressReturnsEmptyForHostname();
+#ifdef ENABLE_ASYNC_DNS
+  void testGetBackupConnectionDelayKeepsDefaultWithoutAsyncDns();
+  void testGetBackupConnectionDelayUsesZeroWithAsyncDns();
+  void testGetBackupConnectionDelayKeepsDefaultWhenIPv6Disabled();
+#endif // ENABLE_ASYNC_DNS
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(InitiateConnectionCommandTest);
@@ -69,5 +83,37 @@ void InitiateConnectionCommandTest::
   CPPUNIT_ASSERT_EQUAL(std::string(),
                        selectBackupIPAddress(addrs, "example.org"));
 }
+
+#ifdef ENABLE_ASYNC_DNS
+void InitiateConnectionCommandTest::
+    testGetBackupConnectionDelayKeepsDefaultWithoutAsyncDns()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+  option.put(PREF_DISABLE_IPV6, A2_V_FALSE);
+
+  CPPUNIT_ASSERT_EQUAL((int64_t)300, getBackupConnectionDelay(&option).count());
+}
+
+void InitiateConnectionCommandTest::
+    testGetBackupConnectionDelayUsesZeroWithAsyncDns()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_DISABLE_IPV6, A2_V_FALSE);
+
+  CPPUNIT_ASSERT_EQUAL((int64_t)0, getBackupConnectionDelay(&option).count());
+}
+
+void InitiateConnectionCommandTest::
+    testGetBackupConnectionDelayKeepsDefaultWhenIPv6Disabled()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
+
+  CPPUNIT_ASSERT_EQUAL((int64_t)300, getBackupConnectionDelay(&option).count());
+}
+#endif // ENABLE_ASYNC_DNS
 
 } // namespace aria2
