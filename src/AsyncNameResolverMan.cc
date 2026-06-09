@@ -113,6 +113,7 @@ AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
 
 AsyncNameResolverMan::AsyncNameResolverMan()
     : resolverMode_(RESOLVER_CARES),
+      dohHttp2_(false),
       numResolver_(0),
       resolverCheck_(0),
       ipv4_(true),
@@ -176,8 +177,8 @@ std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
   case RESOLVER_DOH: {
     auto dohServers = parseAsyncDnsDohServerConfigList(servers_);
     validateAsyncDnsDohServerConfigForDirectConnect(dohServers);
-    return std::make_shared<AsyncDohNameResolver>(family,
-                                                  std::move(dohServers));
+    return std::make_shared<AsyncDohNameResolver>(
+        family, std::move(dohServers), AsyncDohTransportFactory(), dohHttp2_);
   }
 #endif // ENABLE_SSL
   }
@@ -387,6 +388,9 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
   validateAsyncNameResolverConfig(resolverMode, servers);
   asyncNameResolverMan->setResolverMode(resolverMode);
   asyncNameResolverMan->setServers(std::move(servers));
+  asyncNameResolverMan->setDohHttp2(
+      option->getAsBool(PREF_ENABLE_HTTP2) &&
+      !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING));
 }
 
 } // namespace aria2

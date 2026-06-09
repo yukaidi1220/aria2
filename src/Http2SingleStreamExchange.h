@@ -70,6 +70,8 @@ public:
   operator=(const Http2SingleStreamExchange&) = delete;
 
   int32_t submitRequest(HttpRequest& request);
+  int32_t submitRequest(const Http2HeaderBlock& headers,
+                        const std::string& body);
   bool flushOutboundData();
   bool readInboundData();
   bool pump();

@@ -98,6 +98,7 @@ public:
   {
     resolverMode_ = resolverMode;
   }
+  void setDohHttp2(bool enable) { dohHttp2_ = enable; }
 
   virtual std::shared_ptr<AsyncResolver> createResolver(int family) const;
 
@@ -112,6 +113,7 @@ private:
   std::shared_ptr<AsyncResolver> asyncNameResolver_[2];
   std::string servers_;
   ResolverMode resolverMode_;
+  bool dohHttp2_;
   size_t numResolver_;
   int resolverCheck_;
   bool ipv4_;

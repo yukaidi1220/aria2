@@ -48,6 +48,13 @@
 #include "Exception.h"
 #include "HttpHeader.h"
 #include "HttpHeaderProcessor.h"
+#include "HttpProtocol.h"
+#ifdef HAVE_LIBNGHTTP2
+#  include "Http2SingleStreamExchange.h"
+#  include "Http2Transport.h"
+#  include "HttpResponse.h"
+#  include <nghttp2/nghttp2.h>
+#endif // HAVE_LIBNGHTTP2
 #include "LogFactory.h"
 #include "a2functional.h"
 #include "fmt.h"
@@ -143,6 +150,36 @@ std::string createDohRequest(const AsyncDohServerConfig& server,
   request += dnsQuery;
   return request;
 }
+
+std::vector<std::string> createDohAlpnProtocols(bool enableHttp2)
+{
+  std::vector<std::string> protocols;
+#ifdef HAVE_LIBNGHTTP2
+  if (enableHttp2) {
+    protocols.push_back(HTTP_ALPN_H2);
+    protocols.push_back(HTTP_ALPN_HTTP11);
+  }
+#else  // !HAVE_LIBNGHTTP2
+  (void)enableHttp2;
+#endif // !HAVE_LIBNGHTTP2
+  return protocols;
+}
+
+#ifdef HAVE_LIBNGHTTP2
+Http2HeaderBlock createDohHttp2Headers(const AsyncDohServerConfig& server,
+                                       const std::string& dnsQuery)
+{
+  Http2HeaderBlock headers;
+  headers.emplace_back(":method", "POST");
+  headers.emplace_back(":scheme", "https");
+  headers.emplace_back(":authority", createHostHeader(server));
+  headers.emplace_back(":path", server.path);
+  headers.emplace_back("accept", "application/dns-message");
+  headers.emplace_back("content-type", "application/dns-message");
+  headers.emplace_back("content-length", util::uitos(dnsQuery.size()));
+  return headers;
+}
+#endif // HAVE_LIBNGHTTP2
 } // namespace
 
 class AsyncDohExchange {
@@ -153,8 +190,6 @@ public:
 
   virtual void submitRequest(const AsyncDohServerConfig& server,
                              const std::string& dnsQuery) = 0;
-
-  virtual std::vector<std::string> createAlpnProtocols() const = 0;
 
   virtual bool writeRequest(AsyncDohTransport& transport) = 0;
 
@@ -192,11 +227,6 @@ public:
   {
     reset();
     writeBuffer_ = createDohRequest(server, dnsQuery);
-  }
-
-  virtual std::vector<std::string> createAlpnProtocols() const CXX11_OVERRIDE
-  {
-    return std::vector<std::string>();
   }
 
   virtual bool writeRequest(AsyncDohTransport& transport) CXX11_OVERRIDE
@@ -320,6 +350,194 @@ private:
   size_t responseOffset_;
 };
 
+#ifdef HAVE_LIBNGHTTP2
+class AsyncDohHttp2TransportAdapter : public Http2Transport {
+public:
+  explicit AsyncDohHttp2TransportAdapter(AsyncDohTransport& transport)
+      : transport_(transport)
+  {
+  }
+
+  virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE
+  {
+    return transport_.writeData(data, len);
+  }
+
+  virtual ssize_t readData(void* data, size_t len) CXX11_OVERRIDE
+  {
+    return static_cast<ssize_t>(transport_.readData(data, len));
+  }
+
+  virtual size_t getRecvBufferedLength() const CXX11_OVERRIDE
+  {
+    return transport_.getRecvBufferedLength();
+  }
+
+  virtual bool wantRead() const CXX11_OVERRIDE
+  {
+    return transport_.wantRead();
+  }
+
+  virtual bool wantWrite() const CXX11_OVERRIDE
+  {
+    return transport_.wantWrite();
+  }
+
+private:
+  AsyncDohTransport& transport_;
+};
+
+class AsyncDohHttp2Exchange : public AsyncDohExchange {
+public:
+  virtual void reset() CXX11_OVERRIDE
+  {
+    server_ = AsyncDohServerConfig();
+    dnsQuery_.clear();
+    transportAdapter_.reset();
+    exchange_.reset();
+    responseHeaderChecked_ = false;
+    responseBuffer_.clear();
+  }
+
+  virtual void submitRequest(const AsyncDohServerConfig& server,
+                             const std::string& dnsQuery) CXX11_OVERRIDE
+  {
+    reset();
+    server_ = server;
+    dnsQuery_ = dnsQuery;
+  }
+
+  virtual bool writeRequest(AsyncDohTransport& transport) CXX11_OVERRIDE
+  {
+    ensureExchange(transport);
+    exchange_->flushOutboundData();
+    return !exchange_->wantWrite();
+  }
+
+  virtual DohExchangeReadResult
+  readResponseHeader(AsyncDohTransport& transport) CXX11_OVERRIDE
+  {
+    ensureExchange(transport);
+    exchange_->readInboundData();
+    exchange_->flushOutboundData();
+    collectResponseBody();
+
+    auto state = exchange_->getState();
+    if (!state.headersComplete) {
+      if (state.streamClosed) {
+        throw DL_ABORT_EX("DoH HTTP/2 stream closed before response headers");
+      }
+      if (state.errorCode != 0) {
+        throw DL_ABORT_EX("DoH HTTP/2 stream failed before response headers");
+      }
+    }
+    if (!state.responseAvailable || !state.headersComplete) {
+      return DOH_EXCHANGE_READ_HEADER_PENDING;
+    }
+    checkResponseHeader();
+    if (state.streamClosed) {
+      checkStreamClosed(state);
+      return DOH_EXCHANGE_READ_COMPLETE;
+    }
+    return DOH_EXCHANGE_READ_BODY_PENDING;
+  }
+
+  virtual bool readResponseBody(AsyncDohTransport& transport) CXX11_OVERRIDE
+  {
+    ensureExchange(transport);
+    exchange_->readInboundData();
+    exchange_->flushOutboundData();
+    collectResponseBody();
+    auto state = exchange_->getState();
+    if (!state.streamClosed) {
+      return false;
+    }
+    checkStreamClosed(state);
+    return true;
+  }
+
+  virtual const std::vector<unsigned char>& getResponseBody() const
+      CXX11_OVERRIDE
+  {
+    return responseBuffer_;
+  }
+
+  virtual size_t getReadProgress() const CXX11_OVERRIDE
+  {
+    auto progress = responseBuffer_.size();
+    if (responseHeaderChecked_) {
+      ++progress;
+    }
+    if (exchange_) {
+      progress += exchange_->getState().bodyLength;
+    }
+    return progress;
+  }
+
+private:
+  void ensureExchange(AsyncDohTransport& transport)
+  {
+    if (exchange_) {
+      return;
+    }
+    transportAdapter_ = make_unique<AsyncDohHttp2TransportAdapter>(transport);
+    exchange_ = make_unique<Http2SingleStreamExchange>(*transportAdapter_);
+    exchange_->submitRequest(createDohHttp2Headers(server_, dnsQuery_),
+                             dnsQuery_);
+  }
+
+  void collectResponseBody()
+  {
+    for (;;) {
+      auto chunk = exchange_->popResponseBody(MAX_DOH_MESSAGE_SIZE);
+      if (chunk.empty()) {
+        return;
+      }
+      if (responseBuffer_.size() + chunk.size() > MAX_DOH_MESSAGE_SIZE) {
+        throw DL_ABORT_EX("DoH HTTP/2 response body is too large");
+      }
+      responseBuffer_.insert(std::end(responseBuffer_), std::begin(chunk),
+                             std::end(chunk));
+    }
+  }
+
+  void checkResponseHeader()
+  {
+    if (responseHeaderChecked_) {
+      return;
+    }
+    auto response = exchange_->createHttpResponse();
+    if (!response) {
+      throw DL_ABORT_EX("DoH HTTP/2 response header was not parsed");
+    }
+    if (response->getStatusCode() != 200) {
+      throw DL_ABORT_EX(
+          fmt("DoH server returned HTTP/2 status %d",
+              response->getStatusCode()));
+    }
+    responseHeaderChecked_ = true;
+  }
+
+  void checkStreamClosed(const Http2TransactionState& state) const
+  {
+    if (state.errorCode != NGHTTP2_NO_ERROR) {
+      throw DL_ABORT_EX(
+          fmt("DoH HTTP/2 stream closed with error %u", state.errorCode));
+    }
+    if (responseBuffer_.empty()) {
+      throw DL_ABORT_EX("DoH HTTP/2 response body is empty");
+    }
+  }
+
+  AsyncDohServerConfig server_;
+  std::string dnsQuery_;
+  std::unique_ptr<AsyncDohHttp2TransportAdapter> transportAdapter_;
+  std::unique_ptr<Http2SingleStreamExchange> exchange_;
+  bool responseHeaderChecked_ = false;
+  std::vector<unsigned char> responseBuffer_;
+};
+#endif // HAVE_LIBNGHTTP2
+
 namespace {
 class SocketCoreDohTransport : public AsyncDohTransport {
 public:
@@ -387,9 +605,10 @@ createSocketCoreDohTransport(const AsyncDohServerConfig&)
 
 AsyncDohNameResolver::AsyncDohNameResolver(
     int family, std::vector<AsyncDohServerConfig> servers,
-    AsyncDohTransportFactory transportFactory)
+    AsyncDohTransportFactory transportFactory, bool enableHttp2)
     : family_(family),
       servers_(std::move(servers)),
+      enableHttp2_(enableHttp2),
       transportFactory_(std::move(transportFactory)),
       exchange_(make_unique<AsyncDohHttp1Exchange>()),
       status_(STATUS_READY),
@@ -448,7 +667,7 @@ bool AsyncDohNameResolver::startCurrentServer()
   while (serverIndex_ < servers_.size()) {
     const auto& server = servers_[serverIndex_];
     try {
-      exchange_->submitRequest(server, dnsQuery_);
+      exchange_->reset();
       transport_ = transportFactory_(server);
       if (!transport_) {
         throw DL_ABORT_EX("DoH transport factory returned null");
@@ -605,7 +824,31 @@ TLSHandshakeParams AsyncDohNameResolver::createTLSHandshakeParams() const
   const auto verifyHost =
       server.tlsHost.empty() ? server.connectHost : server.tlsHost;
   return TLSHandshakeParams(verifyHost, verifyHost,
-                            exchange_->createAlpnProtocols());
+                            createDohAlpnProtocols(enableHttp2_));
+}
+
+void AsyncDohNameResolver::prepareExchangeForSelectedProtocol()
+{
+  const auto& server = servers_[serverIndex_];
+  auto protocol = decideHttpProtocolFromSelectedAlpn(
+      transport_->getSelectedAlpnProtocol(), enableHttp2_);
+  switch (protocol) {
+  case HTTP_PROTOCOL_HTTP1:
+    exchange_ = make_unique<AsyncDohHttp1Exchange>();
+    break;
+  case HTTP_PROTOCOL_H2:
+#ifdef HAVE_LIBNGHTTP2
+    exchange_ = make_unique<AsyncDohHttp2Exchange>();
+    A2_LOG_NETWORK("DNS: DoH using HTTP/2");
+    break;
+#else  // !HAVE_LIBNGHTTP2
+    throw DL_ABORT_EX(
+        "DoH HTTP/2 was selected but aria2 was built without nghttp2");
+#endif // !HAVE_LIBNGHTTP2
+  case HTTP_PROTOCOL_UNKNOWN:
+    throw DL_ABORT_EX("Unsupported DoH HTTP protocol");
+  }
+  exchange_->submitRequest(server, dnsQuery_);
 }
 
 void AsyncDohNameResolver::process(sock_t readfd, sock_t writefd)
@@ -665,6 +908,7 @@ void AsyncDohNameResolver::processTlsHandshake()
   if (!transport_->tlsConnect(createTLSHandshakeParams())) {
     return;
   }
+  prepareExchangeForSelectedProtocol();
   state_ = DOH_WRITING_REQUEST;
 }
 

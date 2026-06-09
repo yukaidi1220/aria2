@@ -35,7 +35,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
 | DoT / DoH | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot`；当前直连模式要求 DNS server 连接目标是数值 IP；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
 | IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
-| DoH over H2 | 未实现 | DoH resolver 固定发送 HTTP/1.1 `POST application/dns-message`，不会因为 `--enable-http2=true` 变成 H2 | `src/AsyncDohNameResolver.cc` |
+| DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；ALPN 未选中 `h2` 时回落 HTTP/1.1 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc` |
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存 | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
 | HTTP/3 / H3 / QUIC | 只有禁用占位参数 | `--enable-http3=true` 会被 `UnsupportedFeatureOptionHandler` 拒绝；源码没有 QUIC 传输、H3 command、`h3` ALPN 分发或依赖探测 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
 | ECH | 只有禁用占位参数和 TLS 参数骨架 | `--enable-ech=true` 会被拒绝；当前没有 ClientHelloOuter/Inner、ECHConfig 获取或 TLS 后端接线；H2 origin coalescing 会比较 ALPN/ECH 参数并拒绝 FakeSNI override 连接 | `src/OptionHandlerFactory.cc`、`src/SocketCore.h`、`src/TLSSession.h`、`src/usage_text.h` |
@@ -165,10 +165,10 @@ DoH 规则：
 - 当前直连校验同样要求 URL host 是数值地址；`https://dns.example.org/dns-query` 能被解析，但会被 `validateAsyncDnsDohServerConfigForDirectConnect()` 拒绝。
 - `--async-dns-mode=doh` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoH server configured”。
 - URL 必须有 path，拒绝 userinfo、密码；query 允许作为 path 的一部分发送。fragment 被当作 TLS/HTTP 逻辑主机名，只允许合法 DNS 主机名，不能是 IP、`localhost` 或单标签名。
-- `AsyncDohNameResolver.cc::createDohRequest()` 发送 HTTP/1.1 `POST`，`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
+- `AsyncDohNameResolver.cc::createDohRequest()` 是 HTTP/1.1 fallback 路径，发送 `POST`、`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
 - 写了 `#TLS_HOST` 时，DoH TLS SNI、证书校验主机和 HTTP `Host:` 头都使用该主机；TCP 仍连接 URL 里的数值地址，HTTP request target 不包含 fragment。
-- 当前 DoH resolver 自己不启用 HTTP/2/ALPN，也不复用普通下载链路的 H2 连接；`--enable-http2=true` 只影响 HTTP/HTTPS 下载请求，不会把 DoH 改造成 DoH over H2。
-- 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。当前实现按 `Connection: close` 的单请求 HTTP/1.1 交互处理，不支持 DoH over H2/H3，也没有 DoH 连接复用。
+- 有 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时，DoH TLS 会请求配置 ALPN `h2,http/1.1`。服务端选中 `h2` 时使用 `Http2SingleStreamExchange` 发送 HTTP/2 POST + DATA；未选中或 TLS 后端无 ALPN 时回落 HTTP/1.1。
+- HTTP/1.1 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。HTTP/2 响应要求 `:status=200`、stream 正常结束且 DNS message body 不超过上限。当前 DoH 不复用普通下载链路的 H2 连接，也不支持 DoH over H3。
 
 双栈解析：
 
@@ -255,7 +255,7 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 
 - ECH：`--enable-ech=true` 目前是 `UnsupportedFeatureOptionHandler`，只允许默认 `false`；开启会在参数解析阶段失败。源码里只预留了 `TLSHandshakeParams` 的 ECH 参数骨架和 `TLSSession` 默认 no-op API，不会发送 ECH ClientHello。
 - HTTP/3/H3/QUIC：当前有 `--enable-http3[=false]` 禁用壳，只允许默认 `false`；设置为 `true` 会在参数解析阶段失败。源码仍然没有 QUIC 传输层、HTTP/3 request/response command、H3 ALPN 分发或依赖探测，这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进 HTTP 下载 ALPN 列表。
-- DoH over H2：当前 `AsyncDohNameResolver` 使用 HTTP/1.1 POST `application/dns-message`，不会因为 `--enable-http2=true` 自动变成 DoH over H2。
+- DoH over H2：`AsyncDohNameResolver` 会在 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时尝试 ALPN `h2,http/1.1`；TLS 未选中 `h2` 时仍按 HTTP/1.1 POST `application/dns-message` 工作。
 - WinTLS/AppleTLS 上的 FakeSNI override：普通 SNI 可用，但 SNI 与证书校验 hostname 不同会被提前拒绝。
 - WinTLS/AppleTLS 当前代码里的 HTTP/2 ALPN：没有 ALPN 接口时会降级 HTTP/1.1；GnuTLS 只有在 configure 探测到 ALPN API 时才启用。
 

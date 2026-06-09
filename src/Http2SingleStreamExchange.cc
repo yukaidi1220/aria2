@@ -69,6 +69,14 @@ int32_t Http2SingleStreamExchange::submitRequest(HttpRequest& request)
   return streamId;
 }
 
+int32_t Http2SingleStreamExchange::submitRequest(
+    const Http2HeaderBlock& headers, const std::string& body)
+{
+  auto streamId = transaction_.submitRequest(headers, body);
+  pump_.notifyPendingOutboundData();
+  return streamId;
+}
+
 bool Http2SingleStreamExchange::flushOutboundData()
 {
   return pump_.flushOutboundData();

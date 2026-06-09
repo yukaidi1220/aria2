@@ -3,6 +3,7 @@
 #ifdef ENABLE_SSL
 
 #include <algorithm>
+#include <cstdint>
 #include <cstring>
 #include <memory>
 #include <vector>
@@ -12,6 +13,11 @@
 #include "AsyncDnsServerConfig.h"
 #include "DnsMessage.h"
 #include "EventPoll.h"
+#ifdef HAVE_LIBNGHTTP2
+#  include "Http2TestUtil.h"
+#  include "HttpProtocol.h"
+#  include <nghttp2/nghttp2.h>
+#endif // HAVE_LIBNGHTTP2
 #include "a2functional.h"
 #include "util.h"
 
@@ -27,6 +33,11 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testTLSHostDefaultPortHostHeaderOmitsPort);
   CPPUNIT_TEST(testHostHeaderUsesBracketedIPv6);
   CPPUNIT_TEST(testHostHeaderUsesBracketedIPv6DefaultPort);
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_TEST(testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1);
+  CPPUNIT_TEST(testResolveAResponseOverHttp2);
+  CPPUNIT_TEST(testRetryNextServerOnHttp2RstBeforeHeaders);
+#endif // HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testTlsWantReadUpdatesSocketEvents);
   CPPUNIT_TEST(testTlsWantWriteUpdatesSocketEvents);
   CPPUNIT_TEST(testWriteWantWriteThenSucceeds);
@@ -53,6 +64,11 @@ public:
   void testTLSHostDefaultPortHostHeaderOmitsPort();
   void testHostHeaderUsesBracketedIPv6();
   void testHostHeaderUsesBracketedIPv6DefaultPort();
+#ifdef HAVE_LIBNGHTTP2
+  void testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1();
+  void testResolveAResponseOverHttp2();
+  void testRetryNextServerOnHttp2RstBeforeHeaders();
+#endif // HAVE_LIBNGHTTP2
   void testTlsWantReadUpdatesSocketEvents();
   void testTlsWantWriteUpdatesSocketEvents();
   void testWriteWantWriteThenSucceeds();
@@ -178,13 +194,56 @@ std::string getDohRequestBody(const std::string& request)
   return request.substr(pos + 4);
 }
 
-uint16_t getQueryId(const std::string& dohRequest)
+uint16_t getDnsMessageId(const std::string& body)
 {
-  auto body = getDohRequestBody(dohRequest);
   return (static_cast<uint16_t>(
               static_cast<unsigned char>(body[0])) << 8) |
          static_cast<uint16_t>(static_cast<unsigned char>(body[1]));
 }
+
+uint16_t getQueryId(const std::string& dohRequest)
+{
+  return getDnsMessageId(getDohRequestBody(dohRequest));
+}
+
+#ifdef HAVE_LIBNGHTTP2
+bool findFramePayload(const std::string& data, unsigned char frameType,
+                      int32_t streamId, std::string& payload,
+                      uint8_t& flags)
+{
+  size_t offset = 0;
+  if (data.size() >= 24 &&
+      data.substr(0, 24) == "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n") {
+    offset = 24;
+  }
+
+  while (offset + 9 <= data.size()) {
+    auto length = (static_cast<unsigned char>(data[offset]) << 16) |
+                  (static_cast<unsigned char>(data[offset + 1]) << 8) |
+                  static_cast<unsigned char>(data[offset + 2]);
+    auto type = static_cast<unsigned char>(data[offset + 3]);
+    flags = static_cast<uint8_t>(data[offset + 4]);
+    auto sid = ((static_cast<uint32_t>(
+                     static_cast<unsigned char>(data[offset + 5])) << 24) |
+                (static_cast<uint32_t>(
+                     static_cast<unsigned char>(data[offset + 6])) << 16) |
+                (static_cast<uint32_t>(
+                     static_cast<unsigned char>(data[offset + 7])) << 8) |
+                static_cast<uint32_t>(
+                    static_cast<unsigned char>(data[offset + 8]))) &
+               0x7fffffffu;
+    if (offset + 9 + length > data.size()) {
+      return false;
+    }
+    if (type == frameType && static_cast<int32_t>(sid) == streamId) {
+      payload.assign(data, offset + 9, length);
+      return true;
+    }
+    offset += 9 + length;
+  }
+  return false;
+}
+#endif // HAVE_LIBNGHTTP2
 
 std::string createAResponse(uint16_t id, const std::string& hostname)
 {
@@ -259,6 +318,11 @@ public:
     return true;
   }
 
+  virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE
+  {
+    return selectedAlpnProtocol;
+  }
+
   virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE
   {
     wantRead_ = false;
@@ -307,6 +371,7 @@ public:
   bool started = false;
   std::string socketError;
   TLSHandshakeParams tlsParams;
+  std::string selectedAlpnProtocol;
   int tlsConnectCalls = 0;
   bool tlsBlocksWithRead = false;
   bool tlsBlocksWithWrite = false;
@@ -569,6 +634,102 @@ void AsyncDohNameResolverTest::testHostHeaderUsesBracketedIPv6DefaultPort()
   CPPUNIT_ASSERT_EQUAL(std::string("[2606:4700:4700::1111]"),
                        getHeaderValue(transport->written, "Host: "));
 }
+
+#ifdef HAVE_LIBNGHTTP2
+void AsyncDohNameResolverTest::testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
+      makeTransportFactory(factory), true);
+
+  resolver.resolve("www.example.com");
+  driveUntilWriteRequestDone(resolver, factory);
+
+  auto transport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL((size_t)2, transport->tlsParams.alpnProtocols.size());
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_H2),
+                       transport->tlsParams.alpnProtocols[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string(HTTP_ALPN_HTTP11),
+                       transport->tlsParams.alpnProtocols[1]);
+  CPPUNIT_ASSERT(
+      util::startsWith(transport->written, "POST /dns-query HTTP/1.1\r\n"));
+}
+
+void AsyncDohNameResolverTest::testResolveAResponseOverHttp2()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
+      makeTransportFactory(factory), true);
+
+  resolver.resolve("www.example.com");
+  auto transport = factory.transports.back();
+  transport->selectedAlpnProtocol = HTTP_ALPN_H2;
+  driveUntilWriteRequestDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, transport->tlsParams.alpnProtocols.size());
+  std::string dnsQuery;
+  uint8_t flags = 0;
+  CPPUNIT_ASSERT(findFramePayload(transport->written, NGHTTP2_DATA, 1,
+                                  dnsQuery, flags));
+  CPPUNIT_ASSERT(flags & NGHTTP2_FLAG_END_STREAM);
+
+  http2test::FakeHttp2ServerSession server;
+  server.feedInboundData(transport->written);
+  auto response = createAResponse(getDnsMessageId(dnsQuery),
+                                  "www.example.com");
+  auto headers = http2test::createResponseHeaders();
+  headers.emplace_back("content-length", util::uitos(response.size()));
+  server.submitResponse(1, headers, response);
+  transport->readBuffer = server.drainOutboundData();
+
+  driveUntilDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL(AsyncDohNameResolver::DOH_DONE, resolver.getDohState());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getResolvedAddresses().size());
+  CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.9"),
+                       resolver.getResolvedAddresses()[0]);
+}
+
+void AsyncDohNameResolverTest::testRetryNextServerOnHttp2RstBeforeHeaders()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(AF_INET,
+                                {{"1.1.1.1", 443, "", "/dns-query"},
+                                 {"8.8.8.8", 443, "", "/dns-query"}},
+                                makeTransportFactory(factory), true);
+
+  resolver.resolve("www.example.com");
+  auto firstTransport = factory.transports.back();
+  firstTransport->selectedAlpnProtocol = HTTP_ALPN_H2;
+  driveUntilWriteRequestDone(resolver, factory);
+
+  http2test::FakeHttp2ServerSession server;
+  server.feedInboundData(firstTransport->written);
+  server.submitRstStream(1, NGHTTP2_REFUSED_STREAM);
+  firstTransport->readBuffer = server.drainOutboundData();
+
+  for (size_t i = 0; i < 8 && factory.transports.size() == 1; ++i) {
+    driveOnce(resolver, firstTransport);
+  }
+  CPPUNIT_ASSERT_EQUAL((size_t)2, factory.transports.size());
+  auto secondTransport = factory.transports.back();
+  CPPUNIT_ASSERT_EQUAL(std::string("8.8.8.8"),
+                       secondTransport->connectHost);
+
+  driveUntilWriteRequestDone(resolver, factory);
+  auto response = createAResponse(getQueryId(secondTransport->written),
+                                  "www.example.com");
+  secondTransport->readBuffer = createHttpResponse(response);
+  driveUntilDone(resolver, factory);
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.9"),
+                       resolver.getResolvedAddresses()[0]);
+}
+#endif // HAVE_LIBNGHTTP2
 
 void AsyncDohNameResolverTest::testTlsWantReadUpdatesSocketEvents()
 {

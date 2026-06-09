@@ -100,7 +100,8 @@ public:
 
   AsyncDohNameResolver(int family, std::vector<AsyncDohServerConfig> servers,
                        AsyncDohTransportFactory transportFactory =
-                           AsyncDohTransportFactory());
+                           AsyncDohTransportFactory(),
+                       bool enableHttp2 = false);
 
   virtual ~AsyncDohNameResolver();
 
@@ -147,6 +148,7 @@ private:
   void processBufferedRead();
   bool eventReady(sock_t readfd, sock_t writefd) const;
   TLSHandshakeParams createTLSHandshakeParams() const;
+  void prepareExchangeForSelectedProtocol();
   void processConnecting();
   void processTlsHandshake();
   void processWriteRequest();
@@ -156,6 +158,7 @@ private:
 
   int family_;
   std::vector<AsyncDohServerConfig> servers_;
+  bool enableHttp2_;
   AsyncDohTransportFactory transportFactory_;
   std::unique_ptr<AsyncDohTransport> transport_;
   std::unique_ptr<AsyncDohExchange> exchange_;
