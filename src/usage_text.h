@@ -455,7 +455,8 @@
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares|dot|doh Select asynchronous DNS resolver backend.\n" \
     "                              DoT requires numeric --async-dns-server.\n" \
-    "                              DoH requires numeric HTTPS --async-dns-server URL.")
+    "                              DoH requires numeric HTTPS --async-dns-server URL.\n" \
+    "                              Append #TLS_HOST to set TLS/HTTP names.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
@@ -859,8 +860,9 @@
     "                              used in asynchronous DNS resolver. With cares,\n" \
     "                              specify DNS server IP addresses. With dot,\n" \
     "                              specify numeric DoT servers as IP, IP:PORT,\n" \
-    "                              [IPv6], or [IPv6]:PORT. With doh, specify numeric\n" \
-    "                              HTTPS URLs such as https://1.1.1.1/dns-query.\n" \
+    "                              [IPv6], or [IPv6]:PORT, optionally followed\n" \
+    "                              by #TLS_HOST. With doh, specify numeric HTTPS\n" \
+    "                              URLs such as https://1.1.1.1/dns-query#TLS_HOST.\n" \
     "                              Usually asynchronous DNS resolver reads DNS server\n" \
     "                              addresses from /etc/resolv.conf. When this option\n" \
     "                              is used, it uses DNS servers specified in this\n" \

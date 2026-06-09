@@ -53,6 +53,17 @@ void AsyncDnsServerConfigTest::testParseDotServerConfig()
   CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.port);
   CPPUNIT_ASSERT_EQUAL(std::string(), config.tlsHost);
 
+  config = parseAsyncDnsDotServerConfig("1.1.1.1#cloudflare-dns.com");
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string("cloudflare-dns.com"), config.tlsHost);
+
+  config =
+      parseAsyncDnsDotServerConfig("1.1.1.1:8853#Cloudflare-DNS.com");
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8853, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string("cloudflare-dns.com"), config.tlsHost);
+
   config = parseAsyncDnsDotServerConfig("[2606:4700:4700::1111]:853");
   CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"), config.connectHost);
   CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.port);
@@ -62,6 +73,12 @@ void AsyncDnsServerConfigTest::testParseDotServerConfig()
   CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"), config.connectHost);
   CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.port);
   CPPUNIT_ASSERT_EQUAL(std::string(), config.tlsHost);
+
+  config = parseAsyncDnsDotServerConfig(
+      "[2606:4700:4700::1111]:8853#cloudflare-dns.com");
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"), config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8853, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string("cloudflare-dns.com"), config.tlsHost);
 }
 
 void AsyncDnsServerConfigTest::testParseDotServerConfigList()
@@ -89,6 +106,28 @@ void AsyncDnsServerConfigTest::testParseDotServerConfig_badInput()
                        Exception);
   CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("[2606:4700::1111]x:853"),
                        Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#"), Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("#dns.example.org"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#dns"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#dns_.example.org"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#-dns.example.org"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#dns-.example.org"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#dns..example.org"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#dns.example.org."),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#1.1.1.1"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfig("1.1.1.1#localhost"),
+                       Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDotServerConfig("1.1.1.1#dns.example.org#extra"),
+      Exception);
   CPPUNIT_ASSERT_THROW(parseAsyncDnsDotServerConfigList("dns.example.org,"),
                        Exception);
 }
@@ -97,6 +136,11 @@ void AsyncDnsServerConfigTest::testValidateDotServerConfigForDirectConnect()
 {
   auto configs =
       parseAsyncDnsDotServerConfigList("1.1.1.1,[2606:4700:4700::1111]:853");
+  validateAsyncDnsDotServerConfigForDirectConnect(configs);
+
+  configs = parseAsyncDnsDotServerConfigList(
+      "1.1.1.1#cloudflare-dns.com,"
+      "[2606:4700:4700::1111]:853#cloudflare-dns.com");
   validateAsyncDnsDotServerConfigForDirectConnect(configs);
 
   configs = parseAsyncDnsDotServerConfigList("dns.example.org");
@@ -134,6 +178,21 @@ void AsyncDnsServerConfigTest::testParseDohServerConfig()
   CPPUNIT_ASSERT_EQUAL(std::string(), config.tlsHost);
   CPPUNIT_ASSERT_EQUAL(std::string("/dns-query"), config.path);
 
+  config = parseAsyncDnsDohServerConfig(
+      "https://1.1.1.1/dns-query#cloudflare-dns.com");
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string("cloudflare-dns.com"), config.tlsHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("/dns-query"), config.path);
+
+  config = parseAsyncDnsDohServerConfig(
+      "https://1.1.1.1:8443/dns-query?ct=application/dns-message#Cloudflare-DNS.com");
+  CPPUNIT_ASSERT_EQUAL(std::string("1.1.1.1"), config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string("cloudflare-dns.com"), config.tlsHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("/dns-query?ct=application/dns-message"),
+                       config.path);
+
   config =
       parseAsyncDnsDohServerConfig("https://[2606:4700:4700::1111]/dns-query");
   CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
@@ -150,6 +209,14 @@ void AsyncDnsServerConfigTest::testParseDohServerConfig()
   CPPUNIT_ASSERT_EQUAL(std::string(), config.tlsHost);
   CPPUNIT_ASSERT_EQUAL(std::string("/dns-query?ct=application/dns-message"),
                        config.path);
+
+  config = parseAsyncDnsDohServerConfig(
+      "https://[2606:4700:4700::1111]:8443/dns-query?x=1#cloudflare-dns.com");
+  CPPUNIT_ASSERT_EQUAL(std::string("2606:4700:4700::1111"),
+                       config.connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, config.port);
+  CPPUNIT_ASSERT_EQUAL(std::string("cloudflare-dns.com"), config.tlsHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("/dns-query?x=1"), config.path);
 
   config = parseAsyncDnsDohServerConfig("https://dns.example.org/dns-query");
   CPPUNIT_ASSERT_EQUAL(std::string("dns.example.org"), config.connectHost);
@@ -190,8 +257,34 @@ void AsyncDnsServerConfigTest::testParseDohServerConfig_badInput()
                        Exception);
   CPPUNIT_ASSERT_THROW(parseAsyncDnsDohServerConfig("https://user@1.1.1.1/x"),
                        Exception);
+  CPPUNIT_ASSERT_THROW(parseAsyncDnsDohServerConfig("https://1.1.1.1/x#"),
+                       Exception);
   CPPUNIT_ASSERT_THROW(parseAsyncDnsDohServerConfig("https://1.1.1.1/x#frag"),
                        Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#dns_.example.org"),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#-dns.example.org"),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#dns-.example.org"),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#dns..example.org"),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#dns.example.org."),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#1.1.1.1"),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#localhost"),
+      Exception);
+  CPPUNIT_ASSERT_THROW(
+      parseAsyncDnsDohServerConfig("https://1.1.1.1/x#dns.example.org#extra"),
+      Exception);
   CPPUNIT_ASSERT_THROW(
       parseAsyncDnsDohServerConfig("https://2606:4700:4700::1111/dns-query"),
       Exception);
@@ -204,6 +297,11 @@ void AsyncDnsServerConfigTest::testValidateDohServerConfigForDirectConnect()
 {
   auto configs = parseAsyncDnsDohServerConfigList(
       "https://1.1.1.1/dns-query,https://[2606:4700:4700::1111]/dns-query");
+  validateAsyncDnsDohServerConfigForDirectConnect(configs);
+
+  configs = parseAsyncDnsDohServerConfigList(
+      "https://1.1.1.1/dns-query#cloudflare-dns.com,"
+      "https://[2606:4700:4700::1111]/dns-query#cloudflare-dns.com");
   validateAsyncDnsDohServerConfigForDirectConnect(configs);
 
   configs = parseAsyncDnsDohServerConfigList("https://dns.example.org/dns-query");

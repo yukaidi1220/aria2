@@ -34,6 +34,8 @@
 #include "AsyncDnsServerConfig.h"
 
 #include <iterator>
+#include <tuple>
+#include <utility>
 
 #include "DlAbortEx.h"
 #include "fmt.h"
@@ -74,6 +76,78 @@ std::string defaultTLSHost(const std::string& host)
   return util::isNumericHost(host) ? std::string() : host;
 }
 
+bool isAsyncDnsTLSHost(const std::string& hostname)
+{
+  if (hostname.empty() || hostname.size() > 253 ||
+      util::isNumericHost(hostname) ||
+      hostname.find(".") == std::string::npos ||
+      hostname[hostname.size() - 1] == '.') {
+    return false;
+  }
+
+  std::string::size_type labelStart = 0;
+  while (labelStart < hostname.size()) {
+    auto labelEnd = hostname.find(".", labelStart);
+    if (labelEnd == std::string::npos) {
+      labelEnd = hostname.size();
+    }
+    const auto labelLen = labelEnd - labelStart;
+    if (labelLen == 0 || labelLen > 63) {
+      return false;
+    }
+    const auto labelFirst = hostname[labelStart];
+    const auto labelLast = hostname[labelEnd - 1];
+    if ((!util::isAlpha(labelFirst) && !util::isDigit(labelFirst)) ||
+        (!util::isAlpha(labelLast) && !util::isDigit(labelLast))) {
+      return false;
+    }
+
+    for (auto i = labelStart; i < labelEnd; ++i) {
+      const auto c = hostname[i];
+      if (!util::isAlpha(c) && !util::isDigit(c) && c != '-') {
+        return false;
+      }
+    }
+
+    if (labelEnd == hostname.size()) {
+      break;
+    }
+    labelStart = labelEnd + 1;
+  }
+  return true;
+}
+
+std::string normalizeTLSHost(const std::string& value,
+                             const std::string& originalValue,
+                             void (*throwBadConfig)(const std::string&))
+{
+  auto host = util::strip(value);
+  if (!isAsyncDnsTLSHost(host)) {
+    throwBadConfig(originalValue);
+  }
+  return util::toLower(std::move(host));
+}
+
+std::pair<std::string, std::string>
+splitServerAndTLSHost(const std::string& entry, const std::string& value,
+                      void (*throwBadConfig)(const std::string&))
+{
+  auto delim = entry.find('#');
+  if (delim == std::string::npos) {
+    return std::make_pair(entry, std::string());
+  }
+  if (entry.find('#', delim + 1) != std::string::npos) {
+    throwBadConfig(value);
+  }
+  auto server = util::strip(entry.substr(0, delim));
+  auto tlsHost = normalizeTLSHost(entry.substr(delim + 1), value,
+                                  throwBadConfig);
+  if (server.empty()) {
+    throwBadConfig(value);
+  }
+  return std::make_pair(std::move(server), std::move(tlsHost));
+}
+
 void validateDirectConnectHost(const std::string& scheme,
                                const std::string& host)
 {
@@ -92,6 +166,9 @@ AsyncDnsServerConfig parseAsyncDnsDotServerConfig(const std::string& value)
   if (entry.empty()) {
     throwBadDotServerConfig(value);
   }
+  std::string tlsHost;
+  std::tie(entry, tlsHost) =
+      splitServerAndTLSHost(entry, value, throwBadDotServerConfig);
 
   std::string host;
   auto port = DEFAULT_DOT_PORT;
@@ -128,7 +205,7 @@ AsyncDnsServerConfig parseAsyncDnsDotServerConfig(const std::string& value)
     throwBadDotServerConfig(value);
   }
 
-  return {host, port, defaultTLSHost(host)};
+  return {host, port, tlsHost.empty() ? defaultTLSHost(host) : tlsHost};
 }
 
 std::vector<AsyncDnsServerConfig>
@@ -176,9 +253,14 @@ AsyncDohServerConfig parseAsyncDnsDohServerConfig(const std::string& value)
   uri_split_result splitResult;
   if (uri_split(&splitResult, entry.c_str()) != 0 ||
       !(splitResult.field_set & (1 << USR_PATH)) ||
-      ((splitResult.field_set & (1 << USR_PORT)) && splitResult.port == 0) ||
-      (splitResult.field_set & (1 << USR_FRAGMENT))) {
+      ((splitResult.field_set & (1 << USR_PORT)) && splitResult.port == 0)) {
     throwBadDohServerConfig(value);
+  }
+  std::string tlsHost;
+  if (splitResult.field_set & (1 << USR_FRAGMENT)) {
+    tlsHost = normalizeTLSHost(
+        uri::getFieldString(splitResult, USR_FRAGMENT, entry.c_str()), value,
+        throwBadDohServerConfig);
   }
 
   auto path = us.dir + us.file + us.query;
@@ -187,7 +269,7 @@ AsyncDohServerConfig parseAsyncDnsDohServerConfig(const std::string& value)
   }
 
   return {us.host, us.port == 0 ? DEFAULT_DOH_PORT : us.port,
-          defaultTLSHost(us.host), path};
+          tlsHost.empty() ? defaultTLSHost(us.host) : tlsHost, path};
 }
 
 std::vector<AsyncDohServerConfig>

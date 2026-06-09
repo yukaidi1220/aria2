@@ -104,24 +104,27 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 aria2c --async-dns=true --async-dns-mode=cares
 aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=1.1.1.1,8.8.8.8:853
 aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=[2606:4700:4700::1111]:853
+aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=1.1.1.1#cloudflare-dns.com
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://[2606:4700:4700::1111]/dns-query
+aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com
 ```
 
 DoT 规则：
 
-- 解析器能接受 `HOST`、`HOST:PORT`、`IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。
+- 解析器能接受 `HOST`、`HOST:PORT`、`IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。数值地址后可追加 `#TLS_HOST`，例如 `1.1.1.1#cloudflare-dns.com` 或 `[2606:4700:4700::1111]:853#cloudflare-dns.com`。
 - 当前 `AsyncNameResolverMan` 采用直连 DNS server 模式，随后会调用 `validateAsyncDnsDotServerConfigForDirectConnect()`，因此实际可用配置要求 server host 是数值地址。写 `dns.example.org` 这类域名会在配置校验阶段失败，避免解析 DNS server 本身时递归套娃。
 - `--async-dns-mode=dot` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoT server configured”。
-- `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 默认不会形成普通 DNS SNI。
+- `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 默认回退为 IP 本身，写了 `#TLS_HOST` 时会用该主机名做 TLS SNI 和证书校验。
 
 DoH 规则：
 
-- 解析器能接受 HTTPS URL，例如 `https://1.1.1.1/dns-query`、`https://[2606:4700:4700::1111]/dns-query` 或 `https://dns.example.org/dns-query`，默认端口 `443`。
+- 解析器能接受 HTTPS URL，例如 `https://1.1.1.1/dns-query`、`https://[2606:4700:4700::1111]/dns-query` 或 `https://dns.example.org/dns-query`，默认端口 `443`。数值 HTTPS URL 可追加 `#TLS_HOST`，例如 `https://1.1.1.1/dns-query#cloudflare-dns.com`。
 - 当前直连校验同样要求 URL host 是数值地址；`https://dns.example.org/dns-query` 能被解析，但会被 `validateAsyncDnsDohServerConfigForDirectConnect()` 拒绝。
 - `--async-dns-mode=doh` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoH server configured”。
-- URL 必须有 path，拒绝 userinfo、密码、fragment；query 允许作为 path 的一部分发送。
+- URL 必须有 path，拒绝 userinfo、密码；query 允许作为 path 的一部分发送。fragment 被当作 TLS/HTTP 逻辑主机名，只允许合法 DNS 主机名，不能是 IP、`localhost` 或单标签名。
 - `AsyncDohNameResolver.cc::createDohRequest()` 发送 HTTP/1.1 `POST`，`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
+- 写了 `#TLS_HOST` 时，DoH TLS SNI、证书校验主机和 HTTP `Host:` 头都使用该主机；TCP 仍连接 URL 里的数值地址，HTTP request target 不包含 fragment。
 - 当前 DoH resolver 自己不启用 HTTP/2/ALPN；英文 manual 对此已有说明。
 - 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。
 
@@ -527,6 +530,8 @@ aria2c --hosts-mapping=198.18.0.18:origin.example https://198.18.0.18/file
 ```console
 aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=1.1.1.1,[2606:4700:4700::1111]:853 https://example.com/file
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query https://example.com/file
+aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=1.1.1.1#cloudflare-dns.com https://example.com/file
+aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com https://example.com/file
 ```
 
 ### 5.5 网络调试日志

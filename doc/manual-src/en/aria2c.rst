@@ -1322,6 +1322,9 @@ Advanced Options
   :option:`--async-dns-server` entries. ``doh`` uses DNS over HTTPS over
   HTTP/1.1 with numeric HTTPS :option:`--async-dns-server` URLs. ``dot`` and
   ``doh`` are available only when aria2 is built with SSL/TLS support.
+  Numeric DoT/DoH entries can append ``#TLS_HOST`` to use ``TLS_HOST`` as the
+  TLS SNI, certificate verification hostname, and DoH HTTP ``Host`` header without
+  resolving the resolver hostname through DNS first.
   The ``doh`` backend currently uses HTTP/1.1 and does not enable HTTP/2 or
   ALPN negotiation.
   Default: ``cares``
@@ -1333,7 +1336,11 @@ Advanced Options
   addresses. With ``dot``, specify numeric DoT servers as ``IP``, ``IP:PORT``,
   ``[IPv6]``, or ``[IPv6]:PORT``; the default port is 853. With ``doh``,
   specify numeric HTTPS URLs such as ``https://1.1.1.1/dns-query`` or
-  ``https://[2606:4700:4700::1111]/dns-query``. Usually asynchronous DNS
+  ``https://[2606:4700:4700::1111]/dns-query``. For DoT/DoH, append
+  ``#TLS_HOST`` to a numeric entry to connect to the numeric address while using
+  ``TLS_HOST`` for TLS SNI, certificate verification, and the DoH HTTP ``Host``
+  header, for example ``1.1.1.1#cloudflare-dns.com`` or
+  ``https://1.1.1.1/dns-query#cloudflare-dns.com``. Usually asynchronous DNS
   resolver reads DNS server addresses from ``/etc/resolv.conf``. When this
   option is used, it uses DNS servers specified in this option instead of ones
   in ``/etc/resolv.conf``. This option is useful when the system does not have
