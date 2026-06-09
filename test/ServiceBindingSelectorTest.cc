@@ -17,6 +17,7 @@ class ServiceBindingSelectorTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectRejectsZeroPort);
   CPPUNIT_TEST(testSelectRequiresExplicitAlpnWhenDefaultDisabled);
   CPPUNIT_TEST(testGetAddressHintsByFamily);
+  CPPUNIT_TEST(testSelectEndpointsPreservesOriginAndConnectTarget);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -30,6 +31,7 @@ public:
   void testSelectRejectsZeroPort();
   void testSelectRequiresExplicitAlpnWhenDefaultDisabled();
   void testGetAddressHintsByFamily();
+  void testSelectEndpointsPreservesOriginAndConnectTarget();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(ServiceBindingSelectorTest);
@@ -273,6 +275,50 @@ void ServiceBindingSelectorTest::testGetAddressHintsByFamily()
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), all[0]);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), all[1]);
   CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.2"), all[2]);
+}
+
+void ServiceBindingSelectorTest::
+    testSelectEndpointsPreservesOriginAndConnectTarget()
+{
+  auto alternate = createRecord(1, "svc.example.com");
+  alternate.alpn.push_back("h2");
+  alternate.hasPort = true;
+  alternate.port = 8443;
+  alternate.ipv4hint.push_back("192.0.2.1");
+  alternate.echConfigList = "optional-ech";
+
+  auto origin = createRecord(2, std::string());
+  origin.alpn.push_back("http/1.1");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(alternate);
+  records.push_back(origin);
+
+  auto config = createConfig();
+  config.echConfigListEnabled = true;
+  auto endpoints = dns::selectServiceBindingEndpoints(
+      records, "www.example.com", 443, config);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, endpoints.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"),
+                       endpoints[0].originHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, endpoints[0].originPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example.com"),
+                       endpoints[0].connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, endpoints[0].connectPort);
+  CPPUNIT_ASSERT_EQUAL(std::string("h2"), endpoints[0].alpn);
+  CPPUNIT_ASSERT_EQUAL(std::string("optional-ech"),
+                       endpoints[0].echConfigList);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       endpoints[0].addressHints[0]);
+  CPPUNIT_ASSERT(endpoints[0].serviceBindingUsed());
+
+  CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"),
+                       endpoints[1].originHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"),
+                       endpoints[1].connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, endpoints[1].connectPort);
+  CPPUNIT_ASSERT(!endpoints[1].serviceBindingUsed());
 }
 
 } // namespace aria2

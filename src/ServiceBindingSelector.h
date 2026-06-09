@@ -72,6 +72,22 @@ struct SelectedServiceBinding {
   std::vector<std::string> addressHints;
 };
 
+struct ServiceBindingEndpoint {
+  std::string originHost;
+  uint16_t originPort = 0;
+  std::string connectHost;
+  uint16_t connectPort = 0;
+  std::string alpn;
+  bool defaultAlpnUsed = false;
+  std::string echConfigList;
+  std::vector<std::string> addressHints;
+
+  bool serviceBindingUsed() const
+  {
+    return connectHost != originHost || connectPort != originPort;
+  }
+};
+
 std::vector<std::string>
 getServiceBindingAddressHints(const ServiceBindingRecord& record,
                               SvcbAddressFamily family);
@@ -79,6 +95,12 @@ getServiceBindingAddressHints(const ServiceBindingRecord& record,
 std::vector<SelectedServiceBinding>
 selectServiceBindings(const std::vector<ServiceBindingRecord>& records,
                       const ServiceBindingSelectionConfig& config);
+
+std::vector<ServiceBindingEndpoint>
+selectServiceBindingEndpoints(const std::vector<ServiceBindingRecord>& records,
+                              const std::string& originHost,
+                              uint16_t originPort,
+                              const ServiceBindingSelectionConfig& config);
 
 } // namespace dns
 

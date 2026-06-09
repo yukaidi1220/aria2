@@ -153,6 +153,32 @@ selectServiceBindings(const std::vector<ServiceBindingRecord>& records,
   return result;
 }
 
+std::vector<ServiceBindingEndpoint>
+selectServiceBindingEndpoints(const std::vector<ServiceBindingRecord>& records,
+                              const std::string& originHost,
+                              uint16_t originPort,
+                              const ServiceBindingSelectionConfig& config)
+{
+  auto selections = selectServiceBindings(records, config);
+  std::vector<ServiceBindingEndpoint> result;
+  result.reserve(selections.size());
+
+  for (auto& selection : selections) {
+    ServiceBindingEndpoint endpoint;
+    endpoint.originHost = originHost;
+    endpoint.originPort = originPort;
+    endpoint.connectHost = std::move(selection.targetName);
+    endpoint.connectPort = selection.port;
+    endpoint.alpn = std::move(selection.alpn);
+    endpoint.defaultAlpnUsed = selection.defaultAlpnUsed;
+    endpoint.echConfigList = std::move(selection.echConfigList);
+    endpoint.addressHints = std::move(selection.addressHints);
+    result.push_back(std::move(endpoint));
+  }
+
+  return result;
+}
+
 } // namespace dns
 
 } // namespace aria2
