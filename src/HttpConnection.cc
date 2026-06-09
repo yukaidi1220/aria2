@@ -61,6 +61,34 @@
 
 namespace aria2 {
 
+namespace {
+
+std::string formatEndpointForLog(const Endpoint& endpoint)
+{
+  if (endpoint.family == AF_INET6) {
+    return fmt("[%s]:%u", endpoint.addr.c_str(),
+               static_cast<unsigned int>(endpoint.port));
+  }
+  return fmt("%s:%u", endpoint.addr.c_str(),
+             static_cast<unsigned int>(endpoint.port));
+}
+
+std::string getRemoteEndpointForLog(const std::shared_ptr<SocketCore>& socket)
+{
+  if (!socket) {
+    return "unavailable";
+  }
+
+  try {
+    return formatEndpointForLog(socket->getPeerInfo());
+  }
+  catch (DlAbortEx& ex) {
+    return fmt("unavailable (%s)", ex.what());
+  }
+}
+
+} // namespace
+
 HttpRequestEntry::HttpRequestEntry(std::unique_ptr<HttpRequest> httpRequest)
     : httpRequest_{std::move(httpRequest)},
       proc_{
@@ -178,8 +206,9 @@ std::unique_ptr<HttpResponse> HttpConnection::receiveResponse()
                     eraseConfidentialInfo(proc->getHeaderString()).c_str()));
     auto result = proc->getResult();
     A2_LOG_NETWORK(
-        fmt("HTTP: CUID#%" PRId64 " - Response status: %d",
-            cuid_, result->getStatusCode()));
+        fmt("HTTP: CUID#%" PRId64 " - Response status: %d remote=%s",
+            cuid_, result->getStatusCode(),
+            getRemoteEndpointForLog(socket_).c_str()));
     if (result->getStatusCode() / 100 == 1) {
       socketRecvBuffer_->drain(proc->getLastBytesProcessed());
       outstandingHttpRequests_.front()->resetHttpHeaderProcessor();

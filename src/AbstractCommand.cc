@@ -155,6 +155,53 @@ bool shouldPreferIPv4OverScopedIPv6(const std::vector<std::string>& addrs)
          !hasIPv6Address(addrs, isIPv6GlobalUnicastAddress);
 }
 
+const char* addressFamilyNameForLog(int family)
+{
+  if (family == AF_INET) {
+    return "IPv4";
+  }
+  if (family == AF_INET6) {
+    return "IPv6";
+  }
+  return "unknown";
+}
+
+const char* dnsAddressTypesForLog(const std::vector<std::string>& addrs)
+{
+  auto hasA = hasNumericAddressFamily(addrs, AF_INET);
+  auto hasAAAA = hasNumericAddressFamily(addrs, AF_INET6);
+  if (hasA && hasAAAA) {
+    return "A/AAAA";
+  }
+  if (hasAAAA) {
+    return "AAAA";
+  }
+  if (hasA) {
+    return "A";
+  }
+  return "unknown";
+}
+
+void logDnsAddressSelection(cuid_t cuid, const std::string& hostname,
+                            uint16_t port,
+                            const std::vector<std::string>& addrs,
+                            const std::string& selected,
+                            const char* source)
+{
+  if (!A2_LOG_NETWORK_ENABLED) {
+    return;
+  }
+
+  A2_LOG_NETWORK(
+      fmt("DNS: CUID#%" PRId64
+          " - selected host=%s port=%u source=%s addr_types=%s selected=%s "
+          "family=%s candidates=[%s]",
+          cuid, hostname.c_str(), static_cast<unsigned int>(port), source,
+          dnsAddressTypesForLog(addrs), selected.c_str(),
+          addressFamilyNameForLog(getNumericAddressFamily(selected)),
+          strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
+}
+
 dns::ServiceBindingEndpoint createHttpsServiceBindingEndpoint(
     const Request::HttpsServiceBindingEndpointInfo& info)
 {
@@ -1953,6 +2000,8 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     auto ipaddr =
         selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
     prioritizeAndInterleaveIPAddress(addrs, ipaddr);
+    logDnsAddressSelection(getCuid(), hostname, port, addrs, ipaddr,
+                           "hosts");
     return ipaddr;
   }
 
@@ -1989,6 +2038,8 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
     auto ipaddr =
         selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
     prioritizeAndInterleaveIPAddress(addrs, ipaddr);
+    logDnsAddressSelection(getCuid(), hostname, port, addrs, ipaddr,
+                           "cache");
     A2_LOG_INFO(fmt(MSG_DNS_CACHE_HIT, getCuid(), hostname.c_str(),
                     strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
     A2_LOG_NETWORK(
@@ -2000,6 +2051,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   std::string ipaddr;
 #ifdef ENABLE_ASYNC_DNS
   bool asyncDnsUsed = false;
+  const char* dnsResultSource = "getaddrinfo";
   if (getOption()->getAsBool(PREF_ASYNC_DNS)) {
     asyncDnsUsed = true;
     if (!asyncNameResolverMan_->started()) {
@@ -2039,6 +2091,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
           fmt("DNS: getaddrinfo fallback succeeded for %s after async DNS "
               "failure",
               hostname.c_str()));
+      dnsResultSource = "getaddrinfo-fallback";
       break;
     case 0:
       return A2STR::NIL;
@@ -2054,6 +2107,7 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
           fmt("DNS: first usable async result for %s: %s",
               hostname.c_str(),
               strjoin(std::begin(addrs), std::end(addrs), ", ").c_str()));
+      dnsResultSource = "async-dns";
       break;
     }
   }
@@ -2099,6 +2153,13 @@ std::string AbstractCommand::resolveHostname(std::vector<std::string>& addrs,
   }
   ipaddr = selectIPAddress(addrs, getCuid(), getFileEntry(), hostname, port);
   prioritizeAndInterleaveIPAddress(addrs, ipaddr);
+#ifdef ENABLE_ASYNC_DNS
+  logDnsAddressSelection(getCuid(), hostname, port, addrs, ipaddr,
+                         asyncDnsUsed ? dnsResultSource : "getaddrinfo");
+#else  // !ENABLE_ASYNC_DNS
+  logDnsAddressSelection(getCuid(), hostname, port, addrs, ipaddr,
+                         "getaddrinfo");
+#endif // !ENABLE_ASYNC_DNS
   return ipaddr;
 }
 

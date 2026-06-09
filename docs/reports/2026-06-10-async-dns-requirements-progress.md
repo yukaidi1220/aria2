@@ -47,6 +47,12 @@
    - `AsyncNameResolverMan::reset()` 清理 hostname 和 resolver phase，避免复用对象时残留旧 fallback 状态。
    - 测试侧把 `createResolvers()` 收窄为 protected 观测口，并补真实 `multi` 主阶段 resolver 类型断言，避免只靠 mock 计数造成假测。
 
+9. 日志可观测性第一阶段。
+   - 落点：`src/AbstractCommand.cc`、`src/HttpConnection.cc`、`src/SocketCore.cc`
+   - 行为：DNS 选址完成后打印统一 network 日志，包含 `CUID`、hostname、port、来源阶段、最终候选地址类型、最终选中 IP、地址族和候选地址列表。
+   - 行为：HTTP response status 的 network 日志追加实际 remote IP:port，便于把 `Response received` 和本次请求连接端点关联起来。
+   - 行为：TLS 握手成功后打印实际 remote IP:port、SNI、证书校验 host、TLS version 和 ALPN。无 SSL 构建不受影响；TLS 日志复用握手成功路径已有的 peer endpoint，HTTP response 日志读取 remote endpoint 失败时不会中断下载。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
@@ -71,6 +77,7 @@
 1. 静态检查：
    - `git diff --check` 通过；只有 Windows 工作区的 LF/CRLF 提示，没有 whitespace error。
    - HTTPS RR/TYPE65 staged fallback 切片在提交前已通过上述静态检查；本机缺少 `make`/`g++`/`clang++`/`cl`/`cmake`，尚未完成本地编译或单元测试。
+   - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc`；本机仍缺少 C++ 构建工具，等待外部 review 和 GitHub Actions 编译验证。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -118,7 +125,7 @@
 
 ### 日志可观测性（31-35）
 
-未完成到验收标准。已有一些 network 日志，但还不能完整追踪查询域名、A/AAAA、DNS server IP、协议、bootstrap 来源、fallback 阶段、最终 DNS 地址列表、选中 IP、失败 IP、临时避让 IP、TLS remote IP 和 `Response received` 对应 remote IP。下一阶段应先补统一 DNS/connection log 上下文。
+部分完成。第一阶段已补 DNS 最终选中日志、HTTP response remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。尚未完整覆盖 DNS server IP、协议、bootstrap 来源、每个 fallback 阶段的 resolver 级 server 明细、失败 IP、临时避让 IP、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 和连接失败路径补细日志与测试。
 
 ### 下载连接参数（36-39）
 
@@ -139,6 +146,7 @@
 2. secure-first multi 验收：下载域名主解析骨架已改为 secure resolver 优先，plain resolver 默认只用于 DoT/DoH server bootstrap 或失败后的 fallback；下一步要用 fake DNS/真实网络验证 secure、显式 plain、系统 c-ares、getaddrinfo 每一层的日志和失败边界。
 
 3. DNS/连接可观测性：统一记录 DNS query、server、协议、bootstrap/fallback 阶段、A/AAAA、最终地址列表、选中/失败/避让 IP，并让连接成功、TLS 成功和 response received 都能关联 remote IP。
+   - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。下一刀继续补 resolver server/protocol/bootstrap 明细、失败 IP 和临时避让 IP。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
 
