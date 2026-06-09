@@ -38,6 +38,7 @@
 #include "common.h"
 
 #include <string>
+#include <chrono>
 #include <deque>
 #include <vector>
 #include <ostream>
@@ -83,6 +84,13 @@ private:
   RequestPool requestPool_;
   InFlightRequestSet inFlightRequests_;
   std::map<std::pair<std::string, uint16_t>, int> nextAddressFamily_;
+  struct AddressFamilyHealth {
+    int failures = 0;
+    Timer penaltyStarted = Timer::zero();
+    std::chrono::seconds penaltyDuration{0};
+  };
+  std::map<std::pair<std::string, uint16_t>, std::map<int, AddressFamilyHealth>>
+      addressFamilyHealth_;
 
   std::string path_;
   std::string contentType_;
@@ -216,6 +224,19 @@ public:
 
   void setNextAddressFamily(const std::string& hostname, uint16_t port,
                             int family);
+
+  void recordAddressFamilyFailure(const std::string& hostname, uint16_t port,
+                                  int family);
+
+  void recordAddressFamilySuccess(const std::string& hostname, uint16_t port,
+                                  int family);
+
+  bool isAddressFamilyPenalized(const std::string& hostname, uint16_t port,
+                                int family) const;
+
+  int getPreferredAddressFamilyByHealth(const std::string& hostname,
+                                        uint16_t port,
+                                        const std::vector<int>& families) const;
 
   bool operator<(const FileEntry& fileEntry) const;
 

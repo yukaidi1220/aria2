@@ -25,6 +25,7 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetSocketError);
   CPPUNIT_TEST(testInetNtop);
   CPPUNIT_TEST(testInetPton);
+  CPPUNIT_TEST(testGetNumericAddressFamily);
   CPPUNIT_TEST(testIsIPv6GlobalUnicastAddress);
   CPPUNIT_TEST(testGetBinAddr);
   CPPUNIT_TEST(testVerifyHostname);
@@ -55,6 +56,7 @@ public:
   void testGetSocketError();
   void testInetNtop();
   void testInetPton();
+  void testGetNumericAddressFamily();
   void testIsIPv6GlobalUnicastAddress();
   void testGetBinAddr();
   void testVerifyHostname();
@@ -181,6 +183,14 @@ void SocketCoreTest::testInetPton()
   unsigned char dest[16];
   CPPUNIT_ASSERT_EQUAL(-1, inetPton(AF_INET, "localhost", &dest));
   CPPUNIT_ASSERT_EQUAL(-1, inetPton(AF_INET6, "localhost", &dest));
+}
+
+void SocketCoreTest::testGetNumericAddressFamily()
+{
+  CPPUNIT_ASSERT_EQUAL(AF_INET, getNumericAddressFamily("192.0.2.1"));
+  CPPUNIT_ASSERT_EQUAL(AF_INET6, getNumericAddressFamily("2001:db8::1"));
+  CPPUNIT_ASSERT_EQUAL(AF_INET6, getNumericAddressFamily("fd00::1"));
+  CPPUNIT_ASSERT_EQUAL(0, getNumericAddressFamily("localhost"));
 }
 
 void SocketCoreTest::testIsIPv6GlobalUnicastAddress()

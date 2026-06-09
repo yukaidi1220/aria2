@@ -470,6 +470,7 @@ void FileEntry::releaseRuntimeResource()
   requestPool_.clear();
   inFlightRequests_.clear();
   nextAddressFamily_.clear();
+  addressFamilyHealth_.clear();
 }
 
 namespace {
@@ -586,6 +587,22 @@ bool isSelectableAddressFamily(int family)
 {
   return family == AF_INET || family == AF_INET6;
 }
+
+constexpr auto FAMILY_PENALTY_BASE = 30_s;
+constexpr auto FAMILY_PENALTY_MAX = 300_s;
+
+std::chrono::seconds calculateFamilyPenalty(int failures)
+{
+  if (failures <= 0) {
+    return std::chrono::seconds(0);
+  }
+  auto seconds = FAMILY_PENALTY_BASE.count();
+  for (int i = 1; i < failures && seconds < FAMILY_PENALTY_MAX.count(); ++i) {
+    seconds *= 2;
+  }
+  return std::chrono::seconds(
+      std::min(seconds, FAMILY_PENALTY_MAX.count()));
+}
 } // namespace
 
 int FileEntry::getNextAddressFamily(const std::string& hostname, uint16_t port,
@@ -608,6 +625,80 @@ void FileEntry::setNextAddressFamily(const std::string& hostname, uint16_t port,
     return;
   }
   nextAddressFamily_[key] = family;
+}
+
+void FileEntry::recordAddressFamilyFailure(const std::string& hostname,
+                                           uint16_t port, int family)
+{
+  if (!isSelectableAddressFamily(family)) {
+    return;
+  }
+  auto& health = addressFamilyHealth_[std::make_pair(hostname, port)][family];
+  if (health.failures > 0 &&
+      health.penaltyStarted.difference(global::wallclock()) >=
+          health.penaltyDuration) {
+    health.failures = 0;
+  }
+  ++health.failures;
+  health.penaltyStarted = global::wallclock();
+  health.penaltyDuration = calculateFamilyPenalty(health.failures);
+}
+
+void FileEntry::recordAddressFamilySuccess(const std::string& hostname,
+                                           uint16_t port, int family)
+{
+  if (!isSelectableAddressFamily(family)) {
+    return;
+  }
+  auto key = std::make_pair(hostname, port);
+  auto hostEntry = addressFamilyHealth_.find(key);
+  if (hostEntry == std::end(addressFamilyHealth_)) {
+    return;
+  }
+  hostEntry->second.erase(family);
+  if (hostEntry->second.empty()) {
+    addressFamilyHealth_.erase(hostEntry);
+  }
+}
+
+bool FileEntry::isAddressFamilyPenalized(const std::string& hostname,
+                                         uint16_t port, int family) const
+{
+  if (!isSelectableAddressFamily(family)) {
+    return false;
+  }
+  auto hostEntry = addressFamilyHealth_.find(std::make_pair(hostname, port));
+  if (hostEntry == std::end(addressFamilyHealth_)) {
+    return false;
+  }
+  auto familyEntry = hostEntry->second.find(family);
+  if (familyEntry == std::end(hostEntry->second) ||
+      familyEntry->second.failures <= 0) {
+    return false;
+  }
+  return familyEntry->second.penaltyStarted.difference(global::wallclock()) <
+         familyEntry->second.penaltyDuration;
+}
+
+int FileEntry::getPreferredAddressFamilyByHealth(
+    const std::string& hostname, uint16_t port,
+    const std::vector<int>& families) const
+{
+  int candidate = 0;
+  bool sawPenalized = false;
+  for (auto family : families) {
+    if (!isSelectableAddressFamily(family)) {
+      continue;
+    }
+    if (isAddressFamilyPenalized(hostname, port, family)) {
+      sawPenalized = true;
+      continue;
+    }
+    if (candidate == 0) {
+      candidate = family;
+    }
+  }
+  return sawPenalized ? candidate : 0;
 }
 
 void FileEntry::setOriginalName(std::string originalName)

@@ -74,6 +74,7 @@ protected:
 
   void setConnectedAddrInfo(const std::shared_ptr<Request>& req,
                             const std::string& hostname,
+                            uint16_t port,
                             const std::shared_ptr<SocketCore>& socket);
 
   std::shared_ptr<BackupConnectInfo>

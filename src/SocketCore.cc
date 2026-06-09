@@ -1680,6 +1680,21 @@ int inetPton(int af, const char* src, void* dst)
   return -1;
 }
 
+int getNumericAddressFamily(const std::string& addr)
+{
+  union {
+    in_addr ipv4;
+    in6_addr ipv6;
+  } buf;
+  if (inetPton(AF_INET, addr.c_str(), &buf.ipv4) == 0) {
+    return AF_INET;
+  }
+  if (inetPton(AF_INET6, addr.c_str(), &buf.ipv6) == 0) {
+    return AF_INET6;
+  }
+  return 0;
+}
+
 bool isIPv6GlobalUnicastAddress(const std::string& addr)
 {
   in6_addr dest;

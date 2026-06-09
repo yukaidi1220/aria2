@@ -110,17 +110,6 @@ bool isNumericAddressFamily(const std::string& addr, int family)
   return inetPton(family, addr.c_str(), &buf.ipv6) == 0;
 }
 
-int getNumericAddressFamily(const std::string& addr)
-{
-  if (isNumericAddressFamily(addr, AF_INET)) {
-    return AF_INET;
-  }
-  if (isNumericAddressFamily(addr, AF_INET6)) {
-    return AF_INET6;
-  }
-  return 0;
-}
-
 bool isSelectableAddressFamily(int family)
 {
   return family == AF_INET || family == AF_INET6;
@@ -160,6 +149,19 @@ bool shouldPreferIPv4OverScopedIPv6(const std::vector<std::string>& addrs)
   return hasNumericAddressFamily(addrs, AF_INET) &&
          hasNumericAddressFamily(addrs, AF_INET6) &&
          !hasIPv6Address(addrs, isIPv6GlobalUnicastAddress);
+}
+
+std::vector<int>
+getSelectableAddressFamilies(const std::vector<std::string>& addrs)
+{
+  std::vector<int> families;
+  if (hasNumericAddressFamily(addrs, AF_INET)) {
+    families.push_back(AF_INET);
+  }
+  if (hasNumericAddressFamily(addrs, AF_INET6)) {
+    families.push_back(AF_INET6);
+  }
+  return families;
 }
 
 std::vector<std::string>::const_iterator
@@ -1004,6 +1006,11 @@ bool AbstractCommand::execute()
             fmt("CUID#%" PRId64 " - Marking IP address %s as bad (timeout)",
                 getCuid(), connectedAddr.c_str()));
         e_->markBadIPAddress(connectedHostname, connectedAddr, connectedPort);
+        if (fileEntry_) {
+          fileEntry_->recordAddressFamilyFailure(
+              connectedHostname, connectedPort,
+              getNumericAddressFamily(connectedAddr));
+        }
       }
       if (!connectedHostname.empty() &&
           e_->findCachedIPAddress(connectedHostname, connectedPort).empty()) {
@@ -1556,8 +1563,18 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             const std::string& hostname, uint16_t port)
 {
   auto preferIPv4 = shouldPreferIPv4OverScopedIPv6(addrs);
-  auto family = preferIPv4 ? AF_INET : getLeastUsedActiveAddressFamily(
-                                           fileEntry, hostname, port, addrs);
+  auto family = 0;
+  if (preferIPv4) {
+    family = AF_INET;
+  }
+  else if (fileEntry && hasNumericAddressFamily(addrs, AF_INET) &&
+           hasNumericAddressFamily(addrs, AF_INET6)) {
+    family = fileEntry->getPreferredAddressFamilyByHealth(
+        hostname, port, getSelectableAddressFamilies(addrs));
+  }
+  if (!isSelectableAddressFamily(family)) {
+    family = getLeastUsedActiveAddressFamily(fileEntry, hostname, port, addrs);
+  }
   if (!preferIPv4 && !isSelectableAddressFamily(family) && fileEntry &&
       hasNumericAddressFamily(addrs, AF_INET) &&
       hasNumericAddressFamily(addrs, AF_INET6)) {
@@ -1832,6 +1849,11 @@ bool AbstractCommand::checkIfConnectionEstablished(
 
   // See also InitiateConnectionCommand::executeInternal()
   e_->markBadIPAddress(connectedHostname, connectedAddr, connectedPort);
+  if (fileEntry_) {
+    fileEntry_->recordAddressFamilyFailure(
+        connectedHostname, connectedPort,
+        getNumericAddressFamily(connectedAddr));
+  }
   if (e_->findCachedIPAddress(connectedHostname, connectedPort).empty()) {
     auto mappedAddrs =
         getMappedAddresses(connectedHostname, getOption().get());

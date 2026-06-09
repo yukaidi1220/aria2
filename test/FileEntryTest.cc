@@ -4,6 +4,7 @@
 
 #include "InorderURISelector.h"
 #include "util.h"
+#include "wallclock.h"
 
 namespace aria2 {
 
@@ -22,10 +23,14 @@ class FileEntryTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testInsertUri);
   CPPUNIT_TEST(testRemoveUri);
   CPPUNIT_TEST(testPutBackRequest);
+  CPPUNIT_TEST(testAddressFamilyHealth);
+  CPPUNIT_TEST(testAddressFamilyHealthExpires);
+  CPPUNIT_TEST(testAddressFamilyHealthResetsExpiredFailures);
+  CPPUNIT_TEST(testAddressFamilyHealthClearedByRuntimeRelease);
   CPPUNIT_TEST_SUITE_END();
 
 public:
-  void setUp() {}
+  void setUp() { global::wallclock().reset(); }
 
   void testRemoveURIWhoseHostnameIs();
   void testExtractURIResult();
@@ -39,6 +44,10 @@ public:
   void testInsertUri();
   void testRemoveUri();
   void testPutBackRequest();
+  void testAddressFamilyHealth();
+  void testAddressFamilyHealthExpires();
+  void testAddressFamilyHealthResetsExpiredFailures();
+  void testAddressFamilyHealthClearedByRuntimeRelease();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(FileEntryTest);
@@ -309,6 +318,71 @@ void FileEntryTest::testPutBackRequest()
   CPPUNIT_ASSERT_EQUAL(std::string("http://localhost/aria2.zip"), uris[0]);
   CPPUNIT_ASSERT_EQUAL(std::string("http://mirror/aria2.zip"), uris[1]);
   CPPUNIT_ASSERT_EQUAL(std::string("ftp://localhost/aria2.zip"), uris[2]);
+}
+
+void FileEntryTest::testAddressFamilyHealth()
+{
+  FileEntry fileEntry;
+
+  CPPUNIT_ASSERT(!fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                     AF_INET6));
+
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+  CPPUNIT_ASSERT(fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                    AF_INET6));
+  CPPUNIT_ASSERT_EQUAL(
+      AF_INET,
+      fileEntry.getPreferredAddressFamilyByHealth(
+          "example.org", 443, std::vector<int>{AF_INET, AF_INET6}));
+
+  fileEntry.recordAddressFamilySuccess("example.org", 443, AF_INET6);
+  CPPUNIT_ASSERT(!fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                     AF_INET6));
+  CPPUNIT_ASSERT_EQUAL(
+      0, fileEntry.getPreferredAddressFamilyByHealth(
+             "example.org", 443, std::vector<int>{AF_INET, AF_INET6}));
+}
+
+void FileEntryTest::testAddressFamilyHealthExpires()
+{
+  FileEntry fileEntry;
+
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+  CPPUNIT_ASSERT(fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                    AF_INET6));
+
+  global::wallclock().advance(61_s);
+
+  CPPUNIT_ASSERT(!fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                     AF_INET6));
+}
+
+void FileEntryTest::testAddressFamilyHealthResetsExpiredFailures()
+{
+  FileEntry fileEntry;
+
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+  global::wallclock().advance(61_s);
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+
+  CPPUNIT_ASSERT(fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                    AF_INET6));
+  global::wallclock().advance(31_s);
+  CPPUNIT_ASSERT(!fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                     AF_INET6));
+}
+
+void FileEntryTest::testAddressFamilyHealthClearedByRuntimeRelease()
+{
+  FileEntry fileEntry;
+
+  fileEntry.recordAddressFamilyFailure("example.org", 443, AF_INET6);
+  fileEntry.releaseRuntimeResource();
+
+  CPPUNIT_ASSERT(!fileEntry.isAddressFamilyPenalized("example.org", 443,
+                                                     AF_INET6));
 }
 
 } // namespace aria2

@@ -226,6 +226,10 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
         getRequestGroup(), getRequest().get(), hostname, addr, port,
         predicate, coalescingPredicate);
     if (activeHttp2.isActive()) {
+      if (getFileEntry()) {
+        getFileEntry()->recordAddressFamilySuccess(
+            hostname, port, getNumericAddressFamily(addr));
+      }
       getRequest()->setConnectedAddrInfo(hostname, addr, port);
       getRequest()->confirmConnectedAddrInfo();
       getRequest()->setHttp2OriginCoalesced(activeHttp2.originCoalesced);
@@ -258,6 +262,10 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
         getRequestGroup(), getRequest().get(), hostname, addr, port,
         predicate, coalescingPredicate);
     if (idleHttp2.isActive()) {
+      if (getFileEntry()) {
+        getFileEntry()->recordAddressFamilySuccess(
+            hostname, port, getNumericAddressFamily(addr));
+      }
       getRequest()->setConnectedAddrInfo(hostname, addr, port);
       getRequest()->confirmConnectedAddrInfo();
       getRequest()->setHttp2OriginCoalesced(idleHttp2.originCoalesced);
@@ -320,7 +328,7 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
       return std::move(c);
     }
     else {
-      setConnectedAddrInfo(getRequest(), hostname, pooledSocket);
+      setConnectedAddrInfo(getRequest(), hostname, port, pooledSocket);
       auto c = make_unique<HttpRequestCommand>(
           getCuid(), getRequest(), getFileEntry(), getRequestGroup(),
           std::make_shared<HttpConnection>(
@@ -356,7 +364,7 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
     }
     else {
       setSocket(pooledSocket);
-      setConnectedAddrInfo(getRequest(), hostname, pooledSocket);
+      setConnectedAddrInfo(getRequest(), hostname, port, pooledSocket);
 
       return make_unique<HttpRequestCommand>(
           getCuid(), getRequest(), getFileEntry(), getRequestGroup(),

@@ -25,6 +25,8 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressDoesNotRotateToScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressPrefersRequestedDualStackFamily);
   CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedActiveFamily);
+  CPPUNIT_TEST(testSelectIPAddressPrefersHealthyFamily);
+  CPPUNIT_TEST(testSelectIPAddressFallsBackWhenBothFamiliesPenalized);
   CPPUNIT_TEST(testSelectIPAddressRotatesWhenActiveFamiliesBalanced);
   CPPUNIT_TEST(testSelectIPAddressCountsActiveFamilyOutsideCandidates);
   CPPUNIT_TEST(testSelectIPAddressIgnoresOtherActiveHostAndPort);
@@ -50,6 +52,8 @@ public:
   void testSelectIPAddressDoesNotRotateToScopedIPv6();
   void testSelectIPAddressPrefersRequestedDualStackFamily();
   void testSelectIPAddressPrefersUnderusedActiveFamily();
+  void testSelectIPAddressPrefersHealthyFamily();
+  void testSelectIPAddressFallsBackWhenBothFamiliesPenalized();
   void testSelectIPAddressRotatesWhenActiveFamiliesBalanced();
   void testSelectIPAddressCountsActiveFamilyOutsideCandidates();
   void testSelectIPAddressIgnoresOtherActiveHostAndPort();
@@ -245,6 +249,42 @@ void AbstractCommandTest::testSelectIPAddressPrefersUnderusedActiveFamily()
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 2, fileEntry, "example.org",
                                         443));
+}
+
+void AbstractCommandTest::testSelectIPAddressPrefersHealthyFamily()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setUris(std::vector<std::string>{"https://example.org/file"});
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+
+  auto req = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req);
+  req->setConnectedAddrInfo("example.org", "192.0.2.2", 443);
+  fileEntry->recordAddressFamilyFailure("example.org", 443, AF_INET6);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 1, fileEntry, "example.org",
+                                       443));
+}
+
+void AbstractCommandTest::testSelectIPAddressFallsBackWhenBothFamiliesPenalized()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->recordAddressFamilyFailure("example.org", 443, AF_INET);
+  fileEntry->recordAddressFamilyFailure("example.org", 443, AF_INET6);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(addrs, 1, fileEntry, "example.org",
+                                       443));
 }
 
 void AbstractCommandTest::testSelectIPAddressRotatesWhenActiveFamiliesBalanced()

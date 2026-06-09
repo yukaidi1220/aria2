@@ -129,7 +129,7 @@ std::unique_ptr<Command> FtpInitiateConnectionCommand::createNextCommandProxied(
     return std::move(c);
   }
 
-  setConnectedAddrInfo(getRequest(), hostname, pooledSocket);
+  setConnectedAddrInfo(getRequest(), hostname, port, pooledSocket);
   if (proxyMethod == V_TUNNEL) {
 #ifdef HAVE_LIBSSH2
     if (getRequest()->getProtocol() == "sftp") {
@@ -203,7 +203,7 @@ std::unique_ptr<Command> FtpInitiateConnectionCommand::createNextCommandPlain(
     return std::move(c);
   }
 
-  setConnectedAddrInfo(getRequest(), hostname, pooledSocket);
+  setConnectedAddrInfo(getRequest(), hostname, port, pooledSocket);
 
 #ifdef HAVE_LIBSSH2
   if (getRequest()->getProtocol() == "sftp") {

@@ -73,10 +73,10 @@ bool isNumericAddressFamily(const std::string& addr, int family)
 
 int getBackupAddressFamily(const std::string& ipaddr)
 {
-  if (isNumericAddressFamily(ipaddr, AF_INET6)) {
+  if (getNumericAddressFamily(ipaddr) == AF_INET6) {
     return AF_INET;
   }
-  if (isNumericAddressFamily(ipaddr, AF_INET)) {
+  if (getNumericAddressFamily(ipaddr) == AF_INET) {
     return AF_INET6;
   }
   return 0;
@@ -152,11 +152,15 @@ bool InitiateConnectionCommand::executeInternal()
 
 void InitiateConnectionCommand::setConnectedAddrInfo(
     const std::shared_ptr<Request>& req, const std::string& hostname,
-    const std::shared_ptr<SocketCore>& socket)
+    uint16_t port, const std::shared_ptr<SocketCore>& socket)
 {
   auto endpoint = socket->getPeerInfo();
   req->setConnectedAddrInfo(hostname, endpoint.addr, endpoint.port);
   req->confirmConnectedAddrInfo();
+  if (getFileEntry()) {
+    getFileEntry()->recordAddressFamilySuccess(
+        hostname, port, getNumericAddressFamily(endpoint.addr));
+  }
 }
 
 std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
@@ -203,6 +207,15 @@ InitiateConnectionCommand::createBackupConnectCommand(
   std::shared_ptr<BackupConnectInfo> info;
   int backupFamily = getBackupAddressFamily(ipaddr);
   if (backupFamily == 0) {
+    return info;
+  }
+  if (getFileEntry() &&
+      getFileEntry()->isAddressFamilyPenalized(hostname, port, backupFamily)) {
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - Skipping backup connection to penalized IPv%d "
+                       "family for %s:%u",
+                       getCuid(), backupFamily == AF_INET ? 4 : 6,
+                       hostname.c_str(), port));
     return info;
   }
   A2_LOG_INFO(fmt("Searching IPv%d address for backup connection attempt",

@@ -94,19 +94,32 @@ bool ConnectCommand::executeInternal()
             getCuid(), backupConnectionInfo_->ipaddr.c_str()));
 
     auto mainSocketError = getSocket()->getSocketError();
+    auto mainFamily =
+        getNumericAddressFamily(getRequest()->getConnectedAddr());
+    auto backupFamily =
+        getNumericAddressFamily(backupConnectionInfo_->ipaddr);
     if (!mainSocketError.empty()) {
       getDownloadEngine()->markBadIPAddress(
           getRequest()->getConnectedHostname(), getRequest()->getConnectedAddr(),
           getRequest()->getConnectedPort());
+      if (getFileEntry()) {
+        getFileEntry()->recordAddressFamilyFailure(
+            getRequest()->getConnectedHostname(),
+            getRequest()->getConnectedPort(), mainFamily);
+      }
       A2_LOG_NETWORK(
           fmt("CUID#%" PRId64 " - Marking IP %s as bad: %s",
               getCuid(), getRequest()->getConnectedAddr().c_str(),
               mainSocketError.c_str()));
     }
-
     getRequest()->setConnectedAddrInfo(getRequest()->getConnectedHostname(),
                                        backupConnectionInfo_->ipaddr,
                                        getRequest()->getConnectedPort());
+    if (getFileEntry()) {
+      getFileEntry()->recordAddressFamilySuccess(
+          getRequest()->getConnectedHostname(),
+          getRequest()->getConnectedPort(), backupFamily);
+    }
     swapSocket(backupConnectionInfo_->socket);
     backupConnectionInfo_.reset();
   }
@@ -116,6 +129,12 @@ bool ConnectCommand::executeInternal()
     return true;
   }
   getRequest()->confirmConnectedAddrInfo();
+  if (getFileEntry()) {
+    getFileEntry()->recordAddressFamilySuccess(
+        getRequest()->getConnectedHostname(),
+        getRequest()->getConnectedPort(),
+        getNumericAddressFamily(getRequest()->getConnectedAddr()));
+  }
   if (backupConnectionInfo_) {
     backupConnectionInfo_->cancel = true;
     backupConnectionInfo_.reset();

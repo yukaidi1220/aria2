@@ -480,6 +480,9 @@ int inetNtop(int af, const void* src, char* dst, socklen_t size);
 // This function returns 0 if it succeeds, or -1.
 int inetPton(int af, const char* src, void* dst);
 
+// Returns AF_INET, AF_INET6, or 0 for non-numeric addresses.
+int getNumericAddressFamily(const std::string& addr);
+
 // Returns true if addr is a numeric IPv6 address which is not
 // unspecified, loopback, multicast, ULA, link-local, site-local,
 // IPv4-mapped, or IPv4-compatible.
