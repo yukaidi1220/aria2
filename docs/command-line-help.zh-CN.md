@@ -39,7 +39,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
 | HTTP/3 / H3 / QUIC / Alt-Svc | 第一阶段能力门；Alt-Svc parser 已落地 | 默认构建仍拒绝 `--enable-http3=true`；只有构建时显式带 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 且使用 OpenSSL TLS 后端时才接受该开关；`Alt-Svc: h3=...` parser 只解析 header 值，未接缓存、下载路径、QUIC 传输、H3 command 或 `h3` ALPN 分发 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/usage_text.h`、`src/AltSvcParser.cc` |
 | ECH | 手动 ECHConfigList 第一阶段可用 | `--ech-config-base64=BASE64` 或 `--enable-ech=true --ech-config-base64=BASE64` 对 HTTPS 启用 required ECH；HTTPS RR 后台发现已能缓存 `ech` 参数候选，但尚未接到 TLS ECH 自动配置、retry config 自动重试或 H3 discovery；不能与 `--tls-sni-host` override 混用；TLS 后端不支持或握手后未接受 ECH 会失败 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h`、`src/LibsslTLSSession.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/HttpsServiceBindingCache.cc` |
-| HTTPS/SVCB TYPE65 | 第一阶段后台发现、缓存与 address hints 消费已落地 | 能创建 TYPE65 查询并解析 HTTPS/SVCB RDATA，包括 priority、target、mandatory、alpn、no-default-alpn、port、ipv4hint、ech、ipv6hint、unknown params；`cares` 用 plain c-ares，`dot`/`doh` 用对应加密通道，`multi` 只对显式 plain server 发 plain TYPE65，只有 secure server 时不偷加系统 plain fallback；不阻塞首连；已缓存且不改 origin host/port 的 `ipv4hint`/`ipv6hint` 会作为当前 HTTPS origin 解析的额外地址候选，但仍暂不改变 HTTP 下载目标、ALPN、ECH 或 H3/Alt-Svc 选择 | `src/DnsMessage.h`、`src/DnsMessage.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/ServiceBindingSelector.cc`、`src/HttpsServiceBindingCache.cc`、`src/AbstractCommand.cc`、`src/DownloadEngine.cc` |
+| HTTPS/SVCB TYPE65 | 第一阶段后台发现、缓存、connect target/port 与 address hints 消费已落地 | 能创建 TYPE65 查询并解析 HTTPS/SVCB RDATA，包括 priority、target、mandatory、alpn、no-default-alpn、port、ipv4hint、ech、ipv6hint、unknown params；`cares` 用 plain c-ares，`dot`/`doh` 用对应加密通道，`multi` 只对显式 plain server 发 plain TYPE65，只有 secure server 时不偷加系统 plain fallback；不阻塞首连；直连 HTTPS 命中 cache 后可用 selected endpoint 改变 TCP connect target/port，但 Request origin、HTTP `Host`、TLS SNI 和证书校验主机仍保持原 URL origin；proxy 路径不消费 SVCB；selected endpoint 的 address hints 写入 connect target DNS cache，不污染 origin；ALPN、ECH、H3/Alt-Svc、失败负缓存和 fallback origin 仍未接线 | `src/DnsMessage.h`、`src/DnsMessage.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/ServiceBindingSelector.cc`、`src/HttpsServiceBindingCache.cc`、`src/AbstractCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/DownloadEngine.cc` |
 | XP/Win7 兼容 | 单一运行基线，不按系统版本自动改语义 | 不做“旧系统自动禁用功能 / 拒绝启用 / 静默降级”的特殊分支；缺构建能力时按选项校验失败，TLS 后端缺 ALPN 时 H2 自然走 HTTP/1.1，缺 FakeSNI/ECH 能力时报明确错误；原则是不崩溃、不伪装已支持 | `src/FeatureConfig.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 
 ### 2.0.1 新增网络选项速查
@@ -397,7 +397,7 @@ SVCB/HTTPS RR 源码状态：
 - `src/AsyncDotNameResolver.cc` / `src/AsyncDohNameResolver.cc` 已能把同一 DoT/DoH DNS message 通道切到 `TYPE_HTTPS`，并用 `dns::parseServiceBindingResponse()` 解析返回的 service binding records；DoH over H2 时 TYPE65 query 仍作为 HTTP/2 DATA body 发送。
 - `src/AbstractCommand.cc` 在 HTTPS 直连解析路径上启动后台 HTTPS RR discovery。`cares` 复用 `--async-dns-server` 的 c-ares server 配置；`dot` / `doh` 复用对应 server 配置和域名 server bootstrap；`multi` 会并行显式 plain server、DoT、DoH，但如果用户只配置了 secure server，不会额外添加系统 plain fallback 来查询目标域名 TYPE65。
 - HTTPS RR discovery 不等待结果，不参与 A/AAAA 成功条件；首个可用 IP 仍按原 DNS/连接逻辑下载。非空 HTTPS RR 成功会立即写入 cache；只有空结果时会等其它已启动 resolver 结束，最后再写短期负缓存。
-- `src/HttpsServiceBindingCache.cc` 按 origin hostname + port 缓存 raw HTTPS RR records，并记录 resolving 状态，避免同一 origin 被多个 split 同时重复查询。`src/AbstractCommand.cc::getUsableHttpsServiceBindingAddressHints()` 会按当前请求选项筛选同 origin host/port 的 selected records，并把 `ipv4hint`/`ipv6hint` 追加到当前 HTTPS origin 解析候选；要求改 target 或 port 的记录暂不消费，也不会写入通用 DNS cache。
+- `src/HttpsServiceBindingCache.cc` 按 origin hostname + port 缓存 raw HTTPS RR records，并记录 resolving 状态，避免同一 origin 被多个 split 同时重复查询。`src/AbstractCommand.cc::getUsableHttpsServiceBindingAddressHints()` 仍会把不改 origin host/port 的 `ipv4hint`/`ipv6hint` 追加到当前 HTTPS origin 解析候选；`src/HttpInitiateConnectionCommand.cc` 在直连 HTTPS cache 命中后可使用 selected endpoint 的 target/port 作为 TCP connect target/port。Request origin、HTTP `Host`、TLS SNI 和证书校验主机仍保持原 URL origin；selected endpoint 的 address hints 会写入 connect target DNS cache，不写入 origin DNS cache。
 - `ech` SvcParam 当前保存为二进制 ECHConfigList，并可进入 HTTPS RR cache 的候选结果；但还没有接到 `--enable-ech` 或 TLS 握手自动配置。
 
 Alt-Svc 源码状态：
@@ -408,11 +408,11 @@ Alt-Svc 源码状态：
 
 未接线边界：
 
-- DoT/DoH/multi 已能发 TYPE65 后台查询，并能在 cache 命中后消费同 origin host/port 的 address hints；不要写成已经能自动改写连接目标、ALPN、ECH 或 H3。
-- 当前只会把不改 origin host/port 的 `ipv4hint` / `ipv6hint` 追加到当前 HTTPS origin 连接候选；不会写入通用 DNS cache，也不会用 SVCB target/port 改写本次连接目标。
-- 当前没有把 SVCB `alpn` 接进 HTTP/2/H3 选择，也没有把 SVCB `ech` 接进 ECH 自动发现。
-- 现在没有 Alt-Svc cache、响应头接线、过期处理、H3 建连或失败回退逻辑。
-- 因此 SVCB 当前属于“plain/DoT/DoH/multi 后台发现/cache 已落地，且同 origin address hints 可给后续连接补充地址候选”；Alt-Svc 仍属于“parser 已落地，下载决策未接线”。文档、README、帮助文本里不能写成已经能自动发现 ECH/H3。
+- DoT/DoH/multi 已能发 TYPE65 后台查询，并能在 cache 命中后让直连 HTTPS 使用 selected endpoint 作为 TCP connect target/port；但不要写成已经改写 Request origin、HTTP `Host`、TLS SNI/verify、ALPN、ECH 或 H3。
+- 当前只在直连 HTTPS 路径消费 SVCB；proxy 路径不消费。selected endpoint 的 address hints 只写入 connect target DNS cache，不污染 origin DNS cache。
+- 当前没有把 SVCB `alpn` 接进 HTTP/2/H3 选择，也没有把 SVCB `ech` 接进 ECH 自动发现；普通 TCP TLS ALPN 列表仍不因 HTTPS RR 自动加入 `h3`。
+- 现在没有 Alt-Svc cache、响应头接线、过期处理、H3 建连、SVCB 失败负缓存、fallback origin 或失败回退逻辑。
+- 因此 SVCB 当前属于“plain/DoT/DoH/multi 后台发现/cache 已落地，直连 HTTPS 可用 cached selected endpoint 做 TCP connect target/port，address hints 写入 connect target DNS cache”；Alt-Svc 仍属于“parser 已落地，下载决策未接线”。文档、README、帮助文本里不能写成已经自动发现 ECH/H3，也不能写成会改变 Request origin、HTTP `Host`、TLS SNI 或证书校验主机。
 
 ### 2.9 规划中/易误写边界
 
@@ -421,7 +421,7 @@ Alt-Svc 源码状态：
 - ECH 自动发现：当前只支持手动 `--ech-config-base64`。HTTPS RR 后台发现能通过 plain/DoT/DoH/multi 缓存候选 `ech` 数据，但 TLS 握手还不会自动消费它；retry config 自动重试、H3 discovery 都还没实现。
 - HTTP/3/H3/QUIC：当前只有 capability gate 加 Alt-Svc parser。未构建完整 ngtcp2/nghttp3/QUIC TLS 依赖时，`--enable-http3=true` 会在参数解析阶段失败；即使构建时开了这个 gate，源码仍然没有 QUIC 传输层、HTTP/3 request/response command 或 H3 ALPN 分发。这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进普通 HTTPS 下载的 TCP TLS ALPN 列表。
 - Alt-Svc：`src/AltSvcParser.cc` 能解析 `Alt-Svc` header 中正式 `h3` protocol id 的 authority、`ma`、`persist`，支持 `clear` 覆盖，并忽略非 H3/非法项；当前没有缓存表、过期策略接线、HTTP 响应头接线或下载路径改写，解析结果不会驱动 QUIC/H3 建连。
-- HTTPS/SVCB TYPE65：`src/DnsMessage.cc` 已经有 DNS wire 层的 `TYPE_HTTPS = 65` query/response parser，能读 `alpn`、`port`、`ipv4hint`、`ech`、`ipv6hint` 等 SvcParam，并会过滤未知 mandatory key 的记录；`AsyncServiceBindingResolver`、`AsyncDotNameResolver`、`AsyncDohNameResolver` 已能后台发起 HTTPS RR 查询并缓存 raw records；同 origin host/port 的 address hints 已可补入当前 HTTPS origin 连接候选，但还没有把 SVCB target/port、ALPN、ECH 自动配置或 H3 选择接进普通下载决策。
+- HTTPS/SVCB TYPE65：`src/DnsMessage.cc` 已经有 DNS wire 层的 `TYPE_HTTPS = 65` query/response parser，能读 `alpn`、`port`、`ipv4hint`、`ech`、`ipv6hint` 等 SvcParam，并会过滤未知 mandatory key 的记录；`AsyncServiceBindingResolver`、`AsyncDotNameResolver`、`AsyncDohNameResolver` 已能后台发起 HTTPS RR 查询并缓存 raw records；直连 HTTPS cache 命中后可选择 SVCB endpoint 作为 TCP connect target/port，selected endpoint 的 address hints 会写入 connect target DNS cache；但 Request origin、HTTP `Host`、TLS SNI/verify 保持不变，proxy 路径不消费 SVCB，ALPN、ECH 自动配置、H3 选择、失败负缓存和 fallback origin 仍未实现。
 - DoH over H2：这是条件可用能力，不是 H3/ECH 占位。`AsyncDohNameResolver` 会在 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时尝试 ALPN `h2,http/1.1`；TLS 未选中 `h2` 时仍按 HTTP/1.1 POST `application/dns-message` 工作。
 - WinTLS/AppleTLS 上的 FakeSNI override：普通 SNI 可用，但 SNI 与证书校验 hostname 不同会被提前拒绝。
 - WinTLS/AppleTLS 当前代码里的 HTTP/2 ALPN：没有 ALPN 接口时会降级 HTTP/1.1；GnuTLS 只有在 configure 探测到 ALPN API 时才启用。
@@ -438,7 +438,7 @@ Alt-Svc 源码状态：
 - 32-bit MinGW 构建中 `OptionHandlerFactory.cc` 默认把 `--disable-ipv6` 设为 `true`，因为 Vista 前后的 IPv6 API 可用性差异容易踩坑；其他构建通常默认 `false`。单一基线里要把这个当作构建差异处理，不要在运行期假设 IPv6 必然可用。
 - 默认最低 TLS 版本是 `TLSv1.2`。为了兼容旧系统降低 TLS 版本只适合受控环境；公网下载优先换带 OpenSSL/GnuTLS 的构建，比关证书校验靠谱得多。
 - 没有异步 DNS 的构建不存在 `--async-dns-mode=doh|dot` 这条路；无 SSL 构建即使有异步 DNS 也只接受 `cares`。旧系统兼容文档里要把这点写死，别让用户以为 DoH/DoT 会自动降级成普通 DNS。
-- Alt-Svc parser 和 HTTPS/SVCB TYPE65 parser 属于跨平台纯解析能力；HTTPS RR 后台 discovery/cache 同样不依赖新 Windows API。它们当前没有接到运行时下载选择，因此也不存在 XP/Win7 上“自动禁用 H3/SVCB”的运行期分支。
+- Alt-Svc parser 和 HTTPS/SVCB TYPE65 parser 属于跨平台纯解析能力；HTTPS RR 后台 discovery/cache 和直连 HTTPS 的 cached SVCB connect target/port 选择同样不依赖新 Windows API。当前没有 H3 运行时下载路径，也没有 SVCB 失败负缓存或 fallback origin，因此不存在 XP/Win7 上“自动禁用 H3/SVCB”的独立产品线分支。
 
 ## 3. 选项总览
 
@@ -793,7 +793,7 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 - HTTP/2 目前已有同 origin active/idle 复用、保守 origin coalescing、421 负缓存，以及 DoH over H2 请求体发送说明；后续阶段还要补真实网络端到端测试，并继续完善错误恢复、Range/redirect 行为。
 - IPv4/IPv6 目前已有第一阶段双栈竞速：A/AAAA 并发解析、后台 DNS cache 补齐唤醒、异步 DNS 下 `0ms` opposite-family 备份连接。后续若要更完整贴近 RFC 8305，还应实现按地址列表交错排序、连接尝试取消/统计更细粒度、DNS cache TTL 和坏地址恢复策略。
 - H3/QUIC 当前只有依赖探测、`HAVE_HTTP3` 能力门和 `--enable-http3` 选项语义；后续还要补 UDP/QUIC transport、nghttp3 exchange、Alt-Svc/HTTPS RR 结果消费、失败回退和真实下载测试，不能直接把 `h3` ALPN 写进 TCP 下载链路。
-- HTTPS/SVCB TYPE65 目前已能通过 cares/DoT/DoH/multi 做后台发现和 cache，并能把同 origin host/port 的 address hints 补进后续连接候选；后续还要把选中的 SVCB target/port/alpn/ech 接进实际下载决策，并补真实网络端到端测试。
+- HTTPS/SVCB TYPE65 目前已能通过 cares/DoT/DoH/multi 做后台发现和 cache；直连 HTTPS 已可用 cached selected endpoint 作为 TCP connect target/port，并把 selected endpoint 的 address hints 写入 connect target DNS cache。后续还要补 SVCB 失败负缓存、fallback origin、ALPN/ECH/H3 接线、proxy 策略确认和真实网络端到端测试。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
 - 后续如果给 WinTLS/AppleTLS 补 ALPN 或调整 SNI override 能力，需要同步更新 2.0 能力矩阵和 XP/Win7 边界；当前 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override 且在探测到 ALPN API 时支持 ALPN，WinTLS 未声明 SNI override，基类 ALPN 默认不支持并会触发 HTTP/1.1 fallback。
