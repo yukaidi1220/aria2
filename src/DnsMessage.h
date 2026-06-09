@@ -47,6 +47,30 @@ namespace dns {
 enum QueryType {
   TYPE_A = 1,
   TYPE_AAAA = 28,
+  TYPE_HTTPS = 65,
+};
+
+struct SvcParam {
+  uint16_t key = 0;
+  std::string value;
+};
+
+struct ServiceBindingRecord {
+  std::string ownerName;
+  uint16_t priority = 0;
+  std::string targetName;
+  std::vector<uint16_t> mandatoryKeys;
+  std::vector<uint16_t> paramKeys;
+  std::vector<std::string> alpn;
+  bool noDefaultAlpn = false;
+  bool hasPort = false;
+  uint16_t port = 0;
+  std::vector<std::string> ipv4hint;
+  std::vector<std::string> ipv6hint;
+  std::string echConfigList;
+  std::vector<SvcParam> unknownParams;
+  bool aliasModeUnavailable = false;
+  bool hasUnknownMandatoryKey = false;
 };
 
 std::string createQuery(uint16_t id, const std::string& hostname,
@@ -56,6 +80,12 @@ std::vector<std::string> parseResponse(const unsigned char* data, size_t len,
                                        uint16_t expectedId,
                                        const std::string& expectedHostname,
                                        QueryType qtype);
+
+std::vector<ServiceBindingRecord>
+parseServiceBindingResponse(const unsigned char* data, size_t len,
+                            uint16_t expectedId,
+                            const std::string& expectedHostname,
+                            QueryType qtype);
 
 } // namespace dns
 

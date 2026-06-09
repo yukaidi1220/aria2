@@ -13,9 +13,23 @@ class DnsMessageTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(DnsMessageTest);
   CPPUNIT_TEST(testCreateAQuery);
   CPPUNIT_TEST(testCreateAAAAQueryWithTrailingDot);
+  CPPUNIT_TEST(testCreateHTTPSQuery);
   CPPUNIT_TEST(testCreateQueryRejectsBadName);
   CPPUNIT_TEST(testParseAResponse);
   CPPUNIT_TEST(testParseAAAAResponse);
+  CPPUNIT_TEST(testParseBasicHTTPSResponse);
+  CPPUNIT_TEST(testParseHTTPSResponseParams);
+  CPPUNIT_TEST(testParseHTTPSResponseUnknownParam);
+  CPPUNIT_TEST(testParseHTTPSResponseCompressedTargetName);
+  CPPUNIT_TEST(testParseHTTPSResponseRejectsBadParamKeyOrder);
+  CPPUNIT_TEST(testParseHTTPSResponseRejectsBadParamLength);
+  CPPUNIT_TEST(testParseHTTPSResponseRejectsNoDefaultAlpnWithoutAlpn);
+  CPPUNIT_TEST(testParseHTTPSResponseMandatoryParam);
+  CPPUNIT_TEST(testParseHTTPSResponseRejectsBadMandatoryParam);
+  CPPUNIT_TEST(testParseHTTPSResponseIgnoresUnknownMandatoryParam);
+  CPPUNIT_TEST(testParseHTTPSResponseRootTargetName);
+  CPPUNIT_TEST(testParseHTTPSResponseAliasModeIgnoresParams);
+  CPPUNIT_TEST(testParseHTTPSResponseAcceptsCNAMEChain);
   CPPUNIT_TEST(testParseCompressedCNAMEThenAResponse);
   CPPUNIT_TEST(testParseAcceptsUnorderedCNAMEChain);
   CPPUNIT_TEST(testParseIgnoresUnmatchedAnswerType);
@@ -29,9 +43,23 @@ class DnsMessageTest : public CppUnit::TestFixture {
 public:
   void testCreateAQuery();
   void testCreateAAAAQueryWithTrailingDot();
+  void testCreateHTTPSQuery();
   void testCreateQueryRejectsBadName();
   void testParseAResponse();
   void testParseAAAAResponse();
+  void testParseBasicHTTPSResponse();
+  void testParseHTTPSResponseParams();
+  void testParseHTTPSResponseUnknownParam();
+  void testParseHTTPSResponseCompressedTargetName();
+  void testParseHTTPSResponseRejectsBadParamKeyOrder();
+  void testParseHTTPSResponseRejectsBadParamLength();
+  void testParseHTTPSResponseRejectsNoDefaultAlpnWithoutAlpn();
+  void testParseHTTPSResponseMandatoryParam();
+  void testParseHTTPSResponseRejectsBadMandatoryParam();
+  void testParseHTTPSResponseIgnoresUnknownMandatoryParam();
+  void testParseHTTPSResponseRootTargetName();
+  void testParseHTTPSResponseAliasModeIgnoresParams();
+  void testParseHTTPSResponseAcceptsCNAMEChain();
   void testParseCompressedCNAMEThenAResponse();
   void testParseAcceptsUnorderedCNAMEChain();
   void testParseIgnoresUnmatchedAnswerType();
@@ -169,12 +197,85 @@ void appendCNAMEAnswer(std::string& out, const std::string& name, uint32_t ttl,
   out.append(encoded);
 }
 
+void appendSvcParam(std::string& out, uint16_t key, const std::string& value)
+{
+  appendUint16(out, key);
+  appendUint16(out, static_cast<uint16_t>(value.size()));
+  out.append(value);
+}
+
+void appendServiceBindingAnswer(std::string& out, uint16_t type,
+                                uint16_t nameOffset, uint32_t ttl,
+                                uint16_t priority,
+                                const std::string& targetName,
+                                const std::string& params)
+{
+  std::string rdata;
+  appendUint16(rdata, priority);
+  appendName(rdata, targetName);
+  rdata.append(params);
+
+  appendCompressedName(out, nameOffset);
+  appendUint16(out, type);
+  appendUint16(out, 1);
+  appendUint32(out, ttl);
+  appendUint16(out, static_cast<uint16_t>(rdata.size()));
+  out.append(rdata);
+}
+
+void appendServiceBindingAnswer(std::string& out, uint16_t type,
+                                const std::string& name, uint32_t ttl,
+                                uint16_t priority,
+                                const std::string& targetName,
+                                const std::string& params)
+{
+  std::string rdata;
+  appendUint16(rdata, priority);
+  appendName(rdata, targetName);
+  rdata.append(params);
+
+  appendName(out, name);
+  appendUint16(out, type);
+  appendUint16(out, 1);
+  appendUint32(out, ttl);
+  appendUint16(out, static_cast<uint16_t>(rdata.size()));
+  out.append(rdata);
+}
+
+void appendCompressedServiceBindingAnswer(std::string& out, uint16_t type,
+                                          uint16_t nameOffset, uint32_t ttl,
+                                          uint16_t priority,
+                                          uint16_t targetNameOffset,
+                                          const std::string& params)
+{
+  std::string rdata;
+  appendUint16(rdata, priority);
+  appendCompressedName(rdata, targetNameOffset);
+  rdata.append(params);
+
+  appendCompressedName(out, nameOffset);
+  appendUint16(out, type);
+  appendUint16(out, 1);
+  appendUint32(out, ttl);
+  appendUint16(out, static_cast<uint16_t>(rdata.size()));
+  out.append(rdata);
+}
+
 std::vector<std::string> parse(const std::string& msg, uint16_t id,
                                dns::QueryType qtype,
                                const std::string& hostname =
                                    "www.example.com")
 {
   return dns::parseResponse(
+      reinterpret_cast<const unsigned char*>(msg.data()), msg.size(), id,
+      hostname, qtype);
+}
+
+std::vector<dns::ServiceBindingRecord>
+parseServiceBinding(const std::string& msg, uint16_t id, dns::QueryType qtype,
+                    const std::string& hostname = "www.example.com")
+{
+  return dns::parseServiceBindingResponse(
       reinterpret_cast<const unsigned char*>(msg.data()), msg.size(), id,
       hostname, qtype);
 }
@@ -210,6 +311,17 @@ void DnsMessageTest::testCreateAAAAQueryWithTrailingDot()
   CPPUNIT_ASSERT_EQUAL(expected,
                        dns::createQuery(0x2345, "www.example.com.",
                                         dns::TYPE_AAAA));
+}
+
+void DnsMessageTest::testCreateHTTPSQuery()
+{
+  std::string expected;
+  appendHeader(expected, 0x3456, 0x0100, 1, 0);
+  appendQuestion(expected, "www.example.com", dns::TYPE_HTTPS);
+
+  CPPUNIT_ASSERT_EQUAL(expected,
+                       dns::createQuery(0x3456, "www.example.com",
+                                        dns::TYPE_HTTPS));
 }
 
 void DnsMessageTest::testCreateQueryRejectsBadName()
@@ -252,6 +364,386 @@ void DnsMessageTest::testParseAAAAResponse()
   auto result = parse(msg, 0x1234, dns::TYPE_AAAA);
   CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), result[0]);
+}
+
+void DnsMessageTest::testParseBasicHTTPSResponse()
+{
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", std::string());
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"), result[0].ownerName);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)1, result[0].priority);
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example.com"), result[0].targetName);
+  CPPUNIT_ASSERT(result[0].alpn.empty());
+  CPPUNIT_ASSERT(!result[0].noDefaultAlpn);
+  CPPUNIT_ASSERT(!result[0].hasPort);
+}
+
+void DnsMessageTest::testParseHTTPSResponseParams()
+{
+  std::string alpn;
+  alpn.push_back(2);
+  alpn.append("h2");
+  alpn.push_back(8);
+  alpn.append("http/1.1");
+
+  std::string port;
+  appendUint16(port, 8443);
+
+  std::string ipv4hint;
+  ipv4hint.push_back(static_cast<char>(0xc0));
+  ipv4hint.push_back(static_cast<char>(0x00));
+  ipv4hint.push_back(static_cast<char>(0x02));
+  ipv4hint.push_back(static_cast<char>(0x01));
+  ipv4hint.push_back(static_cast<char>(0xc6));
+  ipv4hint.push_back(static_cast<char>(0x33));
+  ipv4hint.push_back(static_cast<char>(0x64));
+  ipv4hint.push_back(static_cast<char>(0x02));
+
+  std::string ech;
+  ech.push_back(static_cast<char>(0x01));
+  ech.push_back(static_cast<char>(0x02));
+  ech.push_back(static_cast<char>(0x03));
+  ech.push_back(static_cast<char>(0x04));
+
+  std::string ipv6hint;
+  static const unsigned char addr[16] = {0x20, 0x01, 0x0d, 0xb8, 0, 0, 0, 0,
+                                         0,    0,    0,    0,    0, 0, 0, 1};
+  ipv6hint.append(reinterpret_cast<const char*>(addr), 16);
+
+  std::string params;
+  appendSvcParam(params, 1, alpn);
+  appendSvcParam(params, 2, std::string());
+  appendSvcParam(params, 3, port);
+  appendSvcParam(params, 4, ipv4hint);
+  appendSvcParam(params, 5, ech);
+  appendSvcParam(params, 6, ipv6hint);
+
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 2,
+                             "svc.example.com", params);
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL((uint16_t)2, result[0].priority);
+  CPPUNIT_ASSERT_EQUAL((size_t)6, result[0].paramKeys.size());
+  CPPUNIT_ASSERT_EQUAL((uint16_t)1, result[0].paramKeys[0]);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)6, result[0].paramKeys[5]);
+  CPPUNIT_ASSERT_EQUAL((size_t)2, result[0].alpn.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("h2"), result[0].alpn[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("http/1.1"), result[0].alpn[1]);
+  CPPUNIT_ASSERT(result[0].noDefaultAlpn);
+  CPPUNIT_ASSERT(result[0].hasPort);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)8443, result[0].port);
+  CPPUNIT_ASSERT_EQUAL((size_t)2, result[0].ipv4hint.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), result[0].ipv4hint[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.2"), result[0].ipv4hint[1]);
+  CPPUNIT_ASSERT_EQUAL(ech, result[0].echConfigList);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result[0].ipv6hint.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), result[0].ipv6hint[0]);
+}
+
+void DnsMessageTest::testParseHTTPSResponseUnknownParam()
+{
+  std::string params;
+  appendSvcParam(params, 65400, std::string("opaque"));
+
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params);
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result[0].unknownParams.size());
+  CPPUNIT_ASSERT_EQUAL((uint16_t)65400, result[0].unknownParams[0].key);
+  CPPUNIT_ASSERT_EQUAL(std::string("opaque"), result[0].unknownParams[0].value);
+}
+
+void DnsMessageTest::testParseHTTPSResponseCompressedTargetName()
+{
+  std::string msg;
+  appendHeader(msg, 0x1234, 0x8180, 1, 1);
+  appendQuestion(msg, "www.example.com", dns::TYPE_HTTPS);
+  appendCompressedServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 1, 12,
+                                       std::string());
+
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+}
+
+void DnsMessageTest::testParseHTTPSResponseRejectsBadParamKeyOrder()
+{
+  std::string port;
+  appendUint16(port, 8443);
+
+  std::string alpn;
+  alpn.push_back(2);
+  alpn.append("h2");
+
+  std::string duplicate;
+  appendSvcParam(duplicate, 3, port);
+  appendSvcParam(duplicate, 3, port);
+  auto msg1 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg1, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", duplicate);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg1, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string outOfOrder;
+  appendSvcParam(outOfOrder, 3, port);
+  appendSvcParam(outOfOrder, 1, alpn);
+  auto msg2 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg2, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", outOfOrder);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg2, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+}
+
+void DnsMessageTest::testParseHTTPSResponseRejectsBadParamLength()
+{
+  std::string emptyAlpnParam;
+  appendSvcParam(emptyAlpnParam, 1, std::string());
+  auto msgEmptyAlpn = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msgEmptyAlpn, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", emptyAlpnParam);
+  CPPUNIT_ASSERT_THROW(
+      parseServiceBinding(msgEmptyAlpn, 0x1234, dns::TYPE_HTTPS), DlAbortEx);
+
+  std::string zeroAlpn;
+  zeroAlpn.push_back(0);
+  std::string zeroAlpnParam;
+  appendSvcParam(zeroAlpnParam, 1, zeroAlpn);
+  auto msgZeroAlpn = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msgZeroAlpn, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", zeroAlpnParam);
+  CPPUNIT_ASSERT_THROW(
+      parseServiceBinding(msgZeroAlpn, 0x1234, dns::TYPE_HTTPS), DlAbortEx);
+
+  std::string badAlpn;
+  badAlpn.push_back(4);
+  badAlpn.append("h2");
+  std::string badAlpnParam;
+  appendSvcParam(badAlpnParam, 1, badAlpn);
+  auto msg0 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg0, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", badAlpnParam);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg0, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string badNoDefaultAlpn;
+  appendSvcParam(badNoDefaultAlpn, 2, std::string("x"));
+  auto msg1 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg1, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", badNoDefaultAlpn);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg1, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string badPort;
+  appendSvcParam(badPort, 3, std::string("x"));
+  auto msg2 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg2, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", badPort);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg2, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string badIpv4;
+  appendSvcParam(badIpv4, 4, std::string("xxx"));
+  auto msg3 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg3, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", badIpv4);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg3, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string emptyIpv4;
+  appendSvcParam(emptyIpv4, 4, std::string());
+  auto msgEmptyIpv4 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msgEmptyIpv4, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", emptyIpv4);
+  CPPUNIT_ASSERT_THROW(
+      parseServiceBinding(msgEmptyIpv4, 0x1234, dns::TYPE_HTTPS), DlAbortEx);
+
+  std::string badIpv6;
+  appendSvcParam(badIpv6, 6, std::string("xxx"));
+  auto msg4 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg4, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", badIpv6);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg4, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string emptyIpv6;
+  appendSvcParam(emptyIpv6, 6, std::string());
+  auto msgEmptyIpv6 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msgEmptyIpv6, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", emptyIpv6);
+  CPPUNIT_ASSERT_THROW(
+      parseServiceBinding(msgEmptyIpv6, 0x1234, dns::TYPE_HTTPS), DlAbortEx);
+}
+
+void DnsMessageTest::testParseHTTPSResponseRejectsNoDefaultAlpnWithoutAlpn()
+{
+  std::string params;
+  appendSvcParam(params, 2, std::string());
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params);
+
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+}
+
+void DnsMessageTest::testParseHTTPSResponseMandatoryParam()
+{
+  std::string mandatory;
+  appendUint16(mandatory, 1);
+  appendUint16(mandatory, 3);
+
+  std::string alpn;
+  alpn.push_back(2);
+  alpn.append("h2");
+
+  std::string port;
+  appendUint16(port, 8443);
+
+  std::string params;
+  appendSvcParam(params, 0, mandatory);
+  appendSvcParam(params, 1, alpn);
+  appendSvcParam(params, 3, port);
+
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params);
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL((size_t)2, result[0].mandatoryKeys.size());
+  CPPUNIT_ASSERT_EQUAL((uint16_t)1, result[0].mandatoryKeys[0]);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)3, result[0].mandatoryKeys[1]);
+}
+
+void DnsMessageTest::testParseHTTPSResponseRejectsBadMandatoryParam()
+{
+  std::string emptyMandatory;
+  std::string params0;
+  appendSvcParam(params0, 0, emptyMandatory);
+  auto msg0 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg0, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params0);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg0, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string oddMandatory;
+  oddMandatory.push_back(1);
+  std::string paramsOdd;
+  appendSvcParam(paramsOdd, 0, oddMandatory);
+  auto msgOdd = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msgOdd, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", paramsOdd);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msgOdd, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string includesMandatory;
+  appendUint16(includesMandatory, 0);
+  std::string params1;
+  appendSvcParam(params1, 0, includesMandatory);
+  auto msg1 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg1, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params1);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg1, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string duplicate;
+  appendUint16(duplicate, 1);
+  appendUint16(duplicate, 1);
+  std::string params2;
+  appendSvcParam(params2, 0, duplicate);
+  auto msg2 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg2, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params2);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg2, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+
+  std::string missing;
+  appendUint16(missing, 3);
+  std::string alpn;
+  alpn.push_back(2);
+  alpn.append("h2");
+  std::string params3;
+  appendSvcParam(params3, 0, missing);
+  appendSvcParam(params3, 1, alpn);
+  auto msg3 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg3, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params3);
+  CPPUNIT_ASSERT_THROW(parseServiceBinding(msg3, 0x1234, dns::TYPE_HTTPS),
+                       DlAbortEx);
+}
+
+void DnsMessageTest::testParseHTTPSResponseIgnoresUnknownMandatoryParam()
+{
+  std::string mandatory;
+  appendUint16(mandatory, 65400);
+  std::string params;
+  appendSvcParam(params, 0, mandatory);
+  appendSvcParam(params, 65400, std::string("opaque"));
+
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 1,
+                             "svc.example.com", params);
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT(result.empty());
+}
+
+void DnsMessageTest::testParseHTTPSResponseRootTargetName()
+{
+  auto msg1 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg1, dns::TYPE_HTTPS, 12, 60, 1, std::string(),
+                             std::string());
+
+  auto result1 = parseServiceBinding(msg1, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result1.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("www.example.com"), result1[0].targetName);
+  CPPUNIT_ASSERT(!result1[0].aliasModeUnavailable);
+
+  auto msg2 = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg2, dns::TYPE_HTTPS, 12, 60, 0, std::string(),
+                             std::string());
+
+  auto result2 = parseServiceBinding(msg2, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result2.size());
+  CPPUNIT_ASSERT_EQUAL(std::string(""), result2[0].targetName);
+  CPPUNIT_ASSERT(result2[0].aliasModeUnavailable);
+}
+
+void DnsMessageTest::testParseHTTPSResponseAliasModeIgnoresParams()
+{
+  std::string params;
+  appendSvcParam(params, 3, std::string("x"));
+  appendSvcParam(params, 1, std::string());
+
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 1);
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, 12, 60, 0,
+                             "alias.example.com", params);
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL((uint16_t)0, result[0].priority);
+  CPPUNIT_ASSERT_EQUAL(std::string("alias.example.com"), result[0].targetName);
+  CPPUNIT_ASSERT(result[0].paramKeys.empty());
+}
+
+void DnsMessageTest::testParseHTTPSResponseAcceptsCNAMEChain()
+{
+  auto msg = createResponseHeader(0x1234, 0x8180, dns::TYPE_HTTPS, 2);
+  appendCNAMEAnswer(msg, 12, 60, "alias.example.com");
+  appendServiceBindingAnswer(msg, dns::TYPE_HTTPS, "alias.example.com", 60, 1,
+                             "svc.example.com", std::string());
+
+  auto result = parseServiceBinding(msg, 0x1234, dns::TYPE_HTTPS);
+  CPPUNIT_ASSERT_EQUAL((size_t)1, result.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("svc.example.com"), result[0].targetName);
 }
 
 void DnsMessageTest::testParseCompressedCNAMEThenAResponse()

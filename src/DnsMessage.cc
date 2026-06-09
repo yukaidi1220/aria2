@@ -34,6 +34,8 @@
 /* copyright --> */
 #include "DnsMessage.h"
 
+#include <algorithm>
+#include <iterator>
 #include <set>
 #include <utility>
 
@@ -196,6 +198,47 @@ std::string readName(const unsigned char* data, size_t len, size_t& pos)
   return util::toLower(readName(data, len, pos, visited, wireLen));
 }
 
+std::string readUncompressedName(const unsigned char* data, size_t len,
+                                 size_t& pos, bool& root)
+{
+  if (pos >= len) {
+    throw DL_ABORT_EX("Truncated DNS name");
+  }
+
+  std::string name;
+  size_t wireLen = 0;
+  for (;;) {
+    if (pos >= len) {
+      throw DL_ABORT_EX("Truncated DNS name");
+    }
+    auto labelLen = data[pos];
+    if ((labelLen & 0xc0) != 0) {
+      throw DL_ABORT_EX("Bad DNS uncompressed name");
+    }
+    ++pos;
+    ++wireLen;
+    if (wireLen > MAX_NAME_LENGTH) {
+      throw DL_ABORT_EX("DNS name is too long");
+    }
+    if (labelLen == 0) {
+      root = name.empty();
+      return util::toLower(std::move(name));
+    }
+    if (labelLen > 63 || pos + labelLen > len) {
+      throw DL_ABORT_EX("Truncated DNS label");
+    }
+    if (!name.empty()) {
+      name += '.';
+    }
+    name.append(reinterpret_cast<const char*>(data + pos), labelLen);
+    wireLen += labelLen;
+    if (wireLen > MAX_NAME_LENGTH) {
+      throw DL_ABORT_EX("DNS name is too long");
+    }
+    pos += labelLen;
+  }
+}
+
 struct Question {
   std::string name;
   uint16_t type;
@@ -209,6 +252,11 @@ struct Answer {
   size_t rdataPos = 0;
   uint16_t rdlength = 0;
   std::string cname;
+};
+
+struct ParsedResponse {
+  std::vector<Answer> answers;
+  std::set<std::string> acceptedNames;
 };
 
 Question readQuestion(const unsigned char* data, size_t len, size_t& pos)
@@ -250,29 +298,10 @@ std::string parseAddress(const unsigned char* data, size_t len, size_t pos,
   return std::string();
 }
 
-} // namespace
-
-std::string createQuery(uint16_t id, const std::string& hostname,
-                        QueryType qtype)
-{
-  std::string out;
-  out.reserve(DNS_HEADER_SIZE + hostname.size() + 6);
-  appendUint16(out, id);
-  appendUint16(out, 0x0100); // RD
-  appendUint16(out, 1);      // QDCOUNT
-  appendUint16(out, 0);      // ANCOUNT
-  appendUint16(out, 0);      // NSCOUNT
-  appendUint16(out, 0);      // ARCOUNT
-  appendName(out, hostname);
-  appendUint16(out, static_cast<uint16_t>(qtype));
-  appendUint16(out, CLASS_IN);
-  return out;
-}
-
-std::vector<std::string> parseResponse(const unsigned char* data, size_t len,
-                                       uint16_t expectedId,
-                                       const std::string& expectedHostname,
-                                       QueryType qtype)
+ParsedResponse readResponse(const unsigned char* data, size_t len,
+                            uint16_t expectedId,
+                            const std::string& expectedHostname,
+                            QueryType qtype)
 {
   if (len < DNS_HEADER_SIZE) {
     throw DL_ABORT_EX("Truncated DNS message");
@@ -313,10 +342,9 @@ std::vector<std::string> parseResponse(const unsigned char* data, size_t len,
     throw DL_ABORT_EX("Unexpected DNS question");
   }
 
-  std::set<std::string> acceptedNames;
-  acceptedNames.insert(std::move(expectedName));
+  ParsedResponse response;
+  response.acceptedNames.insert(std::move(expectedName));
 
-  std::vector<Answer> answers;
   for (size_t i = 0; i < ancount; ++i) {
     Answer answer;
     answer.ownerName = readName(data, len, pos);
@@ -340,30 +368,252 @@ std::vector<std::string> parseResponse(const unsigned char* data, size_t len,
       }
     }
     auto rdlength = answer.rdlength;
-    answers.push_back(std::move(answer));
+    response.answers.push_back(std::move(answer));
     pos += rdlength;
   }
 
   bool addedName;
   do {
     addedName = false;
-    for (const auto& answer : answers) {
+    for (const auto& answer : response.answers) {
       if (answer.klass == CLASS_IN && answer.type == TYPE_CNAME &&
-          acceptedNames.find(answer.ownerName) != acceptedNames.end() &&
+          response.acceptedNames.find(answer.ownerName) !=
+              response.acceptedNames.end() &&
           !answer.cname.empty() &&
-          acceptedNames.insert(answer.cname).second) {
+          response.acceptedNames.insert(answer.cname).second) {
         addedName = true;
       }
     }
   } while (addedName);
 
+  return response;
+}
+
+std::string parseHintAddress(const unsigned char* data, int af)
+{
+  char buf[NI_MAXHOST];
+  if (inetNtop(af, data, buf, sizeof(buf)) != 0) {
+    throw DL_ABORT_EX("Bad DNS SVCB address hint");
+  }
+  return buf;
+}
+
+std::vector<uint16_t> parseMandatoryParam(const unsigned char* data, size_t len)
+{
+  if (len == 0 || len % 2 != 0) {
+    throw DL_ABORT_EX("Bad DNS SVCB mandatory param");
+  }
+
+  std::vector<uint16_t> keys;
+  uint16_t lastKey = 0;
+  bool hasLastKey = false;
+  for (size_t i = 0; i < len; i += 2) {
+    auto key = (static_cast<uint16_t>(data[i]) << 8) | data[i + 1];
+    if (key == 0 || (hasLastKey && key <= lastKey)) {
+      throw DL_ABORT_EX("Bad DNS SVCB mandatory param");
+    }
+    keys.push_back(key);
+    lastKey = key;
+    hasLastKey = true;
+  }
+  return keys;
+}
+
+ServiceBindingRecord parseServiceBindingRecord(const unsigned char* data,
+                                                size_t len,
+                                                const std::string& ownerName,
+                                                size_t pos, uint16_t rdlength)
+{
+  if (pos + rdlength > len || rdlength < 3) {
+    throw DL_ABORT_EX("Bad DNS SVCB record");
+  }
+
+  auto rdataEnd = pos + rdlength;
+  ServiceBindingRecord record;
+  record.ownerName = ownerName;
+  record.priority = readUint16(data, rdataEnd, pos);
+  pos += 2;
+  bool targetNameRoot = false;
+  record.targetName = readUncompressedName(data, rdataEnd, pos, targetNameRoot);
+  if (targetNameRoot) {
+    if (record.priority == 0) {
+      record.aliasModeUnavailable = true;
+    }
+    else {
+      record.targetName = ownerName;
+    }
+  }
+  if (record.priority == 0) {
+    return record;
+  }
+
+  uint16_t lastKey = 0;
+  bool hasLastKey = false;
+  while (pos < rdataEnd) {
+    if (pos + 4 > rdataEnd) {
+      throw DL_ABORT_EX("Truncated DNS SVCB param");
+    }
+    auto key = readUint16(data, rdataEnd, pos);
+    auto paramLen = readUint16(data, rdataEnd, pos + 2);
+    if (hasLastKey && key <= lastKey) {
+      throw DL_ABORT_EX("Bad DNS SVCB param key order");
+    }
+    record.paramKeys.push_back(key);
+    lastKey = key;
+    hasLastKey = true;
+    pos += 4;
+    if (pos + paramLen > rdataEnd) {
+      throw DL_ABORT_EX("Truncated DNS SVCB param value");
+    }
+
+    auto value = data + pos;
+    auto valueEnd = pos + paramLen;
+    switch (key) {
+    case 0: // mandatory
+      record.mandatoryKeys = parseMandatoryParam(value, paramLen);
+      pos = valueEnd;
+      break;
+    case 1: // alpn
+      if (paramLen == 0) {
+        throw DL_ABORT_EX("Bad DNS SVCB alpn param");
+      }
+      while (pos < valueEnd) {
+        auto alpnLen = data[pos++];
+        if (alpnLen == 0 || pos + alpnLen > valueEnd) {
+          throw DL_ABORT_EX("Bad DNS SVCB alpn param");
+        }
+        record.alpn.push_back(
+            std::string(reinterpret_cast<const char*>(data + pos), alpnLen));
+        pos += alpnLen;
+      }
+      break;
+    case 2: // no-default-alpn
+      if (paramLen != 0) {
+        throw DL_ABORT_EX("Bad DNS SVCB no-default-alpn param");
+      }
+      record.noDefaultAlpn = true;
+      break;
+    case 3: // port
+      if (paramLen != 2) {
+        throw DL_ABORT_EX("Bad DNS SVCB port param");
+      }
+      record.hasPort = true;
+      record.port = readUint16(data, rdataEnd, pos);
+      pos = valueEnd;
+      break;
+    case 4: // ipv4hint
+      if (paramLen == 0 || paramLen % 4 != 0) {
+        throw DL_ABORT_EX("Bad DNS SVCB ipv4hint param");
+      }
+      while (pos < valueEnd) {
+        record.ipv4hint.push_back(parseHintAddress(data + pos, AF_INET));
+        pos += 4;
+      }
+      break;
+    case 5: // ech
+      record.echConfigList =
+          std::string(reinterpret_cast<const char*>(value), paramLen);
+      pos = valueEnd;
+      break;
+    case 6: // ipv6hint
+      if (paramLen == 0 || paramLen % 16 != 0) {
+        throw DL_ABORT_EX("Bad DNS SVCB ipv6hint param");
+      }
+      while (pos < valueEnd) {
+        record.ipv6hint.push_back(parseHintAddress(data + pos, AF_INET6));
+        pos += 16;
+      }
+      break;
+    default:
+      SvcParam param;
+      param.key = key;
+      param.value = std::string(reinterpret_cast<const char*>(value), paramLen);
+      record.unknownParams.push_back(std::move(param));
+      pos = valueEnd;
+      break;
+    }
+  }
+
+  if (record.noDefaultAlpn && record.alpn.empty()) {
+    throw DL_ABORT_EX("Bad DNS SVCB no-default-alpn param");
+  }
+  for (const auto& key : record.mandatoryKeys) {
+    if (std::find(std::begin(record.paramKeys), std::end(record.paramKeys),
+                  key) == std::end(record.paramKeys)) {
+      throw DL_ABORT_EX("Bad DNS SVCB mandatory param");
+    }
+    if (key > 6) {
+      record.hasUnknownMandatoryKey = true;
+    }
+  }
+
+  return record;
+}
+
+} // namespace
+
+std::string createQuery(uint16_t id, const std::string& hostname,
+                        QueryType qtype)
+{
+  std::string out;
+  out.reserve(DNS_HEADER_SIZE + hostname.size() + 6);
+  appendUint16(out, id);
+  appendUint16(out, 0x0100); // RD
+  appendUint16(out, 1);      // QDCOUNT
+  appendUint16(out, 0);      // ANCOUNT
+  appendUint16(out, 0);      // NSCOUNT
+  appendUint16(out, 0);      // ARCOUNT
+  appendName(out, hostname);
+  appendUint16(out, static_cast<uint16_t>(qtype));
+  appendUint16(out, CLASS_IN);
+  return out;
+}
+
+std::vector<std::string> parseResponse(const unsigned char* data, size_t len,
+                                       uint16_t expectedId,
+                                       const std::string& expectedHostname,
+                                       QueryType qtype)
+{
+  auto response =
+      readResponse(data, len, expectedId, expectedHostname, qtype);
+
   std::vector<std::string> result;
-  for (const auto& answer : answers) {
+  for (const auto& answer : response.answers) {
     if (answer.klass == CLASS_IN &&
         answer.type == static_cast<uint16_t>(qtype) &&
-        acceptedNames.find(answer.ownerName) != acceptedNames.end()) {
+        response.acceptedNames.find(answer.ownerName) !=
+            response.acceptedNames.end()) {
       result.push_back(parseAddress(data, len, answer.rdataPos, answer.type,
                                     answer.rdlength));
+    }
+  }
+  return result;
+}
+
+std::vector<ServiceBindingRecord>
+parseServiceBindingResponse(const unsigned char* data, size_t len,
+                            uint16_t expectedId,
+                            const std::string& expectedHostname,
+                            QueryType qtype)
+{
+  if (qtype != TYPE_HTTPS) {
+    throw DL_ABORT_EX("Unexpected DNS SVCB query type");
+  }
+
+  auto response =
+      readResponse(data, len, expectedId, expectedHostname, qtype);
+
+  std::vector<ServiceBindingRecord> result;
+  for (const auto& answer : response.answers) {
+    if (answer.klass == CLASS_IN &&
+        answer.type == static_cast<uint16_t>(qtype) &&
+        response.acceptedNames.find(answer.ownerName) !=
+            response.acceptedNames.end()) {
+      auto record = parseServiceBindingRecord(
+          data, len, answer.ownerName, answer.rdataPos, answer.rdlength);
+      if (!record.hasUnknownMandatoryKey) {
+        result.push_back(std::move(record));
+      }
     }
   }
   return result;
