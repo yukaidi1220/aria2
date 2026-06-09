@@ -896,9 +896,16 @@ cuid_t DownloadEngine::newCUID() { return cuidCounter_.newID(); }
 
 const std::string&
 DownloadEngine::findCachedIPAddress(const std::string& hostname,
-                                    uint16_t port) const
+                                     uint16_t port) const
 {
   return dnsCache_->find(hostname, port);
+}
+
+const std::string&
+DownloadEngine::findCachedIPAddress(const std::string& hostname, uint16_t port,
+                                    int family) const
+{
+  return dnsCache_->find(hostname, port, family);
 }
 
 bool DownloadEngine::cacheIPAddress(const std::string& hostname,

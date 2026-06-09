@@ -396,11 +396,21 @@ public:
   const std::string& findCachedIPAddress(const std::string& hostname,
                                          uint16_t port) const;
 
+  const std::string& findCachedIPAddress(const std::string& hostname,
+                                         uint16_t port, int family) const;
+
   template <typename OutputIterator>
   void findAllCachedIPAddresses(OutputIterator out, const std::string& hostname,
                                 uint16_t port) const
   {
     dnsCache_->findAll(out, hostname, port);
+  }
+
+  template <typename OutputIterator>
+  void findAllCachedIPAddresses(OutputIterator out, const std::string& hostname,
+                                uint16_t port, int family) const
+  {
+    dnsCache_->findAll(out, hostname, port, family);
   }
 
   bool cacheIPAddress(const std::string& hostname, const std::string& ipaddr,

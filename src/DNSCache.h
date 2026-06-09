@@ -48,6 +48,8 @@ namespace aria2 {
 
 class DNSCache {
 private:
+  static bool addressFamilyMatch(const std::string& addr, int family);
+
   struct AddrEntry {
     std::string addr_;
     bool good_;
@@ -80,11 +82,23 @@ private:
 
     const std::string& getGoodAddr() const;
 
+    const std::string& getGoodAddr(int family) const;
+
     template <typename OutputIterator>
     void getAllGoodAddrs(OutputIterator out) const
     {
       for (auto& elem : addrEntries_) {
         if (elem.good_) {
+          *out++ = elem.addr_;
+        }
+      }
+    }
+
+    template <typename OutputIterator>
+    void getAllGoodAddrs(OutputIterator out, int family) const
+    {
+      for (auto& elem : addrEntries_) {
+        if (elem.good_ && addressFamilyMatch(elem.addr_, family)) {
           *out++ = elem.addr_;
         }
       }
@@ -111,6 +125,9 @@ public:
 
   const std::string& find(const std::string& hostname, uint16_t port) const;
 
+  const std::string& find(const std::string& hostname, uint16_t port,
+                          int family) const;
+
   template <typename OutputIterator>
   void findAll(OutputIterator out, const std::string& hostname,
                uint16_t port) const
@@ -119,6 +136,17 @@ public:
     auto i = entries_.find(target);
     if (i != entries_.end()) {
       (*i)->getAllGoodAddrs(out);
+    }
+  }
+
+  template <typename OutputIterator>
+  void findAll(OutputIterator out, const std::string& hostname, uint16_t port,
+               int family) const
+  {
+    auto target = std::make_shared<CacheEntry>(hostname, port);
+    auto i = entries_.find(target);
+    if (i != entries_.end()) {
+      (*i)->getAllGoodAddrs(out, family);
     }
   }
 

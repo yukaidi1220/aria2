@@ -34,8 +34,24 @@
 /* copyright --> */
 #include "DNSCache.h"
 #include "A2STR.h"
+#include "SocketCore.h"
 
 namespace aria2 {
+
+bool DNSCache::addressFamilyMatch(const std::string& addr, int family)
+{
+  union {
+    in_addr ipv4;
+    in6_addr ipv6;
+  } buf;
+  if (family == AF_INET) {
+    return inetPton(family, addr.c_str(), &buf.ipv4) == 0;
+  }
+  if (family == AF_INET6) {
+    return inetPton(family, addr.c_str(), &buf.ipv6) == 0;
+  }
+  return true;
+}
 
 DNSCache::AddrEntry::AddrEntry(const std::string& addr)
     : addr_(addr), good_(true)
@@ -124,6 +140,16 @@ const std::string& DNSCache::CacheEntry::getGoodAddr() const
   return A2STR::NIL;
 }
 
+const std::string& DNSCache::CacheEntry::getGoodAddr(int family) const
+{
+  for (auto& elem : addrEntries_) {
+    if (elem.good_ && addressFamilyMatch(elem.addr_, family)) {
+      return (elem).addr_;
+    }
+  }
+  return A2STR::NIL;
+}
+
 void DNSCache::CacheEntry::markBad(const std::string& addr)
 {
   auto i = find(addr);
@@ -170,6 +196,19 @@ const std::string& DNSCache::find(const std::string& hostname,
   }
   else {
     return (*i)->getGoodAddr();
+  }
+}
+
+const std::string& DNSCache::find(const std::string& hostname, uint16_t port,
+                                  int family) const
+{
+  auto target = std::make_shared<CacheEntry>(hostname, port);
+  auto i = entries_.find(target);
+  if (i == entries_.end()) {
+    return A2STR::NIL;
+  }
+  else {
+    return (*i)->getGoodAddr(family);
   }
 }
 

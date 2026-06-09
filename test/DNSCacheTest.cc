@@ -1,4 +1,5 @@
 #include "DNSCache.h"
+#include "a2netcompat.h"
 
 #include <cppunit/extensions/HelperMacros.h>
 #include <iterator>
@@ -11,6 +12,10 @@ class DNSCacheTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(DNSCacheTest);
   CPPUNIT_TEST(testFind);
   CPPUNIT_TEST(testFindAll);
+  CPPUNIT_TEST(testFindByFamily);
+  CPPUNIT_TEST(testFindAllByFamily);
+  CPPUNIT_TEST(testFindByUnknownFamilyKeepsOldSemantics);
+  CPPUNIT_TEST(testFindByFamilyIgnoresNonNumericAddress);
   CPPUNIT_TEST(testPutReturnsWhetherAddressAdded);
   CPPUNIT_TEST(testMarkBad);
   CPPUNIT_TEST(testPutBadAddr);
@@ -31,6 +36,10 @@ public:
 
   void testFind();
   void testFindAll();
+  void testFindByFamily();
+  void testFindAllByFamily();
+  void testFindByUnknownFamilyKeepsOldSemantics();
+  void testFindByFamilyIgnoresNonNumericAddress();
   void testPutReturnsWhetherAddressAdded();
   void testMarkBad();
   void testPutBadAddr();
@@ -63,6 +72,69 @@ void DNSCacheTest::testFindAll()
 
   CPPUNIT_ASSERT_EQUAL((size_t)1, addrs.size());
   CPPUNIT_ASSERT_EQUAL(std::string("::1"), addrs[0]);
+}
+
+void DNSCacheTest::testFindByFamily()
+{
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.1"),
+                       cache_.find("www", 80, AF_INET));
+  CPPUNIT_ASSERT_EQUAL(std::string("::1"),
+                       cache_.find("www", 80, AF_INET6));
+
+  cache_.markBad("www", "192.168.0.1", 80);
+
+  CPPUNIT_ASSERT_EQUAL(std::string(""), cache_.find("www", 80, AF_INET));
+  CPPUNIT_ASSERT_EQUAL(std::string("::1"),
+                       cache_.find("www", 80, AF_INET6));
+}
+
+void DNSCacheTest::testFindAllByFamily()
+{
+  CPPUNIT_ASSERT(cache_.put("www", "192.168.0.2", 80));
+  CPPUNIT_ASSERT(cache_.put("www", "2001:db8::1", 80));
+
+  std::vector<std::string> addrs;
+  cache_.findAll(std::back_inserter(addrs), "www", 80, AF_INET);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.2"), addrs[1]);
+
+  addrs.clear();
+  cache_.findAll(std::back_inserter(addrs), "www", 80, AF_INET6);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("::1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), addrs[1]);
+}
+
+void DNSCacheTest::testFindByUnknownFamilyKeepsOldSemantics()
+{
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.1"), cache_.find("www", 80, 0));
+
+  std::vector<std::string> addrs;
+  cache_.findAll(std::back_inserter(addrs), "www", 80, 0);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.1"), addrs[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("::1"), addrs[1]);
+}
+
+void DNSCacheTest::testFindByFamilyIgnoresNonNumericAddress()
+{
+  CPPUNIT_ASSERT(cache_.put("www", "origin.example", 80));
+
+  std::vector<std::string> addrs;
+  cache_.findAll(std::back_inserter(addrs), "www", 80, AF_INET);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.168.0.1"), addrs[0]);
+
+  addrs.clear();
+  cache_.findAll(std::back_inserter(addrs), "www", 80, 0);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)3, addrs.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), addrs[2]);
 }
 
 void DNSCacheTest::testPutReturnsWhetherAddressAdded()
