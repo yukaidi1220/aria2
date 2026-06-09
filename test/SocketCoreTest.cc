@@ -8,6 +8,9 @@
 #include "Exception.h"
 #ifdef ENABLE_SSL
 #  include "TLSSession.h"
+#  ifdef HAVE_LIBGNUTLS
+#    include "LibgnutlsTLSSession.h"
+#  endif // HAVE_LIBGNUTLS
 #endif // ENABLE_SSL
 
 namespace aria2 {
@@ -25,6 +28,9 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testTLSHandshakeParams);
   CPPUNIT_TEST(testTLSHandshakeParamsComparison);
   CPPUNIT_TEST(testTLSSessionAlpnSupportDefault);
+#ifdef HAVE_LIBGNUTLS
+  CPPUNIT_TEST(testGnuTLSSessionAlpnSupport);
+#endif // HAVE_LIBGNUTLS
   CPPUNIT_TEST(testTLSSessionPeerCertificateMatchDefault);
   CPPUNIT_TEST(testMatchesTLSHandshakeParams);
   CPPUNIT_TEST(testIsTLSSNIHostname);
@@ -46,6 +52,9 @@ public:
   void testTLSHandshakeParams();
   void testTLSHandshakeParamsComparison();
   void testTLSSessionAlpnSupportDefault();
+#ifdef HAVE_LIBGNUTLS
+  void testGnuTLSSessionAlpnSupport();
+#endif // HAVE_LIBGNUTLS
   void testTLSSessionPeerCertificateMatchDefault();
   void testMatchesTLSHandshakeParams();
   void testIsTLSSNIHostname();
@@ -396,6 +405,19 @@ void SocketCoreTest::testTLSSessionAlpnSupportDefault()
                        session.setAlpnProtocols(std::vector<std::string>()));
   CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR, session.setAlpnProtocols(alpnProtocols));
 }
+
+#ifdef HAVE_LIBGNUTLS
+void SocketCoreTest::testGnuTLSSessionAlpnSupport()
+{
+  GnuTLSSession session(nullptr);
+#if defined(HAVE_GNUTLS_ALPN_SET_PROTOCOLS) &&                             \
+    defined(HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  CPPUNIT_ASSERT(session.supportsAlpnProtocols());
+#else  // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  CPPUNIT_ASSERT(!session.supportsAlpnProtocols());
+#endif // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+}
+#endif // HAVE_LIBGNUTLS
 
 void SocketCoreTest::testTLSSessionPeerCertificateMatchDefault()
 {

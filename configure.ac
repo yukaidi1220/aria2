@@ -393,7 +393,9 @@ if test "x$with_gnutls" = "xyes" && test "x$have_ssl" != "xyes"; then
     AC_DEFINE([HAVE_LIBGNUTLS], [1], [Define to 1 if you have libgnutls.])
     save_LIBS=$LIBS
     LIBS="$LIBGNUTLS_LIBS $LIBS"
-    AC_CHECK_FUNCS([gnutls_certificate_set_x509_system_trust])
+    AC_CHECK_FUNCS([gnutls_certificate_set_x509_system_trust \
+                    gnutls_alpn_set_protocols \
+                    gnutls_alpn_get_selected_protocol])
     LIBS=$save_LIBS
   else
     AC_MSG_WARN([$LIBGNUTLS_PKG_ERRORS])

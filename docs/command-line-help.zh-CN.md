@@ -27,6 +27,19 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 
 ## 2. 新增/重点网络能力
 
+### 2.0 当前能力矩阵
+
+| 能力 | 用户可用状态 | 关键边界 | 主要源码落点 |
+| --- | --- | --- | --- |
+| FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
+| `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
+| DoT / DoH | 已接入异步 DNS 后端 | 当前直连模式要求 DNS server 连接目标是数值 IP；DoT/DoH 必须显式配置 server；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint，不是 DNS 查询名 | `src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
+| DoH over H2 | 未实现 | DoH resolver 固定发送 HTTP/1.1 `POST application/dns-message`，不会因为 `--enable-http2=true` 变成 H2 | `src/AsyncDohNameResolver.cc` |
+| HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存 | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
+| HTTP/3 / H3 / QUIC | 只有禁用占位参数 | `--enable-http3=true` 会被 `UnsupportedFeatureOptionHandler` 拒绝；源码没有 QUIC 传输、H3 command、`h3` ALPN 分发或依赖探测 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
+| ECH | 只有禁用占位参数 | `--enable-ech=true` 会被拒绝；当前没有 ClientHelloOuter/Inner、ECHConfig 获取或 TLS 后端接线 | `src/OptionHandlerFactory.cc`、`src/usage_text.h` |
+| XP/Win7 兼容 | 以 HTTP/1.1 fallback 和可构建性为主 | 旧 Windows 原生 TLS 栈通常不要指望 ALPN/FakeSNI override；H2 要看 OpenSSL/GnuTLS ALPN，FakeSNI override 要看 OpenSSL/GnuTLS | `src/FeatureConfig.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
+
 ### 2.1 FakeSNI / `--tls-sni-host`
 
 注册路径：
@@ -34,7 +47,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 - `src/OptionHandlerFactory.cc` 注册 `PREF_TLS_SNI_HOST`，参数格式为 `HOST or TARGET:SNI[,TARGET:SNI]...`。
 - `src/TLSSNIHostMapping.cc::getTLSSNIHostConfig()` 解析单一 SNI 或映射表。
 - `src/HttpTLSHandshakeParams.cc::createHttpTLSHandshakeParams()` 计算 `sniHost`、证书校验主机 `verifyHost` 和 ALPN 列表。
-- `src/SocketCore.cc::SocketCore::tlsConnect()` 校验 SNI 主机格式，调用 `TLSSession::setSNIHostname()`。
+- `src/SocketCore.cc::SocketCore::tlsConnect()` 校验 SNI 主机格式，调用 `TLSSession::setSNIHostname()`，并在 SNI 与证书校验主机不同时检查 `TLSSession::supportsSNIHostnameOverride()`。
 
 语义：
 
@@ -44,6 +57,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 - `SNI` 必须是可用于 TLS SNI 的 DNS 主机名；`isTLSSNIHostname()` 会拒绝 IP、`localhost`、单标签名、空标签、下划线、标签首尾 `-` 等。
 - 同一个 `TARGET` 如果写了多次，`getTLSSNIHostConfig()` 会保留最先命中的配置；当前请求 host 的匹配优先级高于逻辑/默认 host 的匹配。
 - 这个选项只改 TLS SNI，不改 DNS 解析、TCP 连接目标、HTTP `Host` 头、代理 `CONNECT` 目标、cookie 作用域、证书校验主机。
+- 映射表里未命中的请求会继续使用逻辑/默认主机做 SNI；这不是通配符映射，源码没有 `*.example.com` 之类规则。
 
 示例：
 
@@ -58,6 +72,12 @@ aria2c --tls-sni-host=[2001:db8::1]:front.example https://[2001:db8::1]/file
 - 如果 SNI 与证书校验主机不同，`SocketCore::tlsConnect()` 要求 TLS 后端 `supportsSNIHostnameOverride()` 为真。当前 OpenSSL/GnuTLS 后端显式支持；基类默认不支持，WinTLS/AppleTLS 当前没有在头文件里声明覆盖该能力。
 - WinTLS 可以设置普通 SNI，但“FakeSNI：SNI 与校验主机不同”会被源码提前拒绝。XP/Win7 若使用原生 SChannel 后端，要优先使用 `--hosts-mapping=IP:HOST` 这种“逻辑主机一致”的方式，或换 OpenSSL/GnuTLS 构建。
 - `--check-certificate=false` 能绕过证书校验，但不建议用于生产下载。
+
+和 `--hosts-mapping` 的组合顺序：
+
+- `createHttpTLSHandshakeParams()` 会先用 `HostMapping.cc::getLogicalHostForRequest()` 算出证书校验主机 `verifyHost`，再把当前请求 host 与 `verifyHost` 一起交给 `getTLSSNIHostConfig()` 查 SNI。
+- `--hosts-mapping=198.18.0.18:origin.example https://198.18.0.18/file` 这种写法会让 HTTP `Host:`、默认 SNI、证书校验主机都变成 `origin.example`，通常比 FakeSNI 更适合旧 Windows TLS 后端。
+- 如果再叠加 `--tls-sni-host=origin.example:front.example`，SNI 会变成 `front.example`，证书仍按 `origin.example` 校验；这才进入 FakeSNI override 能力边界。
 
 ### 2.2 `--hosts-mapping`
 
@@ -85,6 +105,7 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 - `IPADDR:HOST`：URL 写 IP，但逻辑 HTTP/TLS 主机改为 `HOST`；TCP 仍连 IP，`HttpRequest::getBuiltinHeaders()` 生成的 HTTP `Host:` 也会使用这个逻辑主机。适合老系统/代理前置场景。
 - IPv6 字面量必须写方括号。`HostMapping.cc` 会拒绝两边都是 IP 或两边都不是 IP 的配置。
 - 映射只用于直连 HTTP/HTTPS；通过 HTTP 代理或 HTTPS `CONNECT` 时，代理侧解析仍由代理控制。
+- `HOST:IPADDR` 会把映射 IP 写入 aria2 自己的 DNS cache；`IPADDR:HOST` 不需要解析 IP，但会改变后续 HTTP/TLS 逻辑主机。别把它当系统 hosts 文件的全局替代品，范围只在本次 aria2 进程内。
 
 ### 2.3 DoH/DoT / 异步 DNS
 
@@ -110,12 +131,19 @@ aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://[2606:47
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com
 ```
 
+`#TLS_HOST` hint：
+
+- DoT/DoH 的 `#TLS_HOST` 是 aria2 自己解析出来的 hint，不会进入 DNS wire query，也不会改变要解析的下载目标域名。
+- 对 DoT，`AsyncDotNameResolver::createTLSHandshakeParams()` 把 hint 同时用作 TLS SNI 和证书校验主机；TCP 仍连接 `connectHost:port`。
+- 对 DoH，`AsyncDohNameResolver::createTLSHandshakeParams()` 同样把 hint 用作 TLS SNI 和证书校验主机，`createDohRequest()` 还会用它生成 HTTP/1.1 `Host:` 头；URL fragment 不会出现在 request target。
+- hint 必须是合法 DNS 主机名，不能是 IP、`localhost`、单标签名或以下划线等非法字符组成的名字。
+
 DoT 规则：
 
 - 解析器能接受 `HOST`、`HOST:PORT`、`IP`、`IP:PORT`、`[IPv6]`、`[IPv6]:PORT`，默认端口 `853`。数值地址后可追加 `#TLS_HOST`，例如 `1.1.1.1#cloudflare-dns.com` 或 `[2606:4700:4700::1111]:853#cloudflare-dns.com`。
 - 当前 `AsyncNameResolverMan` 采用直连 DNS server 模式，随后会调用 `validateAsyncDnsDotServerConfigForDirectConnect()`，因此实际可用配置要求 server host 是数值地址。写 `dns.example.org` 这类域名会在配置校验阶段失败，避免解析 DNS server 本身时递归套娃。
 - `--async-dns-mode=dot` 必须显式提供 `--async-dns-server`；为空会报 “No async DNS DoT server configured”。
-- `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 默认回退为 IP 本身，写了 `#TLS_HOST` 时会用该主机名做 TLS SNI 和证书校验。
+- `AsyncDotNameResolver::createTLSHandshakeParams()` 使用 server 的 TLS host；数值 IP 未写 hint 时证书校验主机回退为 IP 本身，且不会发送 DNS 主机名形式的 SNI。
 
 DoH 规则：
 
@@ -125,7 +153,7 @@ DoH 规则：
 - URL 必须有 path，拒绝 userinfo、密码；query 允许作为 path 的一部分发送。fragment 被当作 TLS/HTTP 逻辑主机名，只允许合法 DNS 主机名，不能是 IP、`localhost` 或单标签名。
 - `AsyncDohNameResolver.cc::createDohRequest()` 发送 HTTP/1.1 `POST`，`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
 - 写了 `#TLS_HOST` 时，DoH TLS SNI、证书校验主机和 HTTP `Host:` 头都使用该主机；TCP 仍连接 URL 里的数值地址，HTTP request target 不包含 fragment。
-- 当前 DoH resolver 自己不启用 HTTP/2/ALPN；英文 manual 对此已有说明。
+- 当前 DoH resolver 自己不启用 HTTP/2/ALPN，也不复用普通下载链路的 H2 连接；`--enable-http2=true` 只影响 HTTP/HTTPS 下载请求，不会把 DoH 改造成 DoH over H2。
 - 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。
 
 双栈解析：
@@ -141,7 +169,7 @@ XP/Win7 注意：
 
 - `configure.ac` 的 mingw 注释说明 `getaddrinfo` 依赖 `_WIN32_WINNT >= 0x0501`；源码还保留了 Windows 地址配置探测路径。
 - `SocketCore::checkAddrconfig()` 在 mingw 下使用 `GetAdaptersAddresses()`；失败时会保守假设 IPv4/IPv6 都可用。因此旧系统若 IPv6 栈坏或 AAAA 查询拖慢，建议显式加 `--disable-ipv6=true`。
-- 默认 `--min-tls-version=TLSv1.2`。老 XP/Win7 的原生 TLS 栈可能不满足现代 TLS/ALPN/SNI 需求；需要兼容时优先考虑 OpenSSL/GnuTLS 构建，或只在受控环境降低 TLS 版本。
+- 默认 `--min-tls-version=TLSv1.2`。老 XP/Win7 的原生 TLS 栈可能不满足现代 TLS/ALPN/SNI 需求；需要兼容时优先考虑 OpenSSL/GnuTLS 构建；涉及 H2 时还必须确认 OpenSSL ALPN 或 GnuTLS ALPN 可用，或只在受控环境降低 TLS 版本。
 
 ### 2.4 HTTP/2 / `--enable-http2`
 
@@ -168,17 +196,17 @@ XP/Win7 注意：
 - 复用限定在同一个 `RequestGroup` 内，且必须是 HTTPS、`--enable-http2=true`、无代理或 HTTPS `CONNECT` tunnel、当前请求 0/1 segment。命令行多个流式 URL 默认通常是同一个下载项的镜像 URI；独立下载项之间即使 host 相同，也不会复用这里的 active/idle H2 context。
 - same-origin 复用要求 key 完全匹配当前 URL host/port 与已连接地址信息，并通过 TLS socket reuse predicate。
 - origin coalescing 只在 same-origin key 未命中后尝试，且要求当前请求不走代理、候选连接也不是代理连接、当前连接实际 peer 地址/端口等于本次目标解析出的地址/端口、目标没有显式 SNI override、当前 TLS peer certificate 覆盖目标 verify host、ALPN 已选中 `h2`。任一条件不满足就走普通新连接。
-- 如果 coalesced stream 收到 HTTP 421 Misdirected Request，`HttpSkipResponseCommand.cc` 会先在当前 `RequestGroup` 里记录 `target authority + verifyHost + peer endpoint` 的负缓存，再屏蔽当前 request 后续 coalescing 并立即重试。后续同一下载任务再访问同一目标、同一校验主机、同一 peer endpoint 时，会跳过跨 origin coalescing；同 authority 的直接 H2 复用不受影响。
+- 如果 coalesced stream 收到 HTTP 421 Misdirected Request，`HttpSkipResponseCommand.cc` 会先在当前 `RequestGroup` 里记录 `target authority + verifyHost + peer endpoint` 的负缓存，再屏蔽当前 request 后续 coalescing 并立即重试。后续同一下载任务再访问同一目标、同一校验主机、同一 peer endpoint 时，会跳过跨 origin coalescing；同 authority 的直接 H2 复用不受影响。这个负缓存只在当前 `RequestGroup` 内存里生效，不写 session，也不是全局站点黑名单。
 - idle pool 命中前会检查 socket 仍打开、未超时、不可读；socket 可读时按保守策略视为可能 EOF/GOAWAY，直接驱逐而不复用。
 - `EvictSocketPoolCommand.cc` 会随普通 socket pool 定时扫描一起调用 `DownloadEngine::evictIdleHttp2Connections()`，避免 idle H2 context 长时间强持有 `RequestGroup`。
 - active stream 上限使用本地保守上限 `MAX_ACTIVE_HTTP2_STREAMS = 8` 与 peer `SETTINGS_MAX_CONCURRENT_STREAMS` 的较小值；服务端未发 SETTINGS 限制时退回本地 8 条上限。
 - 首条 H2 stream 在注册 context 后会 `exchange->flushOutboundData()`；复用路径提交新 stream 后不提前 flush，交给 `Http2ResponseCommand::executeInternal()` / `exchange_->pump()` 统一驱动。
-- TLS 后端必须支持 ALPN 才能真正协商 H2；`SocketCore::tlsHandshake()` 会在后端不支持 ALPN 时跳过 ALPN 设置并继续握手，最终退回 HTTP/1.1。当前源码里只有 OpenSSL 后端声明支持 ALPN。
+- TLS 后端必须支持 ALPN 才能真正协商 H2；`SocketCore::tlsHandshake()` 会在后端不支持 ALPN 时跳过 ALPN 设置并继续握手，最终退回 HTTP/1.1。OpenSSL 后端按 OpenSSL ALPN 宏启用；GnuTLS 后端通过 `configure.ac` 探测 `gnutls_alpn_set_protocols` / `gnutls_alpn_get_selected_protocol`，只有两者都可用才声明支持 ALPN。
 
 XP/Win7 注意：
 
 - HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 时会优雅退回 HTTP/1.1，不应因为 ALPN 缺失直接中断 HTTPS 下载。
-- 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用带 OpenSSL 且启用 ALPN 的构建；如果目标环境只要求能下载，HTTP/1.1 fallback 能保持可用。
+- 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用带 OpenSSL ALPN 或 GnuTLS ALPN 的构建；如果目标环境只要求能下载，HTTP/1.1 fallback 能保持可用。
 - `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端 SNI override 能力限制，见 2.1。
 
 文档状态：
@@ -208,10 +236,18 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 这些功能不要在文档或帮助里写成已经可用：
 
 - ECH：`--enable-ech=true` 目前是 `UnsupportedFeatureOptionHandler`，只允许默认 `false`；开启会在参数解析阶段失败。
-- HTTP/3/H3/QUIC：当前有 `--enable-http3[=false]` 禁用壳，只允许默认 `false`；设置为 `true` 会在参数解析阶段失败。源码仍然没有 QUIC 传输层、HTTP/3 request/response command、H3 ALPN 分发或依赖探测，这个参数不表示下载链路已支持 H3。
+- HTTP/3/H3/QUIC：当前有 `--enable-http3[=false]` 禁用壳，只允许默认 `false`；设置为 `true` 会在参数解析阶段失败。源码仍然没有 QUIC 传输层、HTTP/3 request/response command、H3 ALPN 分发或依赖探测，这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进 HTTP 下载 ALPN 列表。
 - DoH over H2：当前 `AsyncDohNameResolver` 使用 HTTP/1.1 POST `application/dns-message`，不会因为 `--enable-http2=true` 自动变成 DoH over H2。
 - WinTLS/AppleTLS 上的 FakeSNI override：普通 SNI 可用，但 SNI 与证书校验 hostname 不同会被提前拒绝。
-- WinTLS/AppleTLS/GnuTLS 当前代码里的 HTTP/2 ALPN：没有 ALPN 接口时会降级 HTTP/1.1。
+- WinTLS/AppleTLS 当前代码里的 HTTP/2 ALPN：没有 ALPN 接口时会降级 HTTP/1.1；GnuTLS 只有在 configure 探测到 ALPN API 时才启用。
+
+### 2.7 XP/Win7 兼容边界
+
+- 旧 Windows 能不能用这些新网络能力，首先取决于构建使用的 TLS 后端和依赖库，不是单看命令行参数名。
+- HTTP/2 需要 libnghttp2、HTTPS、TLS ALPN 三个条件同时满足。缺 libnghttp2 时 `--enable-http2=true` 会被拒绝；TLS 后端不支持 ALPN 时，`SocketCore::tlsHandshake()` 会清空 ALPN 并继续握手，最终走 HTTP/1.1。
+- FakeSNI override 需要 TLS 后端允许“发送的 SNI”和“证书校验主机”不同。OpenSSL/GnuTLS 当前源码声明支持；WinTLS/AppleTLS 没声明，遇到 override 会提前失败。普通 SNI 与证书校验主机一致时不属于 FakeSNI override。
+- DoT/DoH 依赖 SSL 构建和可用的数值 DNS server。老系统如果 IPv6 支持不稳，建议显式 `--disable-ipv6=true`，避免 AAAA 查询或 IPv6 server 连接拖慢。
+- 默认最低 TLS 版本是 `TLSv1.2`。为了兼容旧系统降低 TLS 版本只适合受控环境；公网下载优先换带 OpenSSL/GnuTLS 的构建，比关证书校验靠谱得多。
 
 ## 3. 选项总览
 
@@ -546,4 +582,4 @@ aria2c --log=- --log-level=network --console-log-level=network https://example.c
 - H3/QUIC 当前只有 `--enable-http3[=false]` 禁用壳和文档边界；后续应先做依赖探测与能力矩阵，不能直接把 `h3` ALPN 写进下载链路。
 - `--select-least-used-host`、`--dns-timeout`、`--startup-idle-time`、`--max-http-pipelining`、`--bt-keep-alive-interval`、`--bt-request-timeout`、`--bt-timeout`、`--peer-connection-timeout` 等源码注册项需要确认是否正式对用户公开，还是只用于内部/隐藏帮助。
 - `usage_text.h` 的 `--enable-direct-io` 和旧 `--metalink-servers` 文案未在当前 `OptionHandlerFactory.cc` 注册列表中确认到，需要清理或补注册。
-- WinTLS/AppleTLS/GnuTLS 的 ALPN 和 SNI override 能力需要按最终 TLS 后端实现再做矩阵表；当前只能确定 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override，WinTLS 未声明 SNI override，基类 ALPN 默认不支持并会触发 HTTP/1.1 fallback。
+- 后续如果给 WinTLS/AppleTLS 补 ALPN 或调整 SNI override 能力，需要同步更新 2.0 能力矩阵和 XP/Win7 边界；当前 OpenSSL 后端有 ALPN 与 SNI override，GnuTLS 有 SNI override 且在探测到 ALPN API 时支持 ALPN，WinTLS 未声明 SNI override，基类 ALPN 默认不支持并会触发 HTTP/1.1 fallback。

@@ -492,8 +492,10 @@ HTTP Specific Options
   instead of silently continuing as HTTP/1.1.
 
   When enabled, aria2 advertises ``h2`` and ``http/1.1`` with TLS ALPN unless
-  :option:`--enable-http-pipelining` is enabled.  TLS backends without ALPN
-  support keep the HTTPS download working by falling back to HTTP/1.1.
+  :option:`--enable-http-pipelining` is enabled.  OpenSSL and GnuTLS builds can
+  send ALPN when their TLS libraries provide the required API.  TLS backends
+  without ALPN support keep the HTTPS download working by falling back to
+  HTTP/1.1.
 
   HTTP/2 connections can be reused by active streams or kept briefly in the
   idle HTTP/2 pool.  Cross-origin reuse is conservative: it is limited to the

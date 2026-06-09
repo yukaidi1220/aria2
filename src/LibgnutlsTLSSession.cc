@@ -266,6 +266,59 @@ int GnuTLSSession::setSNIHostname(const std::string& hostname)
   return TLS_ERR_OK;
 }
 
+int GnuTLSSession::setAlpnProtocols(
+    const std::vector<std::string>& protocols)
+{
+  if (protocols.empty()) {
+    return TLS_ERR_OK;
+  }
+
+#if defined(HAVE_GNUTLS_ALPN_SET_PROTOCOLS) &&                             \
+    defined(HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  for (auto& protocol : protocols) {
+    if (protocol.empty() || protocol.size() > 255) {
+      return TLS_ERR_ERROR;
+    }
+  }
+
+  alpnProtocols_ = protocols;
+  alpnWireProtocols_.clear();
+  alpnWireProtocols_.reserve(alpnProtocols_.size());
+  for (auto& protocol : alpnProtocols_) {
+    gnutls_datum_t datum;
+    datum.data =
+        reinterpret_cast<unsigned char*>(const_cast<char*>(protocol.c_str()));
+    datum.size = static_cast<unsigned int>(protocol.size());
+    alpnWireProtocols_.push_back(datum);
+  }
+
+  rv_ = gnutls_alpn_set_protocols(sslSession_, alpnWireProtocols_.data(),
+                                  alpnWireProtocols_.size(), 0);
+  return rv_ == GNUTLS_E_SUCCESS ? TLS_ERR_OK : TLS_ERR_ERROR;
+#else  // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  return TLS_ERR_ERROR;
+#endif // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+}
+
+std::string GnuTLSSession::getSelectedAlpnProtocol() const
+{
+#if defined(HAVE_GNUTLS_ALPN_SET_PROTOCOLS) &&                             \
+    defined(HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  if (!sslSession_) {
+    return std::string();
+  }
+  gnutls_datum_t protocol;
+  auto rv = gnutls_alpn_get_selected_protocol(sslSession_, &protocol);
+  if (rv != GNUTLS_E_SUCCESS || protocol.size == 0) {
+    return std::string();
+  }
+  return std::string(reinterpret_cast<const char*>(protocol.data),
+                     protocol.size);
+#else  // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  return std::string();
+#endif // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+}
+
 int GnuTLSSession::closeConnection()
 {
   rv_ = gnutls_bye(sslSession_, GNUTLS_SHUT_WR);

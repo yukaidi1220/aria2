@@ -55,6 +55,18 @@ public:
   {
     return true;
   }
+  virtual int setAlpnProtocols(const std::vector<std::string>& protocols)
+      CXX11_OVERRIDE;
+  virtual bool supportsAlpnProtocols() const CXX11_OVERRIDE
+  {
+#if defined(HAVE_GNUTLS_ALPN_SET_PROTOCOLS) &&                             \
+    defined(HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+    return true;
+#else  // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+    return false;
+#endif // !(HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  }
+  virtual std::string getSelectedAlpnProtocol() const CXX11_OVERRIDE;
   virtual int closeConnection() CXX11_OVERRIDE;
   virtual int checkDirection() CXX11_OVERRIDE;
   virtual ssize_t writeData(const void* data, size_t len) CXX11_OVERRIDE;
@@ -72,6 +84,11 @@ private:
   GnuTLSContext* tlsContext_;
   // Last error code from gnutls library functions
   int rv_;
+#if defined(HAVE_GNUTLS_ALPN_SET_PROTOCOLS) &&                             \
+    defined(HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL)
+  std::vector<std::string> alpnProtocols_;
+  std::vector<gnutls_datum_t> alpnWireProtocols_;
+#endif // HAVE_GNUTLS_ALPN_SET_PROTOCOLS && HAVE_GNUTLS_ALPN_GET_SELECTED_PROTOCOL
 };
 
 } // namespace aria2
