@@ -114,7 +114,7 @@
 10. c-ares 普通 A/AAAA 查询日志明细测试。
     - 落点：`src/AsyncNameResolver.cc`、`src/AsyncNameResolver.h`、`test/AsyncNameResolverTest.cc`
     - 行为：普通 c-ares A/AAAA 查询日志从 `DNS: query ... using c-ares` 扩展为 `DNS: query ... using c-ares server_source=... servers=... transport=...`。显式 server 只有在 `ares_set_servers_csv()` 成功后才记录为 `server_source=configured`；否则继续显示系统 resolver。
-    - 测试：`testCaresQueryLogsServerSource()` 覆盖系统 DNS 和显式 c-ares server 的 A/AAAA 查询日志；具备 `ARES_FLAG_USEVC` 和 `ARES_OPT_FLAGS` 时，`testCaresQueryLogsTcpTransport()` 覆盖 TCP transport 日志。
+    - 测试：`testCaresQueryLogsServerSource()` 覆盖系统 DNS 和显式 c-ares server 的 A/AAAA 查询日志；`testCaresRejectedServerLogsSystemFallback()` 覆盖 `ares_set_servers_csv()` 拒绝域名形式 c-ares server 后，查询日志必须回落为 `server_source=system servers=system`；具备 `ARES_FLAG_USEVC` 和 `ARES_OPT_FLAGS` 时，`testCaresQueryLogsTcpTransport()` 覆盖 TCP transport 日志。
     - 边界：该测试只钉住发起 c-ares 查询时的格式级可观测性，不等待真实 DNS 响应，也不验证真实网络 fallback 或抓包级行为。
 
 ## 最新增量（03:40-04:06）
@@ -338,6 +338,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27272717109
    - c-ares 普通 A/AAAA 查询日志明细已提交为 `342536cf Log c-ares query server details`，GitHub Actions build 已通过，run id `27274353270`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27274353270
+   - c-ares 拒绝配置 server 后的 system fallback 日志回归测试已提交为 `6761fb0e Cover rejected c-ares server query logs`，GitHub Actions build 已通过，run id `27275634793`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27275634793
 
 3. artifact：
    - `0e483039` artifacts：
@@ -407,6 +409,12 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535050913/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535021687/zip
       - artifact 过期时间：`2026-09-08T11:53:47Z`。
+   - `6761fb0e` artifacts：
+      - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27275634793
+      - run 结论：`success`；`build-windows (x86_64-w64-mingw32)` 和 `build-windows (i686-w64-mingw32)` 均为 `success`。
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535533884/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535531490/zip
+      - artifact 过期时间：`2026-09-08T12:17:37Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
