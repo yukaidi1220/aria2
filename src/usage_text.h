@@ -57,7 +57,7 @@
     "                              N URIs are given, those URLs are used more than\n" \
     "                              once so that N connections total are made\n" \
     "                              simultaneously. The number of connections to the\n" \
-    "                              same host is restricted by the \n"        \
+    "                              same protocol+host server is restricted by\n" \
     "                              --max-connection-per-server option. See also the\n" \
     "                              --min-split-size option.")
 #define TEXT_RETRY_WAIT                                                 \
@@ -811,7 +811,7 @@
     "                              be saved.")
 #define TEXT_MAX_CONNECTION_PER_SERVER          \
   _(" -x, --max-connection-per-server=NUM The maximum number of connections to one\n" \
-    "                              server for each download.")
+    "                              protocol+host server for each download.")
 #define TEXT_MIN_SPLIT_SIZE                     \
   _(" -k, --min-split-size=SIZE    aria2 does not split less than 2*SIZE byte range.\n" \
     "                              For example, let's consider downloading 20MiB\n" \

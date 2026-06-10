@@ -64,6 +64,12 @@
     - 行为：显式 `--enable-https-rr=true` 后，直连 HTTPS origin 才启动后台 HTTPS/SVCB discovery，并允许 cached selected endpoint 参与 connect target/port 选择；无 async DNS 构建会在参数解析阶段拒绝该能力，不进入运行期崩溃。
     - 日志：启动日志打印 `enable-https-rr` 的最终值和来源，便于确认“默认不多查 HTTPS RR”的配置边界。
 
+12. `max-connection-per-server` server 维度改为 URL `protocol + hostname`。
+    - 落点：`src/FileEntry.cc`、`src/FileEntry.h`
+    - 行为：`-x` 硬上限按 URL scheme/host 计数，不按解析出来的 IP 计数；同一 HTTPS hostname 解析出多个 IPv4/IPv6 地址也不能绕过上限。
+    - 行为：`http://example.org` 和 `ftp://example.org` 视为不同 server key，分别受 `-x` 上限约束。
+    - 文档：`src/usage_text.h`、`doc/manual-src/en/aria2c.rst`、`docs/command-line-help.zh-CN.md` 已同步 `protocol+host` 语义，并修正英文手册里的 `split=16`、`min-split-size=2M` 默认值。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
@@ -89,8 +95,13 @@
    - `testSelectBackupIPAddressSkipsScopedIPv6Backup`：覆盖 IPv4 主连接时不会把 ULA/link-local IPv6 选作 backup 连接地址。
 
 5. `test/HttpInitiateConnectionCommandTest.cc`
-   - `testSelectConnectionAuthorityIgnoresCachedSvcbByDefault`：覆盖默认未启用 `--enable-https-rr` 时即使已有 SVCB cache，也不改 connect target/port、不写 selected endpoint address hints。
-   - 既有 cached SVCB endpoint、failed endpoint、proxy 和 connect failure 测试显式设置 `--enable-https-rr=true`，确保 opt-in 后仍可消费 SVCB cache。
+    - `testSelectConnectionAuthorityIgnoresCachedSvcbByDefault`：覆盖默认未启用 `--enable-https-rr` 时即使已有 SVCB cache，也不改 connect target/port、不写 selected endpoint address hints。
+    - 既有 cached SVCB endpoint、failed endpoint、proxy 和 connect failure 测试显式设置 `--enable-https-rr=true`，确保 opt-in 后仍可消费 SVCB cache。
+
+6. `test/FileEntryTest.cc`
+   - `testGetRequest`：覆盖同 host 不同 protocol 可分别获得请求，验证 `http://localhost` 不再误挡 `ftp://localhost`。
+   - `testGetRequest_limitsSameProtocolHost`：覆盖同 protocol+host 仍受 `max-connection-per-server` 限制，提升到 `2` 后只允许第二条同 server 请求。
+   - `testFindFasterRequestUsesProtocolHostLimit`：覆盖 faster-server 替换路径也按 protocol+host 计数，HTTP 同 host 占满时不会挑同 HTTP 候选，但允许 FTP 同 host 候选。
 
 ## 当前验证
 
@@ -99,7 +110,8 @@
    - HTTPS RR/TYPE65 staged fallback 切片在提交前已通过上述静态检查；本机缺少 `make`/`g++`/`clang++`/`cl`/`cmake`，尚未完成本地编译或单元测试。
    - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc` 和外部 review；GitHub Actions run `27242784981` 已通过。
    - 双栈 backup 避让第一阶段切片已通过 `git diff --check -- src/InitiateConnectionCommand.cc test/InitiateConnectionCommandTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；GitHub Actions run `27243094090` 已通过。
-   - HTTPS RR 默认关闭切片当前正在进行本地静态检查和外部 review；本机仍缺少 C++ 构建工具，提交后依赖 GitHub Actions 编译验证。
+   - HTTPS RR 默认关闭切片已通过 `git diff --check`、外部 review 和 GitHub Actions；本机仍缺少 C++ 构建工具，编译验证依赖 CI。
+   - `max-connection-per-server` protocol+host 切片已通过 `git diff --check` 和外部 review；本机仍缺少 C++ 构建工具，提交后依赖 GitHub Actions 编译验证。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -112,6 +124,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27242784981
    - 双栈 backup 避让第一阶段切片已提交为 `d6186215 Skip non-global IPv6 backup connections`，GitHub Actions build 已通过，run id `27243094090`，耗时 `8m20s`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27243094090
+   - HTTPS RR 默认关闭切片已提交为 `63934398 Gate HTTPS RR discovery behind option`，GitHub Actions build 已通过，run id `27244533609`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27244533609
 
 3. artifact：
    - `0e483039` artifacts：
@@ -122,6 +136,10 @@
      - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27240908069/artifacts/7522240987
      - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27240908069/artifacts/7522203553
      - artifact 过期时间：`2026-09-07T22:50:05Z`。
+   - `63934398` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27244533609/artifacts/7523580423
+      - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27244533609/artifacts/7523554794
+      - artifact 过期时间：`2026-09-08T00:21:09Z`。
 
 ## 47 条需求状态
 
@@ -143,7 +161,7 @@
 
 ### IPv4 / IPv6（21-25）
 
-部分完成。第 21 条已实现：32-bit MinGW 不再默认 `disable-ipv6=true`。第 23 条先补了 backup 连接避让：IPv4 主连时不会把非公网 IPv6 地址选作 backup，减少内网 IPv6 存在但公网不可达时的额外拖慢。第 22、24、25 条仍需继续做运行期地址能力、坏 IPv6 快速避让、v4/v6 混合并发下载和同 hostname 连接数约束的端到端验证。现有双栈 first-success 与后台 DNS cache fill 是基础，但不能宣称完整覆盖 RFC 8305 行为。
+部分完成。第 21 条已实现：32-bit MinGW 不再默认 `disable-ipv6=true`。第 23 条先补了 backup 连接避让：IPv4 主连时不会把非公网 IPv6 地址选作 backup，减少内网 IPv6 存在但公网不可达时的额外拖慢。第 25 条的硬限制已改为按 URL `protocol + hostname` 计数，不按解析 IP 计数；同 hostname 多个 IPv4/IPv6 地址不能绕过 `-x` 上限。第 22、24、25 条仍需继续做运行期地址能力、坏 IPv6 快速避让、v4/v6 混合并发下载和端到端验证。现有双栈 first-success 与后台 DNS cache fill 是基础，但不能宣称完整覆盖 RFC 8305 行为。
 
 ### HTTPS RR / H2 / H3（26-30）
 
@@ -155,7 +173,7 @@
 
 ### 下载连接参数（36-39）
 
-部分完成。第 37 条已实现：`max-connection-per-server` 上限为 64。第 38 条已核验并记录：`split=16`、`min-split-size=2M`、`max-connection-per-server=1`。第 36 条和第 39 条需要继续补源码/文档说明：server 按 URL hostname/protocol 维度，不按解析 IP 绕过限制；`split`、`-x`、`min-split-size` 的关系还需要更系统地写进用户文档。
+部分完成。第 36 条已在源码中改为 URL `protocol + hostname` server key，不按解析 IP 绕过限制；`http://host` 与 `ftp://host` 分开计数，同一 `https://host` 的多 IPv4/IPv6 地址仍共享上限。第 37 条已实现：`max-connection-per-server` 上限为 64。第 38 条已核验并记录：`split=16`、`min-split-size=2M`、`max-connection-per-server=1`，英文手册旧默认值已同步修正。第 39 条已在中文帮助和英文手册补充三者关系，后续还要加真实下载行为验收。
 
 ### 兼容性（40-42）
 
@@ -175,7 +193,9 @@
    - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。下一刀继续补 resolver server/protocol/bootstrap 明细、失败 IP 和临时避让 IP。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
-   - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。下一刀继续评估本机公网 IPv6 能力判断、family penalty 和同 host 并发限制测试。
+   - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。
+   - 已完成第二刀：`max-connection-per-server` 按 URL `protocol + hostname` 计数，不按解析 IP 计数，避免不同 IP 绕过同 server 上限。
+   - 下一刀继续评估本机公网 IPv6 能力判断、family penalty 和 v4/v6 混合并发端到端测试。
 
 5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback，并新增 `--enable-https-rr` 显式 opt-in 门控；下一步补 fake/真实 DNS 验收，确认默认不发 TYPE65、不消费 SVCB cache，开启后按当前 DNS backend 查询并允许 selected endpoint 生效，DoH over H2 日志可断言。H3 继续保持默认关闭和 unsupported 快速拒绝。
 

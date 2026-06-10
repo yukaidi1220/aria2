@@ -107,11 +107,11 @@ private:
 
   void storePool(const std::shared_ptr<Request>& request);
 
-  std::shared_ptr<Request> getRequestWithInFlightHosts(
+  std::shared_ptr<Request> getRequestWithInFlightServers(
       URISelector* selector, bool uriReuse,
       const std::vector<std::pair<size_t, std::string>>& usedHosts,
       const std::string& referer, const std::string& method,
-      const std::vector<std::string>& inFlightHosts);
+      const std::vector<std::string>& inFlightServers);
 
 public:
   FileEntry();
@@ -261,8 +261,8 @@ public:
 
   int getMaxConnectionPerServer() const { return maxConnectionPerServer_; }
 
-  // Reuse URIs which have not emitted error so far and whose host
-  // component is not included in ignore. The reusable URIs are
+  // Reuse URIs which have not emitted error so far and whose
+  // protocol+host server key is not included in ignore. The reusable URIs are
   // appended to uris_ maxConnectionPerServer_ times.
   void reuseUri(const std::vector<std::string>& ignore);
 

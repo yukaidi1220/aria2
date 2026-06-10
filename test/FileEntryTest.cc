@@ -3,6 +3,8 @@
 #include <cppunit/extensions/HelperMacros.h>
 
 #include "InorderURISelector.h"
+#include "ServerStat.h"
+#include "ServerStatMan.h"
 #include "util.h"
 #include "wallclock.h"
 
@@ -14,6 +16,8 @@ class FileEntryTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testRemoveURIWhoseHostnameIs);
   CPPUNIT_TEST(testExtractURIResult);
   CPPUNIT_TEST(testGetRequest);
+  CPPUNIT_TEST(testGetRequest_limitsSameProtocolHost);
+  CPPUNIT_TEST(testFindFasterRequestUsesProtocolHostLimit);
   CPPUNIT_TEST(testGetRequest_withoutUriReuse);
   CPPUNIT_TEST(testGetRequest_withUniqueProtocol);
   CPPUNIT_TEST(testGetRequest_withReferer);
@@ -35,6 +39,8 @@ public:
   void testRemoveURIWhoseHostnameIs();
   void testExtractURIResult();
   void testGetRequest();
+  void testGetRequest_limitsSameProtocolHost();
+  void testFindFasterRequestUsesProtocolHostLimit();
   void testGetRequest_withoutUriReuse();
   void testGetRequest_withUniqueProtocol();
   void testGetRequest_withReferer();
@@ -114,24 +120,75 @@ void FileEntryTest::testGetRequest()
   CPPUNIT_ASSERT_EQUAL(std::string("http"), req2nd->getProtocol());
 
   auto req3rd = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT_EQUAL(std::string("mirror"), req3rd->getHost());
-  CPPUNIT_ASSERT_EQUAL(std::string("http"), req3rd->getProtocol());
+  CPPUNIT_ASSERT_EQUAL(std::string("localhost"), req3rd->getHost());
+  CPPUNIT_ASSERT_EQUAL(std::string("ftp"), req3rd->getProtocol());
 
   auto req4th = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT(!req4th);
+  CPPUNIT_ASSERT_EQUAL(std::string("mirror"), req4th->getHost());
+  CPPUNIT_ASSERT_EQUAL(std::string("http"), req4th->getProtocol());
+
+  auto req5th = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(!req5th);
+}
+
+void FileEntryTest::testGetRequest_limitsSameProtocolHost()
+{
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setUris(std::vector<std::string>{"http://example.org/aria2.zip",
+                                              "http://example.org/aria2.zip?2"});
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+
+  auto req = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT_EQUAL(std::string("example.org"), req->getHost());
+  CPPUNIT_ASSERT_EQUAL(std::string("http"), req->getProtocol());
+
+  auto req2nd = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(!req2nd);
+
+  fileEntry->removeRequest(req);
 
   fileEntry->setMaxConnectionPerServer(2);
 
+  auto req3rd = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT_EQUAL(std::string("example.org"), req3rd->getHost());
+  CPPUNIT_ASSERT_EQUAL(std::string("http"), req3rd->getProtocol());
+
+  auto req4th = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT_EQUAL(std::string("example.org"), req4th->getHost());
+  CPPUNIT_ASSERT_EQUAL(std::string("http"), req4th->getProtocol());
+
   auto req5th = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT_EQUAL(std::string("localhost"), req5th->getHost());
-  CPPUNIT_ASSERT_EQUAL(std::string("ftp"), req5th->getProtocol());
+  CPPUNIT_ASSERT(!req5th);
+}
 
-  auto req6th = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT_EQUAL(std::string("mirror"), req6th->getHost());
-  CPPUNIT_ASSERT_EQUAL(std::string("http"), req6th->getProtocol());
+void FileEntryTest::testFindFasterRequestUsesProtocolHostLimit()
+{
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setMaxConnectionPerServer(1);
+  fileEntry->setUris(std::vector<std::string>{
+      "http://example.org/base", "http://example.org/fast-http",
+      "ftp://example.org/fast-ftp"});
 
-  auto req7th = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT(!req7th);
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+  auto base = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT_EQUAL(std::string("http://example.org/base"), base->getUri());
+
+  auto serverStatMan = std::make_shared<ServerStatMan>();
+  auto fastHttp = std::make_shared<ServerStat>("example.org", "http");
+  fastHttp->setDownloadSpeed(100_k);
+  serverStatMan->add(fastHttp);
+  auto fastFtp = std::make_shared<ServerStat>("example.org", "ftp");
+  fastFtp->setDownloadSpeed(100_k);
+  serverStatMan->add(fastFtp);
+
+  global::wallclock().advance(11_s);
+
+  auto faster = fileEntry->findFasterRequest(base, usedHosts, serverStatMan);
+  CPPUNIT_ASSERT(faster);
+  CPPUNIT_ASSERT_EQUAL(std::string("ftp://example.org/fast-ftp"),
+                       faster->getUri());
 }
 
 void FileEntryTest::testGetRequest_withoutUriReuse()
@@ -217,7 +274,7 @@ void FileEntryTest::testReuseUri()
   }
   CPPUNIT_ASSERT_EQUAL((size_t)0, fileEntry->getRemainingUris().size());
   ignore.clear();
-  ignore.push_back("mirror");
+  ignore.push_back("http://mirror");
   fileEntry->reuseUri(ignore);
   CPPUNIT_ASSERT_EQUAL((size_t)1, fileEntry->getRemainingUris().size());
   uris = fileEntry->getRemainingUris();

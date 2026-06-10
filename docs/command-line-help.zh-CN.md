@@ -242,6 +242,7 @@ DoH 规则：
 下载层行为：
 
 - aria2 的多连接下载仍由 `RequestGroup`、`FileEntry`、`--split`、`--max-connection-per-server`、DNS cache 和 URI 选择共同决定。双栈 DNS 只提供更多候选地址，不会凭空增加下载分片。
+- `--max-connection-per-server` 的 server 维度是 URL 的 `protocol + hostname`，不是解析出来的 IP。`https://example.org/file` 即使同时解析出多个 IPv4/IPv6 地址，也仍按同一个 `https://example.org` 计数；`http://example.org` 和 `ftp://example.org` 是不同 server key，分别受自己的上限约束。
 - 首个连接通常使用最先可用的地址族；后台 resolver 后续写入另一族地址后，只有在确实新增 cache 地址时才唤醒同一下载组继续创建连接。
 - 已有两族地址时，若 IPv6 不只是本地/非公网 scope，先看同一下载项内的短 TTL family 软降权，再由 `getLeastUsedActiveAddressFamily()` 按同 host/port 的 active 连接数平衡 IPv4/IPv6；数量相等再按 `FileEntry` 的轮换状态选族。IPv4 存在且 IPv6 全是本地/非公网 scope 时，主连接持续优先 IPv4，opposite-family 备份连接也不会选择这类非公网 IPv6。
 - `BackupIPv4ConnectCommand` 名字带有历史包袱，实际通过 `getBackupAddressFamily()` 做 opposite-family 备份：IPv6 主连时找 IPv4，IPv4 主连时找 IPv6。不要按类名误解为“只会备份 IPv4”。
@@ -488,7 +489,7 @@ Alt-Svc 源码状态：
 | `--server-stat-if=<FILE>` | 无 | 读取 server 性能统计。 |
 | `--server-stat-timeout=<SEC>` | `86400` | server 性能统计过期时间。 |
 | `-s, --split=<N>` | `16` | 单文件分片下载连接数。 |
-| `-x, --max-connection-per-server=<NUM>` | `1` | 每服务器最大连接数；当前允许范围 `1..64`。 |
+| `-x, --max-connection-per-server=<NUM>` | `1` | 每 URL `protocol + hostname` server 最大连接数；当前允许范围 `1..64`，不按解析 IP 绕过。 |
 | `-k, --min-split-size=<SIZE>` | `2M` | 小于 `2*SIZE` 的范围不继续拆分。 |
 | `--stream-piece-selector=<SELECTOR>` | `default` | piece 选择：`default`、`inorder`、`random`、`geom`。 |
 | `--uri-selector=<SELECTOR>` | `feedback` | URI 选择：`inorder`、`feedback`、`adaptive`。 |
@@ -782,7 +783,7 @@ aria2c --async-dns=true --disable-ipv6=false -s 16 -x 16 --console-log-level=net
 
 这会在双栈可用时并发启动 A/AAAA 查询，任一地址族先成功就先建连；后台拿到另一族新地址后会写入 DNS cache 并唤醒后续连接。已有 IPv4/IPv6 两族地址时，异步 DNS 路径会把 opposite-family 备份连接延迟阈值降为 `0ms`，方便主/备份连接尽早竞速；`--disable-ipv6=true` 或无异步 DNS 构建仍保持保守路径。
 如果解析结果同时包含 IPv4 和仅限本地/非公网 scope 的 IPv6（例如 ULA `fc00::/7`、link-local `fe80::/10` 或 site-local `fec0::/10`），主连接会优先 IPv4，避免“IPv4 能出公网、IPv6 只在局域网里有地址”的机器把首连押到 IPv6 黑洞；IPv4 主连接的备份连接也会跳过这类非公网 IPv6。
-真正让同一下载任务长期同时使用 IPv4/IPv6 多条连接，还需要 DNS cache 里已有两族地址、文件可分片、`--split>=2`，并且同一 host 的 `--max-connection-per-server` 足够大，例如第二条命令里的 `-x 16`。backup connection 是主/备份竞速，胜者接管 socket，不能等同于长期两条下载流。
+真正让同一下载任务长期同时使用 IPv4/IPv6 多条连接，还需要 DNS cache 里已有两族地址、文件可分片、`--split>=2`，并且同一 URL `protocol + hostname` 的 `--max-connection-per-server` 足够大，例如第二条命令里的 `-x 16`。不同 IP 不能绕过这个上限。backup connection 是主/备份竞速，胜者接管 socket，不能等同于长期两条下载流。
 
 ### 5.6 网络调试日志
 
