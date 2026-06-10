@@ -370,7 +370,13 @@
       - run 结论：`success`；`build-windows (x86_64-w64-mingw32)` 和 `build-windows (i686-w64-mingw32)` 均为 `success`。
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7532599189/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7532557535/zip
-      - artifact 过期时间待补：当前 `gh auth status` 显示 token invalid，`gh api repos/yukaidi1220/aria2/actions/runs/27268352139/artifacts` 返回 API rate limit，`gh run download` 可暴露 artifact id 但下载因 401 失败。
+      - artifact 过期时间：`2026-09-08T09:56:37Z`。
+   - `81cdff6f` artifacts：
+      - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27270660709
+      - run 结论：`success`；`build-windows (x86_64-w64-mingw32)` 和 `build-windows (i686-w64-mingw32)` 均为 `success`。
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7533510739/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7533490630/zip
+      - artifact 过期时间：`2026-09-08T10:41:34Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
