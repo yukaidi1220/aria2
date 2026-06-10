@@ -228,8 +228,11 @@ AsyncServiceBindingResolver::AsyncServiceBindingResolver(
     const std::string& servers, bool useTcp)
     : status_(STATUS_READY),
       channel_(nullptr),
+      servers_(servers),
       port_(DEFAULT_HTTPS_PORT),
-      queryId_(0)
+      queryId_(0),
+      useTcp_(useTcp),
+      configuredServers_(false)
 {
   ares_options opts{};
   opts.sock_state_cb = sock_state_cb;
@@ -283,6 +286,16 @@ AsyncServiceBindingResolver::AsyncServiceBindingResolver(
               "keeping existing resolver configuration",
               servers.c_str(), ares_strerror(rv)));
     }
+    else {
+      configuredServers_ = true;
+      A2_LOG_NETWORK(
+          fmt("DNS: HTTPS RR c-ares using configured servers %s over %s",
+              servers_.c_str(), useTcp_ ? "TCP" : "UDP"));
+    }
+  }
+  else {
+    A2_LOG_NETWORK(fmt("DNS: HTTPS RR c-ares using system DNS over %s",
+                       useTcp_ ? "TCP" : "UDP"));
   }
 }
 
@@ -324,8 +337,13 @@ void AsyncServiceBindingResolver::resolve(const std::string& name,
     queryId_ = nextQueryId();
     auto query = dns::createQuery(queryId_, queryName_, dns::TYPE_HTTPS);
     status_ = STATUS_QUERYING;
-    A2_LOG_NETWORK(fmt("DNS: query HTTPS RR %s using c-ares",
-                       queryName_.c_str()));
+    auto serverSource = configuredServers_ ? "configured" : "system";
+    auto servers = configuredServers_ ? servers_.c_str() : "system";
+    A2_LOG_NETWORK(
+        fmt("DNS: query HTTPS RR %s using c-ares server_source=%s "
+            "servers=%s transport=%s",
+            queryName_.c_str(), serverSource, servers,
+            useTcp_ ? "TCP" : "UDP"));
     ares_send(channel_,
               reinterpret_cast<const unsigned char*>(query.data()),
               static_cast<int>(query.size()), serviceBindingCallback, this);

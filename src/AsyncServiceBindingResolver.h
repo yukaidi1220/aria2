@@ -65,8 +65,11 @@ private:
   std::string error_;
   std::string hostname_;
   std::string queryName_;
+  std::string servers_;
   uint16_t port_;
   uint16_t queryId_;
+  bool useTcp_;
+  bool configuredServers_;
 
 public:
   explicit AsyncServiceBindingResolver(const std::string& servers = "",

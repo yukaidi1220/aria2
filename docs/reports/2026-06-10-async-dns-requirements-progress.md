@@ -99,6 +99,12 @@
    - 行为：新增 `testSelectIPAddressUsesBothFamiliesForConcurrentRequests()`，在同一 `FileEntry`、同一 `https://example.org`、`max-connection-per-server=2` 下创建两个 in-flight request，断言第一个 request 选择 IPv4、第二个 request 选择 IPv6，并且第三个同 hostname request 被 `max-connection-per-server` 限制挡住。
    - 边界：该测试证明已缓存双栈地址时的并发 request family 轮换和 hostname 维度连接上限；仍不是真实 `SegmentMan` split、socket 或抓包级端到端下载验收。
 
+8. HTTPS RR c-ares resolver server 明细日志测试。
+   - 落点：`src/AsyncServiceBindingResolver.cc`、`test/AsyncServiceBindingResolverTest.cc`
+   - 行为：`AsyncServiceBindingResolver` 的 network 日志新增 `server_source=system|configured`、`servers=...` 和 `transport=UDP|TCP`，并在 resolver 初始化时打印系统 DNS 或显式 server 列表来源。
+   - 测试：`testLogsSystemDnsServerSource()`、`testLogsConfiguredDnsServerSource()` 和具备 c-ares TCP 能力时的 `testLogsTcpTransport()` 不依赖真实 DNS 响应，只断言 HTTPS RR c-ares 查询日志能看出 server 来源、server 列表和传输协议。
+   - 边界：该测试只覆盖 c-ares HTTPS RR resolver 的格式级可观测性；真实 DoT/DoH HTTPS RR 查询、真实网络 resolver 行为和 artifact 日志仍需后续验收。
+
 ## 最新增量（03:40-04:06）
 
 1. 配置发现顺序补强：`0ab1da12 Test config discovery candidate order`
@@ -404,7 +410,7 @@
 
 ### 日志可观测性（31-35）
 
-部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。后续又补 DoH/DoT endpoint 运行期 connect failure 日志断言，并在 `DownloadEngine::markBadIPAddress()` 统一打印失败 IP/临时避让地址的 host、port、ip、family；下载连接、backup、TLS handshake retry 和 FTP proxy tunnel 失败路径已传入 CUID，并有单元日志断言。尚未完整覆盖真实 artifact 运行日志、HTTPS RR resolver 内部 server 明细、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和真实功能测试里补齐。
+部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。后续又补 DoH/DoT endpoint 运行期 connect failure 日志断言，并在 `DownloadEngine::markBadIPAddress()` 统一打印失败 IP/临时避让地址的 host、port、ip、family；下载连接、backup、TLS handshake retry 和 FTP proxy tunnel 失败路径已传入 CUID，并有单元日志断言。HTTPS RR c-ares resolver 已补 server 来源、server 列表和 UDP/TCP transport 的 network 日志及格式级单测。尚未完整覆盖真实 artifact 运行日志、真实 DoT/DoH HTTPS RR resolver 运行明细、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和真实功能测试里补齐。
 
 复查补充：已补 HTTPS 建连成功日志、`Response received from` 和 `Response status ... remote=` 的格式级回归测试，防止后续把 remote endpoint 从用户可见日志里删掉。
 
@@ -431,7 +437,8 @@
    - 已完成第二刀：async DNS query plan 日志代码路径和单元日志断言，记录 CUID、host、qtype、mode、phase、backend、transport、server、bootstrap 和 fallback 来源。
    - 本轮阶段修复：HTTPS 建连成功日志和 `Response received` info 日志本身追加 remote IP，解决普通日志里看不出连接 IP 的测试问题。
    - 当前继续补强：DoH/DoT endpoint connect failure 日志已有 fake transport 回归断言，失败 IP/临时避让地址已有 `DownloadEngine::markBadIPAddress()` 统一 network 日志和 IPv4/IPv6/CUID 单测。
-   - 后续待实现：HTTPS RR resolver 内部 server 明细、真实 artifact 日志和抓包级 v4/v6 对账断言。
+   - 当前继续补强：HTTPS RR c-ares resolver 已有 `server_source`、`servers` 和 `transport` 格式级单测。
+   - 后续待实现：真实 DoT/DoH HTTPS RR resolver 运行明细、真实 artifact 日志和抓包级 v4/v6 对账断言。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
    - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。
