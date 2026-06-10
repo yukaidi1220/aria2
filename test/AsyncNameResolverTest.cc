@@ -40,6 +40,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
   CPPUNIT_TEST(testStartAsyncCaresWithExplicitServerFallsBackToSystem);
   CPPUNIT_TEST(testCaresQueryLogsServerSource);
+  CPPUNIT_TEST(testCaresRejectedServerLogsSystemFallback);
 #if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
   CPPUNIT_TEST(testCaresQueryLogsTcpTransport);
 #endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
@@ -99,6 +100,7 @@ public:
   void testValidateConfigLeavesCaresServersUnchanged();
   void testStartAsyncCaresWithExplicitServerFallsBackToSystem();
   void testCaresQueryLogsServerSource();
+  void testCaresRejectedServerLogsSystemFallback();
 #if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
   void testCaresQueryLogsTcpTransport();
 #endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
@@ -508,6 +510,24 @@ void AsyncNameResolverTest::testCaresQueryLogsServerSource()
                            "transport=UDP") != std::string::npos);
   CPPUNIT_ASSERT(logs.find("DNS: query AAAA configured.example using c-ares "
                            "server_source=configured servers=192.0.2.53 "
+                           "transport=UDP") != std::string::npos);
+}
+
+void AsyncNameResolverTest::testCaresRejectedServerLogsSystemFallback()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testCaresRejectedServerLogsSystemFallback.log";
+  ScopedNetworkLog log(logPath);
+
+  AsyncNameResolver resolver(AF_INET, "dns.example.org");
+  resolver.resolve("rejected.example");
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: c-ares rejected configured server list "
+                           "dns.example.org:") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: query A rejected.example using c-ares "
+                           "server_source=system servers=system "
                            "transport=UDP") != std::string::npos);
 }
 
