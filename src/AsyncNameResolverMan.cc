@@ -200,7 +200,7 @@ std::string formatDohServerList(
 {
   std::vector<std::string> entries;
   for (const auto& server : servers) {
-    auto entry = "https://";
+    std::string entry = "https://";
     entry += formatDnsServerEndpoint(server.connectHost, server.port);
     entry += server.path;
     if (!server.tlsHost.empty() && server.tlsHost != server.connectHost) {
