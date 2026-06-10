@@ -51,6 +51,11 @@ std::string formatRequestRemoteEndpointForLog(const Request* req);
 std::string formatHttpsConnectionEstablishedLog(cuid_t cuid,
                                                 const std::string& host,
                                                 const std::string& remote);
+std::string formatTlsConnectedLog(const std::string& remote,
+                                  const std::string& sni,
+                                  const std::string& verify,
+                                  const std::string& version,
+                                  const std::string& alpn);
 std::string formatHttpResponseReceivedLog(cuid_t cuid,
                                           const std::string& remote,
                                           const std::string& header);

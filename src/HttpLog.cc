@@ -72,6 +72,18 @@ std::string formatHttpsConnectionEstablishedLog(cuid_t cuid,
              cuid, host.c_str(), remote.c_str());
 }
 
+std::string formatTlsConnectedLog(const std::string& remote,
+                                  const std::string& sni,
+                                  const std::string& verify,
+                                  const std::string& version,
+                                  const std::string& alpn)
+{
+  return fmt("TLS: connected remote=%s sni=%s verify=%s version=%s alpn=%s",
+             remote.c_str(), sni.empty() ? "none" : sni.c_str(),
+             verify.empty() ? "none" : verify.c_str(), version.c_str(),
+             alpn.empty() ? "none" : alpn.c_str());
+}
+
 std::string formatHttpResponseReceivedLog(cuid_t cuid,
                                           const std::string& remote,
                                           const std::string& header)

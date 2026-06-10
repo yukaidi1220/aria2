@@ -565,6 +565,21 @@ void HttpRequestTest::testHttpsConnectionLogIncludesRemoteEndpoint()
                   "remote=[2001:db8::9]:443"),
       formatHttpsConnectionEstablishedLog(
           8, req.getHost(), formatRequestRemoteEndpointForLog(&req)));
+
+  Endpoint endpoint{"192.0.2.9", AF_INET, 443};
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("TLS: connected remote=192.0.2.9:443 sni=front.example "
+                  "verify=origin.example version=TLSv1.3 alpn=h2"),
+      formatTlsConnectedLog(formatEndpointForLog(endpoint), "front.example",
+                            "origin.example", "TLSv1.3", "h2"));
+
+  endpoint.addr = "2001:db8::9";
+  endpoint.family = AF_INET6;
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("TLS: connected remote=[2001:db8::9]:443 sni=none "
+                  "verify=none version=TLSv1.2 alpn=none"),
+      formatTlsConnectedLog(formatEndpointForLog(endpoint), "", "",
+                            "TLSv1.2", ""));
 }
 
 void HttpRequestTest::testCreateRequest_with_hosts_mapping()

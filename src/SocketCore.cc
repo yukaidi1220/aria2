@@ -57,6 +57,7 @@
 #include "TimeA2.h"
 #include "a2functional.h"
 #include "LogFactory.h"
+#include "HttpLog.h"
 #include "A2STR.h"
 #ifdef ENABLE_SSL
 #  include "TLSContext.h"
@@ -100,20 +101,6 @@ namespace aria2 {
 #endif // __MINGW32__
 
 #ifdef ENABLE_SSL
-namespace {
-
-std::string formatEndpointForLog(const Endpoint& endpoint)
-{
-  if (endpoint.family == AF_INET6) {
-    return fmt("[%s]:%u", endpoint.addr.c_str(),
-               static_cast<unsigned int>(endpoint.port));
-  }
-  return fmt("%s:%u", endpoint.addr.c_str(),
-             static_cast<unsigned int>(endpoint.port));
-}
-
-} // namespace
-
 bool operator==(const TLSECHParams& lhs, const TLSECHParams& rhs)
 {
   return lhs.requested == rhs.requested && lhs.required == rhs.required &&
@@ -1159,13 +1146,9 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
       A2_LOG_DEBUG(fmt("Securely connected to %s with %s", peerInfo.c_str(),
                        tlsVersion.c_str()));
       auto selectedAlpn = tlsSession_->getSelectedAlpnProtocol();
-      A2_LOG_NETWORK(
-          fmt("TLS: connected remote=%s sni=%s verify=%s version=%s alpn=%s",
-              formatEndpointForLog(peerEndpoint).c_str(),
-              params.sniHost.empty() ? "none" : params.sniHost.c_str(),
-              params.verifyHost.empty() ? "none" : params.verifyHost.c_str(),
-              tlsVersion.c_str(),
-              selectedAlpn.empty() ? "none" : selectedAlpn.c_str()));
+      A2_LOG_NETWORK(formatTlsConnectedLog(
+          formatEndpointForLog(peerEndpoint), params.sniHost, params.verifyHost,
+          tlsVersion, selectedAlpn));
 
       // 2. We're connected now!
       secure_ = A2_TLS_CONNECTED;
