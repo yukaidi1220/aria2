@@ -146,9 +146,12 @@ private:
                         DownloadEngine* e, Command* command);
   bool getNextFallbackPhase(ResolverPhase& nextPhase) const;
   void setNameResolverCheck(size_t resolverIndex, DownloadEngine* e,
-                            Command* command);
+                             Command* command);
   void disableNameResolverCheck(size_t index, DownloadEngine* e,
                                 Command* command);
+  const char* resolverPhaseToString(ResolverPhase phase) const;
+  void logResolverPlan(const std::string& hostname, int family,
+                       Command* command) const;
 
   std::vector<ResolverSlot> resolverSlots_;
   std::string hostname_;

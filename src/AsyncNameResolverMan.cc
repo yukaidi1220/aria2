@@ -103,6 +103,26 @@ const char* resolverModeToString(AsyncNameResolverMan::ResolverMode mode)
   abort();
 }
 
+std::string formatDnsLogHost(const std::string& host)
+{
+  if (host.find(':') != std::string::npos &&
+      host.find(']') == std::string::npos) {
+    std::string result = "[";
+    result += host;
+    result += "]";
+    return result;
+  }
+  return host;
+}
+
+std::string formatCuid(Command* command)
+{
+  if (!command) {
+    return "-";
+  }
+  return fmt("%" PRId64, command->getCuid());
+}
+
 int getBootstrapFamily(bool ipv4, bool ipv6)
 {
   if (ipv4 && ipv6) {
@@ -150,6 +170,76 @@ void appendCsv(std::string& dst, const std::string& value)
     dst += ",";
   }
   dst += value;
+}
+
+std::string formatDnsServerEndpoint(const std::string& host, uint16_t port)
+{
+  auto result = formatDnsLogHost(host);
+  result += ":";
+  result += util::uitos(port);
+  return result;
+}
+
+std::string formatDotServerList(
+    const std::vector<AsyncDnsServerConfig>& servers)
+{
+  std::vector<std::string> entries;
+  for (const auto& server : servers) {
+    auto entry = formatDnsServerEndpoint(server.connectHost, server.port);
+    if (!server.tlsHost.empty() && server.tlsHost != server.connectHost) {
+      entry += "#";
+      entry += server.tlsHost;
+    }
+    entries.push_back(std::move(entry));
+  }
+  return strjoin(std::begin(entries), std::end(entries), ",");
+}
+
+std::string formatDohServerList(
+    const std::vector<AsyncDohServerConfig>& servers)
+{
+  std::vector<std::string> entries;
+  for (const auto& server : servers) {
+    auto entry = "https://";
+    entry += formatDnsServerEndpoint(server.connectHost, server.port);
+    entry += server.path;
+    if (!server.tlsHost.empty() && server.tlsHost != server.connectHost) {
+      entry += "#";
+      entry += server.tlsHost;
+    }
+    entries.push_back(std::move(entry));
+  }
+  return strjoin(std::begin(entries), std::end(entries), ",");
+}
+
+bool needsBootstrap(const std::vector<AsyncDnsServerConfig>& servers)
+{
+  for (const auto& server : servers) {
+    if (!util::isNumericHost(server.connectHost)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool needsBootstrap(const std::vector<AsyncDohServerConfig>& servers)
+{
+  for (const auto& server : servers) {
+    if (!util::isNumericHost(server.connectHost)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+const char* dohTransportToString(bool dohHttp2)
+{
+#ifdef HAVE_LIBNGHTTP2
+  return dohHttp2 ? "https-h1-or-h2" : "https-h1";
+#else  // !HAVE_LIBNGHTTP2
+  (void)dohHttp2;
+  return "https-h1";
+#endif // !HAVE_LIBNGHTTP2
 }
 
 bool parsePlainDnsServer(std::string& host, std::string& port,
@@ -442,10 +532,148 @@ AsyncNameResolverMan::createResolvers(int family) const
   return resolvers;
 }
 
+const char*
+AsyncNameResolverMan::resolverPhaseToString(ResolverPhase phase) const
+{
+  switch (phase) {
+  case RESOLVER_PHASE_PRIMARY:
+    return "primary";
+  case RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK:
+    return "explicit-plain-fallback";
+  case RESOLVER_PHASE_SYSTEM_CARES_FALLBACK:
+    return "system-cares-fallback";
+  }
+  abort();
+}
+
+void AsyncNameResolverMan::logResolverPlan(const std::string& hostname,
+                                           int family, Command* command) const
+{
+  if (!A2_LOG_NETWORK_ENABLED) {
+    return;
+  }
+
+  const auto qtype = familyToString(family);
+  const auto phase = resolverPhaseToString(resolverPhase_);
+  const auto mode = resolverModeToString(resolverMode_);
+  const auto cuid = formatCuid(command);
+  auto logPlan = [&](const char* backend, const char* transport,
+                     const char* server, const char* bootstrap,
+                     const char* fallbackFrom) {
+    A2_LOG_NETWORK(
+        fmt("DNS: CUID#%s - query plan host=%s qtype=%s mode=%s phase=%s "
+            "backend=%s transport=%s server=%s bootstrap=%s "
+            "fallback_from=%s",
+            cuid.c_str(), hostname.c_str(), qtype, mode, phase, backend,
+            transport, server && *server ? server : "-",
+            bootstrap && *bootstrap ? bootstrap : "none",
+            fallbackFrom && *fallbackFrom ? fallbackFrom : "none"));
+  };
+
+  if (resolverPhase_ == RESOLVER_PHASE_SYSTEM_CARES_FALLBACK) {
+    const char* fallbackFrom = "primary";
+    if (resolverMode_ == RESOLVER_CARES && !servers_.empty()) {
+      fallbackFrom = "explicit-cares-dns";
+    }
+#ifdef ENABLE_SSL
+    if (resolverMode_ == RESOLVER_DOT || resolverMode_ == RESOLVER_DOH) {
+      fallbackFrom = "secure-dns";
+    }
+    else if (resolverMode_ == RESOLVER_MULTI) {
+      auto config = parseAsyncDnsMultiServerConfigList(servers_);
+      if (!config.udpServers.empty() || !config.tcpServers.empty()) {
+        fallbackFrom = "explicit-plain-dns";
+      }
+      else if (!config.dotServers.empty() || !config.dohServers.empty()) {
+        fallbackFrom = "secure-dns";
+      }
+    }
+#endif // ENABLE_SSL
+    logPlan("c-ares", "system-cares", "system", "none", fallbackFrom);
+    return;
+  }
+
+  if (resolverMode_ == RESOLVER_CARES) {
+    logPlan("c-ares", servers_.empty() ? "system-cares" : "udp",
+            servers_.empty() ? "system" : servers_.c_str(), "none", "none");
+    return;
+  }
+
+#ifdef ENABLE_SSL
+  if (resolverMode_ == RESOLVER_DOT) {
+    auto dotServers = parseAsyncDnsDotServerConfigList(servers_);
+    auto formatted = formatDotServerList(dotServers);
+    logPlan("DoT", "tls", formatted.c_str(),
+            needsBootstrap(dotServers) ? "system-cares" : "none", "none");
+    return;
+  }
+
+  if (resolverMode_ == RESOLVER_DOH) {
+    auto dohServers = parseAsyncDnsDohServerConfigList(servers_);
+    auto formatted = formatDohServerList(dohServers);
+    logPlan("DoH", dohTransportToString(dohHttp2_), formatted.c_str(),
+            needsBootstrap(dohServers) ? "system-cares" : "none", "none");
+    return;
+  }
+
+  if (resolverMode_ == RESOLVER_MULTI) {
+    auto config = parseAsyncDnsMultiServerConfigList(servers_);
+    if (resolverPhase_ == RESOLVER_PHASE_PRIMARY) {
+      if (!config.dotServers.empty()) {
+        auto formatted = formatDotServerList(config.dotServers);
+        const char* bootstrap =
+            needsBootstrap(config.dotServers)
+                ? (!config.udpServers.empty() || !config.tcpServers.empty()
+                       ? "explicit-plain-dns"
+                       : "system-cares")
+                : "none";
+        logPlan("DoT", "tls", formatted.c_str(), bootstrap, "none");
+      }
+      if (!config.dohServers.empty()) {
+        auto formatted = formatDohServerList(config.dohServers);
+        const char* bootstrap =
+            needsBootstrap(config.dohServers)
+                ? (!config.udpServers.empty() || !config.tcpServers.empty()
+                       ? "explicit-plain-dns"
+                       : "system-cares")
+                : "none";
+        logPlan("DoH", dohTransportToString(dohHttp2_), formatted.c_str(),
+                bootstrap, "none");
+      }
+      if (config.dotServers.empty() && config.dohServers.empty()) {
+        if (!config.udpServers.empty()) {
+          logPlan("c-ares", "udp", config.udpServers.c_str(), "none", "none");
+        }
+        if (!config.tcpServers.empty()) {
+          logPlan("c-ares", "tcp", config.tcpServers.c_str(), "none", "none");
+        }
+        if (config.udpServers.empty() && config.tcpServers.empty()) {
+          logPlan("c-ares", "system-cares", "system", "none", "none");
+        }
+      }
+      return;
+    }
+
+    if (resolverPhase_ == RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK) {
+      if (!config.udpServers.empty()) {
+        logPlan("c-ares", "udp", config.udpServers.c_str(), "none",
+                "secure-dns");
+      }
+      if (!config.tcpServers.empty()) {
+        logPlan("c-ares", "tcp", config.tcpServers.c_str(), "none",
+                "secure-dns");
+      }
+      return;
+    }
+  }
+#endif // ENABLE_SSL
+}
+
 void AsyncNameResolverMan::startAsyncFamily(const std::string& hostname,
                                             int family, DownloadEngine* e,
                                             Command* command)
 {
+  logResolverPlan(hostname, family, command);
   auto resolvers = createResolvers(family);
   for (auto& resolver : resolvers) {
     resolver->resolve(hostname);

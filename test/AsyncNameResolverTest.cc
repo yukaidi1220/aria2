@@ -17,10 +17,13 @@
 #include "AsyncResolver.h"
 #include "Command.h"
 #include "Exception.h"
+#include "File.h"
+#include "LogFactory.h"
 #include "Option.h"
 #include "prefs.h"
 #include "SelectEventPoll.h"
 #include "SocketCore.h"
+#include "TestUtil.h"
 
 namespace aria2 {
 
@@ -46,6 +49,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateDohResolverUsesUnspecBootstrapForDualStack);
   CPPUNIT_TEST(testCreateDohResolverRejectsEmptyServerList);
   CPPUNIT_TEST(testStartAsyncDotFallsBackToSystem);
+  CPPUNIT_TEST(testStartAsyncMultiLogsQueryPlans);
   CPPUNIT_TEST(testStartAsyncMultiStartsSecureBackendsBeforePlainFallback);
   CPPUNIT_TEST(testStartAsyncMultiFallsBackToExplicitPlainThenSystem);
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
@@ -94,6 +98,7 @@ public:
   void testCreateDohResolverUsesUnspecBootstrapForDualStack();
   void testCreateDohResolverRejectsEmptyServerList();
   void testStartAsyncDotFallsBackToSystem();
+  void testStartAsyncMultiLogsQueryPlans();
   void testStartAsyncMultiStartsSecureBackendsBeforePlainFallback();
   void testStartAsyncMultiFallsBackToExplicitPlainThenSystem();
   void testValidateConfigAcceptsDotIpServers();
@@ -242,6 +247,34 @@ public:
   using AsyncNameResolverMan::createResolvers;
 };
 #endif // ENABLE_SSL
+
+class ScopedNetworkLog {
+public:
+  explicit ScopedNetworkLog(std::string path) : path_(std::move(path))
+  {
+    File(path_).remove();
+    LogFactory::setLogFile(path_);
+    LogFactory::setLogLevel(V_NETWORK);
+    LogFactory::reconfigure();
+  }
+
+  ~ScopedNetworkLog()
+  {
+    LogFactory::setLogFile("");
+    LogFactory::setLogLevel(Logger::A2_DEBUG);
+    LogFactory::reconfigure();
+  }
+
+  std::string closeAndRead() const
+  {
+    LogFactory::setLogFile("");
+    LogFactory::reconfigure();
+    return readFile(path_);
+  }
+
+private:
+  std::string path_;
+};
 
 class MockCommand : public Command {
 public:
@@ -544,6 +577,51 @@ void AsyncNameResolverTest::testStartAsyncDotFallsBackToSystem()
                        countQueryStatusEntries(resolverMan.getQueryStatus()));
   CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
   CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiLogsQueryPlans()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiLogsQueryPlans.log";
+  ScopedNetworkLog log(logPath);
+  MockFallbackAsyncNameResolverMan resolverMan({2, 2, 1});
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("udp://192.0.2.53,tcp://192.0.2.54,"
+                         "dot://dns.example.org,"
+                         "https://dns.example.org/dns-query");
+  resolverMan.setIPv6(false);
+  MockCommand command(99);
+
+  resolverMan.startAsync("example.org", nullptr, &command);
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#99 - query plan host=example.org "
+                           "qtype=A mode=multi phase=primary backend=DoT "
+                           "transport=tls server=dns.example.org:853 "
+                           "bootstrap=explicit-plain-dns "
+                           "fallback_from=none") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("qtype=A mode=multi phase=primary backend=DoH "
+                           "transport=https-h1 "
+                           "server=https://dns.example.org:443/dns-query "
+                           "bootstrap=explicit-plain-dns "
+                           "fallback_from=none") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("qtype=A mode=multi "
+                           "phase=explicit-plain-fallback backend=c-ares "
+                           "transport=udp server=192.0.2.53 bootstrap=none "
+                           "fallback_from=secure-dns") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("qtype=A mode=multi "
+                           "phase=explicit-plain-fallback backend=c-ares "
+                           "transport=tcp server=192.0.2.54 bootstrap=none "
+                           "fallback_from=secure-dns") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("qtype=A mode=multi "
+                           "phase=system-cares-fallback backend=c-ares "
+                           "transport=system-cares server=system "
+                           "bootstrap=none "
+                           "fallback_from=explicit-plain-dns") !=
+                 std::string::npos);
 }
 
 void AsyncNameResolverTest::testStartAsyncMultiStartsSecureBackendsBeforePlainFallback()

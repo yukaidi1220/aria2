@@ -70,6 +70,12 @@
     - 行为：`http://example.org` 和 `ftp://example.org` 视为不同 server key，分别受 `-x` 上限约束。
     - 文档：`src/usage_text.h`、`doc/manual-src/en/aria2c.rst`、`docs/command-line-help.zh-CN.md` 已同步 `protocol+host` 语义，并修正英文手册里的 `split=16`、`min-split-size=2M` 默认值。
 
+13. DNS query plan 日志第二阶段。
+    - 落点：`src/AsyncNameResolverMan.cc`、`src/AsyncNameResolverMan.h`
+    - 行为：每个 async DNS A/AAAA family 启动前的代码路径会打印统一 network 日志，包含 `CUID`、hostname、qtype、mode、phase、backend、transport、server、bootstrap 来源和 `fallback_from`。
+    - 行为：`multi` secure-first 阶段会分别打印 DoT/DoH plan；secure server 为域名时可看出 bootstrap 来自显式 plain DNS 还是系统 c-ares；显式 plain fallback 和系统 c-ares fallback 也会记录来源。当前已用单元日志断言覆盖这三个阶段，真实 artifact 运行日志仍待后续功能测试确认。
+    - 边界：这仍是 resolver plan 级日志，不依赖 `ares_set_server_state_callback`，旧 c-ares/旧 Windows 构建不会因为缺新 API 编译失败；per-server 成败、DoT/DoH endpoint fail、HTTPS RR resolver 内部细节还需要后续继续补。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
@@ -79,6 +85,7 @@
    - `testStartAsyncDotFallsBackToSystem`：覆盖 DoT 失败后进入系统 c-ares。
    - `testStartAsyncMultiStartsSecureBackendsBeforePlainFallback` / `testStartAsyncMultiFallsBackToExplicitPlainThenSystem`：覆盖 `multi` 下载域名解析的 secure-first 和显式 plain -> 系统 c-ares fallback 阶段。
    - `testStartAsyncMultiStartsSecureBackendsBeforePlainFallback` 额外断言真实 `createResolvers()` 主阶段只创建 DoT/DoH resolver，不提前创建 plain resolver。
+   - `testStartAsyncMultiLogsQueryPlans`：覆盖 `multi` 主阶段 DoT/DoH query plan、显式 plain fallback query plan 和系统 c-ares fallback query plan 的 network 日志字段。
    - 既有 DoT/DoH/multi 配置校验测试显式设置 `async-dns=true`，避免新早退让测试空跑。
 
 2. `test/AbstractCommandTest.cc`
@@ -111,7 +118,8 @@
    - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc` 和外部 review；GitHub Actions run `27242784981` 已通过。
    - 双栈 backup 避让第一阶段切片已通过 `git diff --check -- src/InitiateConnectionCommand.cc test/InitiateConnectionCommandTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；GitHub Actions run `27243094090` 已通过。
    - HTTPS RR 默认关闭切片已通过 `git diff --check`、外部 review 和 GitHub Actions；本机仍缺少 C++ 构建工具，编译验证依赖 CI。
-   - `max-connection-per-server` protocol+host 切片已通过 `git diff --check` 和外部 review；本机仍缺少 C++ 构建工具，提交后依赖 GitHub Actions 编译验证。
+   - `max-connection-per-server` protocol+host 切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27245665096`。
+   - DNS query plan 日志第二阶段切片已通过 `git diff --check -- src/AsyncNameResolverMan.cc src/AsyncNameResolverMan.h test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；新增单元日志断言；本机仍缺少 C++ 构建工具，提交前需外部 review，提交后依赖 GitHub Actions 编译验证。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -126,6 +134,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27243094090
    - HTTPS RR 默认关闭切片已提交为 `63934398 Gate HTTPS RR discovery behind option`，GitHub Actions build 已通过，run id `27244533609`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27244533609
+   - `max-connection-per-server` protocol+host 切片已提交为 `8e0b8866 Key connection limit by URL server`，GitHub Actions build 已通过，run id `27245665096`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27245665096
 
 3. artifact：
    - `0e483039` artifacts：
@@ -140,6 +150,10 @@
       - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27244533609/artifacts/7523580423
       - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27244533609/artifacts/7523554794
       - artifact 过期时间：`2026-09-08T00:21:09Z`。
+   - `8e0b8866` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27245665096/artifacts/7524007978
+      - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27245665096/artifacts/7523998481
+      - artifact 过期时间：`2026-09-08T00:52:21Z`。
 
 ## 47 条需求状态
 
@@ -169,7 +183,7 @@
 
 ### 日志可观测性（31-35）
 
-部分完成。第一阶段已补 DNS 最终选中日志、HTTP response remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。尚未完整覆盖 DNS server IP、协议、bootstrap 来源、每个 fallback 阶段的 resolver 级 server 明细、失败 IP、临时避让 IP、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 和连接失败路径补细日志与测试。
+部分完成。第一阶段已补 DNS 最终选中日志、HTTP response remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。尚未完整覆盖真实 artifact 运行日志、每个 DNS server 的运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 内部 server 明细、失败 IP、临时避让 IP、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和连接失败路径补细日志与测试。
 
 ### 下载连接参数（36-39）
 
@@ -190,7 +204,9 @@
 2. secure-first multi 验收：下载域名主解析骨架已改为 secure resolver 优先，plain resolver 默认只用于 DoT/DoH server bootstrap 或失败后的 fallback；下一步要用 fake DNS/真实网络验证 secure、显式 plain、系统 c-ares、getaddrinfo 每一层的日志和失败边界。
 
 3. DNS/连接可观测性：统一记录 DNS query、server、协议、bootstrap/fallback 阶段、A/AAAA、最终地址列表、选中/失败/避让 IP，并让连接成功、TLS 成功和 response received 都能关联 remote IP。
-   - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。下一刀继续补 resolver server/protocol/bootstrap 明细、失败 IP 和临时避让 IP。
+   - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。
+   - 已完成第二刀：async DNS query plan 日志代码路径和单元日志断言，记录 CUID、host、qtype、mode、phase、backend、transport、server、bootstrap 和 fallback 来源。
+   - 下一刀继续补 resolver 内部运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 明细、失败 IP 和临时避让 IP。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
    - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。
