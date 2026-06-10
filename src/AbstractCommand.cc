@@ -855,7 +855,7 @@ void maybeStartHttpsServiceBindingDiscovery(DownloadEngine* e,
                                             uint16_t port, a2_gid_t gid)
 {
   if (!e || !shouldStartHttpsServiceBindingDiscovery(
-                e->getOption().get(),
+                e->getOption(),
                 e->findCachedHttpsServiceBindingRecords(hostname, port),
                 e->isHttpsServiceBindingResolving(hostname, port))) {
     return;
