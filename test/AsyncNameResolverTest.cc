@@ -59,6 +59,8 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testValidateConfigAcceptsDohDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDohEmptyServerList);
   CPPUNIT_TEST(testValidateConfigAcceptsMultiServers);
+  CPPUNIT_TEST(testParseMultiTreatsBareIpAsPlainUdp);
+  CPPUNIT_TEST(testParseMultiRequiresDotPrefixPerDotServer);
   CPPUNIT_TEST(testValidateConfigRejectsMultiPlainDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsMultiBadPlainPort);
   CPPUNIT_TEST(testPlainBootstrapFactoryUsesConfiguredPlainServers);
@@ -108,6 +110,8 @@ public:
   void testValidateConfigAcceptsDohDomainServer();
   void testValidateConfigRejectsDohEmptyServerList();
   void testValidateConfigAcceptsMultiServers();
+  void testParseMultiTreatsBareIpAsPlainUdp();
+  void testParseMultiRequiresDotPrefixPerDotServer();
   void testValidateConfigRejectsMultiPlainDomainServer();
   void testValidateConfigRejectsMultiBadPlainPort();
   void testPlainBootstrapFactoryUsesConfiguredPlainServers();
@@ -723,6 +727,36 @@ void AsyncNameResolverTest::testValidateConfigAcceptsMultiServers()
       AsyncNameResolverMan::RESOLVER_MULTI,
       "udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,"
       "https://dns.example.org/dns-query,8.8.8.8");
+}
+
+void AsyncNameResolverTest::testParseMultiTreatsBareIpAsPlainUdp()
+{
+  auto config =
+      parseAsyncDnsMultiServerConfigList("dot://223.6.6.6,180.184.1.1");
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, config.dotServers.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("223.6.6.6"),
+                       config.dotServers[0].connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.dotServers[0].port);
+  CPPUNIT_ASSERT_EQUAL(std::string("180.184.1.1"), config.udpServers);
+  CPPUNIT_ASSERT(config.tcpServers.empty());
+  CPPUNIT_ASSERT(config.dohServers.empty());
+}
+
+void AsyncNameResolverTest::testParseMultiRequiresDotPrefixPerDotServer()
+{
+  auto config =
+      parseAsyncDnsMultiServerConfigList("dot://223.6.6.6,dot://180.184.1.1");
+
+  CPPUNIT_ASSERT_EQUAL((size_t)2, config.dotServers.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("223.6.6.6"),
+                       config.dotServers[0].connectHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("180.184.1.1"),
+                       config.dotServers[1].connectHost);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)853, config.dotServers[1].port);
+  CPPUNIT_ASSERT(config.udpServers.empty());
+  CPPUNIT_ASSERT(config.tcpServers.empty());
+  CPPUNIT_ASSERT(config.dohServers.empty());
 }
 
 void AsyncNameResolverTest::testValidateConfigRejectsMultiPlainDomainServer()
