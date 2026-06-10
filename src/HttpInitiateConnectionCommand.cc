@@ -394,7 +394,8 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
             getPieceStorage(), getSegments().front());
       }
 
-      auto streamId = activeHttp2.exchange->submitRequest(*httpRequest);
+      auto streamId =
+          activeHttp2.exchange->submitRequestAndFlush(*httpRequest);
       return make_unique<Http2ResponseCommand>(
           getCuid(), getRequest(), getFileEntry(), getRequestGroup(),
           activeHttp2.exchange, streamId, std::move(httpRequest),
@@ -430,9 +431,9 @@ std::unique_ptr<Command> HttpInitiateConnectionCommand::createNextCommand(
             getPieceStorage(), getSegments().front());
       }
 
-      auto streamId = idleHttp2.exchange->submitRequest(*httpRequest);
+      auto streamId = idleHttp2.exchange->submitRequestAndFlush(*httpRequest);
       getDownloadEngine()->registerActiveHttp2Connection(getRequest().get(),
-                                                         idleHttp2.context);
+                                                          idleHttp2.context);
       return make_unique<Http2ResponseCommand>(
           getCuid(), getRequest(), getFileEntry(), getRequestGroup(),
           idleHttp2.exchange, streamId, std::move(httpRequest),

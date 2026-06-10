@@ -65,6 +65,13 @@ int32_t Http2MultiplexExchange::submitRequest(HttpRequest& request)
   return submitRequest(createHttp2HeaderBlockFromHttpRequest(request));
 }
 
+int32_t Http2MultiplexExchange::submitRequestAndFlush(HttpRequest& request)
+{
+  auto streamId = submitRequest(request);
+  flushOutboundData();
+  return streamId;
+}
+
 int32_t Http2MultiplexExchange::submitRequest(const Http2HeaderBlock& headers)
 {
   auto streamId = connection_.submitRequest(headers);

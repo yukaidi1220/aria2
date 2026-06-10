@@ -73,6 +73,7 @@ public:
   operator=(const Http2MultiplexExchange&) = delete;
 
   int32_t submitRequest(HttpRequest& request);
+  int32_t submitRequestAndFlush(HttpRequest& request);
   int32_t submitRequest(const Http2HeaderBlock& headers);
   bool flushOutboundData();
   bool readInboundData();

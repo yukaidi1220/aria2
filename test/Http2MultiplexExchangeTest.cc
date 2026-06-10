@@ -24,6 +24,7 @@ class Http2MultiplexExchangeTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2MultiplexExchangeTest);
   CPPUNIT_TEST(testSubmitTwoRequestsAndReadOutOfOrderResponses);
   CPPUNIT_TEST(testSubmitRequestMakesExchangeWantWrite);
+  CPPUNIT_TEST(testSubmitRequestAndFlushWritesImmediately);
   CPPUNIT_TEST(testReadInboundDataMakesExchangeWantWrite);
   CPPUNIT_TEST(testReadInboundDataUpdatesRemoteMaxConcurrentStreams);
   CPPUNIT_TEST(testPopResponseEventKeepsOtherStreamsActive);
@@ -35,6 +36,7 @@ class Http2MultiplexExchangeTest : public CppUnit::TestFixture {
 public:
   void testSubmitTwoRequestsAndReadOutOfOrderResponses();
   void testSubmitRequestMakesExchangeWantWrite();
+  void testSubmitRequestAndFlushWritesImmediately();
   void testReadInboundDataMakesExchangeWantWrite();
   void testReadInboundDataUpdatesRemoteMaxConcurrentStreams();
   void testPopResponseEventKeepsOtherStreamsActive();
@@ -143,6 +145,26 @@ void Http2MultiplexExchangeTest::testSubmitRequestMakesExchangeWantWrite()
   CPPUNIT_ASSERT(exchange.wantWrite());
   CPPUNIT_ASSERT(exchange.flushOutboundData());
   CPPUNIT_ASSERT(!transport.drainOutboundData().empty());
+  CPPUNIT_ASSERT(!exchange.wantWrite());
+}
+
+void Http2MultiplexExchangeTest::testSubmitRequestAndFlushWritesImmediately()
+{
+  http2test::MemoryHttp2Transport transport;
+  Http2MultiplexExchange exchange(transport);
+  Option option;
+  AuthConfigFactory authConfigFactory;
+  HttpRequest httpRequest;
+  configureRequest(httpRequest, makeRequest("https://origin.example/file.bin"),
+                   &option, &authConfigFactory);
+
+  auto stream = exchange.submitRequestAndFlush(httpRequest);
+
+  CPPUNIT_ASSERT(stream > 0);
+  CPPUNIT_ASSERT(exchange.hasActiveStream(stream));
+  auto outbound = transport.drainOutboundData();
+  CPPUNIT_ASSERT(!outbound.empty());
+  CPPUNIT_ASSERT(http2test::containsFrameType(outbound, NGHTTP2_HEADERS));
   CPPUNIT_ASSERT(!exchange.wantWrite());
 }
 
