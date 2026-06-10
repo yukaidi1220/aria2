@@ -88,7 +88,10 @@ public:
                          std::string& handshakeErr) CXX11_OVERRIDE;
   virtual int tlsAccept(TLSVersion& version) CXX11_OVERRIDE;
   virtual std::string getLastErrorString() CXX11_OVERRIDE;
-  virtual size_t getRecvBufferedLength() CXX11_OVERRIDE { return 0; }
+  virtual size_t getRecvBufferedLength() CXX11_OVERRIDE
+  {
+    return ssl_ ? static_cast<size_t>(SSL_pending(ssl_)) : 0;
+  }
 
 private:
   int handshake(TLSVersion& version);

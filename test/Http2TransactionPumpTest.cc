@@ -23,6 +23,7 @@ class Http2TransactionPumpTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testFlushOutboundHandlesPartialWrite);
   CPPUNIT_TEST(testPumpFeedsInboundResponse);
   CPPUNIT_TEST(testPumpHandlesPartialRead);
+  CPPUNIT_TEST(testPumpDrainsBufferedReads);
   CPPUNIT_TEST(testWriteFailureThrows);
   CPPUNIT_TEST(testReadFailureThrows);
   CPPUNIT_TEST(testClosedReadThrows);
@@ -33,6 +34,7 @@ public:
   void testFlushOutboundHandlesPartialWrite();
   void testPumpFeedsInboundResponse();
   void testPumpHandlesPartialRead();
+  void testPumpDrainsBufferedReads();
   void testWriteFailureThrows();
   void testReadFailureThrows();
   void testClosedReadThrows();
@@ -131,6 +133,33 @@ void Http2TransactionPumpTest::testPumpHandlesPartialRead()
     CPPUNIT_ASSERT(iterations++ < 100);
     CPPUNIT_ASSERT(pump.pump());
   }
+
+  auto event = transaction.popResponseEvent();
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT_EQUAL(std::string("chunked-body"), event->body.drainAll());
+  CPPUNIT_ASSERT(event->body.closed());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
+}
+
+void Http2TransactionPumpTest::testPumpDrainsBufferedReads()
+{
+  Http2Transaction transaction;
+  http2test::MemoryHttp2Transport transport;
+  Http2TransactionPump pump(transaction, transport);
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+  auto headers = http2test::createResponseHeaders();
+  headers.emplace_back("content-length", "12");
+
+  transport.setMaxReadSize(16);
+  CPPUNIT_ASSERT(pump.flushOutboundData());
+  server.feedInboundData(transport.drainOutboundData());
+  server.submitResponse(streamId, headers, "chunked-body");
+  transport.appendInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT(transport.getRecvBufferedLength() > 0);
+  CPPUNIT_ASSERT(pump.pump());
+  CPPUNIT_ASSERT_EQUAL((size_t)0, transport.getRecvBufferedLength());
 
   auto event = transaction.popResponseEvent();
   CPPUNIT_ASSERT(event);

@@ -48,6 +48,7 @@ namespace aria2 {
 
 namespace {
 const size_t MAX_HTTP2_TRANSPORT_READ_SIZE = 16_k;
+const size_t MAX_HTTP2_TRANSPORT_READ_ITERATIONS = 64;
 } // namespace
 
 Http2TransactionPump::Http2TransactionPump(Http2Transaction& transaction,
@@ -146,8 +147,19 @@ bool Http2TransactionPump::pump()
 {
   bool progressed = false;
   progressed |= flushOutboundData();
-  progressed |= readInboundData();
-  progressed |= flushOutboundData();
+  if (readInboundData()) {
+    progressed = true;
+    progressed |= flushOutboundData();
+  }
+  for (size_t i = 1; i < MAX_HTTP2_TRANSPORT_READ_ITERATIONS &&
+                     transport_.getRecvBufferedLength() > 0;
+       ++i) {
+    if (!readInboundData()) {
+      break;
+    }
+    progressed = true;
+    progressed |= flushOutboundData();
+  }
   return progressed;
 }
 
