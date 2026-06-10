@@ -588,6 +588,12 @@
     "                              when aria2 is built with ngtcp2, nghttp3, and\n" \
     "                              a QUIC TLS backend. Unsupported builds reject\n" \
     "                              true; the download path is still experimental.")
+#define TEXT_ENABLE_HTTPS_RR                                            \
+  _(" --enable-https-rr[=true|false]\n"                                  \
+    "                              Enable background HTTPS/SVCB DNS RR\n" \
+    "                              discovery for direct HTTPS origins. This\n" \
+    "                              may change the TCP connect target/port\n" \
+    "                              from cached SVCB records. Default: false.")
 #define TEXT_HOSTS_MAPPING                                              \
   _(" --hosts-mapping=HOST:IPADDR[,IPADDR:HOST]...\n"                   \
     "                              Set host mappings. HOST:IPADDR connects HOST\n" \

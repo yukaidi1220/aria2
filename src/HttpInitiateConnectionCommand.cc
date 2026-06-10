@@ -125,6 +125,10 @@ std::vector<dns::ServiceBindingEndpoint> getCachedHttpsServiceBindingEndpoints(
     DownloadEngine* e, const Request* request, const Option* option)
 {
   std::vector<dns::ServiceBindingEndpoint> endpoints;
+  if (!option || !option->getAsBool(PREF_ENABLE_HTTPS_RR)) {
+    return endpoints;
+  }
+
   auto records =
       e->findCachedHttpsServiceBindingRecords(request->getHost(),
                                               request->getPort());

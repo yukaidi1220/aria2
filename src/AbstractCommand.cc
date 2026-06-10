@@ -856,6 +856,7 @@ void maybeStartHttpsServiceBindingDiscovery(DownloadEngine* e,
 {
   if (!e || !e->getOption() ||
       !e->getOption()->getAsBool(PREF_ASYNC_DNS) ||
+      !e->getOption()->getAsBool(PREF_ENABLE_HTTPS_RR) ||
       e->findCachedHttpsServiceBindingRecords(hostname, port) ||
       e->isHttpsServiceBindingResolving(hostname, port)) {
     return;
@@ -898,6 +899,11 @@ bool appendHttpsServiceBindingAddressHints(std::vector<std::string>& addrs,
                                            const std::string& hostname,
                                            uint16_t port)
 {
+  if (!e || !e->getOption() ||
+      !e->getOption()->getAsBool(PREF_ENABLE_HTTPS_RR)) {
+    return false;
+  }
+
   auto records = e->findCachedHttpsServiceBindingRecords(hostname, port);
   if (!records) {
     return false;
@@ -944,6 +950,9 @@ std::vector<HttpsServiceBindingDiscoveryPhase>
 createHttpsServiceBindingDiscoveryPhases(const Option* option)
 {
   std::vector<HttpsServiceBindingDiscoveryPhase> phases;
+  if (!option || !option->getAsBool(PREF_ENABLE_HTTPS_RR)) {
+    return phases;
+  }
   const auto& mode = option->get(PREF_ASYNC_DNS_MODE);
   const auto& servers = option->get(PREF_ASYNC_DNS_SERVER);
 

@@ -58,6 +58,12 @@
     - 行为：主连接使用 IPv4 时，backup 连接只选择公网 IPv6 地址；如果候选里只有 ULA、link-local、site-local、loopback 等非公网 IPv6，则不再发起 IPv6 backup，避免内网 IPv6 存在但公网不可达时额外拖慢首连。
     - 行为：主连接使用 IPv6 时，IPv4 backup 保持原有选择逻辑。
 
+11. HTTPS/SVCB TYPE65 discovery 默认关闭。
+    - 落点：`src/OptionHandlerFactory.cc`、`src/AbstractCommand.cc`、`src/Context.cc`
+    - 行为：新增 `--enable-https-rr[=true|false]`，默认 `false`；未显式开启时，即使启用 HTTPS、async DNS、H2 或 H3 capability gate，也不会额外发起 HTTPS RR/TYPE65 查询，也不会消费已有 SVCB cache 改 TCP connect target/port 或追加 address hints。
+    - 行为：显式 `--enable-https-rr=true` 后，直连 HTTPS origin 才启动后台 HTTPS/SVCB discovery，并允许 cached selected endpoint 参与 connect target/port 选择；无 async DNS 构建会在参数解析阶段拒绝该能力，不进入运行期崩溃。
+    - 日志：启动日志打印 `enable-https-rr` 的最终值和来源，便于确认“默认不多查 HTTPS RR”的配置边界。
+
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
@@ -70,23 +76,30 @@
    - 既有 DoT/DoH/multi 配置校验测试显式设置 `async-dns=true`，避免新早退让测试空跑。
 
 2. `test/AbstractCommandTest.cc`
+   - `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault`：覆盖默认未启用 `--enable-https-rr` 时不会创建 HTTPS RR discovery phase。
    - `testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem` / `testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit`：覆盖 HTTPS RR discovery 在 c-ares 模式下的系统 DNS 和显式 c-ares -> 系统 c-ares 阶段。
    - `testCreateHttpsServiceBindingDiscoveryPhasesDot` / `testCreateHttpsServiceBindingDiscoveryPhasesDoh`：覆盖纯 DoT/DoH 的 secure -> 系统 c-ares 阶段。
    - `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly`：覆盖 `multi` 下 secure-first、secure-only、plain-only 和空 server 的 HTTPS RR discovery 阶段顺序。
 
 3. `test/OptionHandlerTest.cc`
    - `testFactoryMaxConnectionPerServerLimit`：覆盖 `-x 64` 成功、`-x 65` 失败。
+   - `testUnsupportedFeatureOptionParser`：覆盖 `--enable-https-rr` 默认 `false`、显式 `false` 可解析、有 async DNS 构建时 `true` 可解析、无 async DNS 构建时 `true` 启动期拒绝。
 
 4. `test/InitiateConnectionCommandTest.cc`
    - `testSelectBackupIPAddressSkipsScopedIPv6Backup`：覆盖 IPv4 主连接时不会把 ULA/link-local IPv6 选作 backup 连接地址。
+
+5. `test/HttpInitiateConnectionCommandTest.cc`
+   - `testSelectConnectionAuthorityIgnoresCachedSvcbByDefault`：覆盖默认未启用 `--enable-https-rr` 时即使已有 SVCB cache，也不改 connect target/port、不写 selected endpoint address hints。
+   - 既有 cached SVCB endpoint、failed endpoint、proxy 和 connect failure 测试显式设置 `--enable-https-rr=true`，确保 opt-in 后仍可消费 SVCB cache。
 
 ## 当前验证
 
 1. 静态检查：
    - `git diff --check` 通过；只有 Windows 工作区的 LF/CRLF 提示，没有 whitespace error。
    - HTTPS RR/TYPE65 staged fallback 切片在提交前已通过上述静态检查；本机缺少 `make`/`g++`/`clang++`/`cl`/`cmake`，尚未完成本地编译或单元测试。
-   - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc` 和外部 review；本机仍缺少 C++ 构建工具，GitHub Actions run `27242784981` 正在验证。
-   - 双栈 backup 避让第一阶段切片已通过 `git diff --check -- src/InitiateConnectionCommand.cc test/InitiateConnectionCommandTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；本机仍缺少 C++ 构建工具，等待 GitHub Actions 编译验证。
+   - 日志可观测性第一阶段切片已通过 `git diff --check -- src/AbstractCommand.cc src/HttpConnection.cc src/SocketCore.cc` 和外部 review；GitHub Actions run `27242784981` 已通过。
+   - 双栈 backup 避让第一阶段切片已通过 `git diff --check -- src/InitiateConnectionCommand.cc test/InitiateConnectionCommandTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；GitHub Actions run `27243094090` 已通过。
+   - HTTPS RR 默认关闭切片当前正在进行本地静态检查和外部 review；本机仍缺少 C++ 构建工具，提交后依赖 GitHub Actions 编译验证。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -95,6 +108,10 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27238331842
    - HTTPS RR/TYPE65 staged fallback 切片已提交为 `b41ada1a Stage HTTPS RR discovery DNS fallback`，GitHub Actions build 已通过，run id `27240908069`，耗时 `8m20s`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27240908069
+   - 日志可观测性第一阶段切片已提交为 `07d2a84e Add DNS and connection endpoint network logs`，GitHub Actions build 已通过，run id `27242784981`，耗时 `9m6s`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27242784981
+   - 双栈 backup 避让第一阶段切片已提交为 `d6186215 Skip non-global IPv6 backup connections`，GitHub Actions build 已通过，run id `27243094090`，耗时 `8m20s`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27243094090
 
 3. artifact：
    - `0e483039` artifacts：
@@ -130,7 +147,7 @@
 
 ### HTTPS RR / H2 / H3（26-30）
 
-部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server，并且 `multi` 下已改为 secure-first 阶段式 fallback；该 discovery 仍是后台任务，不阻塞首连。未启用 H3/无明确能力时“不额外查 HTTPS RR”的精确开关、DoH H2 日志 `DNS: DoH using HTTP/2`，以及真实网络/fake server 验收还需要继续补。
+部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server，并且 `multi` 下已改为 secure-first 阶段式 fallback；该 discovery 仍是后台任务，不阻塞首连。本轮新增 `--enable-https-rr=false` 默认门控，未显式开启时不会额外查询 HTTPS RR/TYPE65，也不会消费 SVCB cache 改 connect target/port，满足“未启用 H3、也没有明确需要 SVCB/HTTPS RR 的能力时，不应额外查 HTTPS RR”的第一阶段边界。DoH H2 已有 network 日志 `DNS: DoH using HTTP/2`；还需要继续补真实网络/fake server 验收。
 
 ### 日志可观测性（31-35）
 
@@ -160,6 +177,6 @@
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
    - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。下一刀继续评估本机公网 IPv6 能力判断、family penalty 和同 host 并发限制测试。
 
-5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback；下一步默认不额外查询不需要的 HTTPS RR，补 DoH over H2 日志；H3 继续保持默认关闭和 unsupported 快速拒绝。
+5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback，并新增 `--enable-https-rr` 显式 opt-in 门控；下一步补 fake/真实 DNS 验收，确认默认不发 TYPE65、不消费 SVCB cache，开启后按当前 DNS backend 查询并允许 selected endpoint 生效，DoH over H2 日志可断言。H3 继续保持默认关闭和 unsupported 快速拒绝。
 
 6. 验收报告：CI 通过后补 GitHub Actions run、artifact 链接和实际功能测试结果。

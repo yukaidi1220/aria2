@@ -139,6 +139,7 @@ void logStartupOptions(const Option* option)
   logStartupOption(option, PREF_DISABLE_IPV6, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTP2, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTP3, parser.get());
+  logStartupOption(option, PREF_ENABLE_HTTPS_RR, parser.get());
   logStartupOption(option, PREF_SPLIT, parser.get());
   logStartupOption(option, PREF_MAX_CONNECTION_PER_SERVER, parser.get());
   logStartupOption(option, PREF_MIN_SPLIT_SIZE, parser.get());

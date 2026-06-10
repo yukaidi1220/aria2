@@ -29,6 +29,7 @@ class HttpInitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityUsesSvcbEndpoint);
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityIgnoresHttpEndpoint);
   CPPUNIT_TEST(testSelectHttpConnectionAuthorityIgnoresMismatchedEndpoint);
+  CPPUNIT_TEST(testSelectConnectionAuthorityIgnoresCachedSvcbByDefault);
   CPPUNIT_TEST(testSelectConnectionAuthorityUsesCachedSvcbEndpoint);
   CPPUNIT_TEST(testSelectConnectionAuthoritySkipsFailedSvcbEndpoint);
   CPPUNIT_TEST(testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed);
@@ -43,6 +44,7 @@ public:
   void testSelectHttpConnectionAuthorityUsesSvcbEndpoint();
   void testSelectHttpConnectionAuthorityIgnoresHttpEndpoint();
   void testSelectHttpConnectionAuthorityIgnoresMismatchedEndpoint();
+  void testSelectConnectionAuthorityIgnoresCachedSvcbByDefault();
   void testSelectConnectionAuthorityUsesCachedSvcbEndpoint();
   void testSelectConnectionAuthoritySkipsFailedSvcbEndpoint();
   void testSelectConnectionAuthorityFallsBackWhenSvcbEndpointsFailed();
@@ -213,10 +215,36 @@ void HttpInitiateConnectionCommandTest::
 }
 
 void HttpInitiateConnectionCommandTest::
+    testSelectConnectionAuthorityIgnoresCachedSvcbByDefault()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  auto requestGroup =
+      std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = makeRequest("https://origin.example/file");
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  e.setOption(option.get());
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(makeSvcbRecord());
+  e.cacheHttpsServiceBindingRecords("origin.example", 443, records, 60);
+
+  TestHttpInitiateConnectionCommand command(request, requestGroup, &e);
+  auto authority = command.selectConnectionAuthority(nullptr);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), authority.hostname);
+  CPPUNIT_ASSERT_EQUAL((uint16_t)443, authority.port);
+  CPPUNIT_ASSERT(authority.directOrigin);
+  CPPUNIT_ASSERT(!request->hasHttpsServiceBindingEndpointInfo());
+  CPPUNIT_ASSERT(e.findCachedIPAddress("svc.example", 8443).empty());
+}
+
+void HttpInitiateConnectionCommandTest::
     testSelectConnectionAuthorityUsesCachedSvcbEndpoint()
 {
   auto option = std::make_shared<Option>();
   option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  option->put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto requestGroup =
       std::make_shared<RequestGroup>(GroupId::create(), option);
   auto request = makeRequest("https://origin.example/file");
@@ -250,6 +278,7 @@ void HttpInitiateConnectionCommandTest::
 {
   auto option = std::make_shared<Option>();
   option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  option->put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto requestGroup =
       std::make_shared<RequestGroup>(GroupId::create(), option);
   auto request = makeRequest("https://origin.example/file");
@@ -281,6 +310,7 @@ void HttpInitiateConnectionCommandTest::
 {
   auto option = std::make_shared<Option>();
   option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  option->put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto requestGroup =
       std::make_shared<RequestGroup>(GroupId::create(), option);
   auto request = makeRequest("https://origin.example/file");
@@ -310,6 +340,7 @@ void HttpInitiateConnectionCommandTest::
 {
   auto option = std::make_shared<Option>();
   option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  option->put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto requestGroup =
       std::make_shared<RequestGroup>(GroupId::create(), option);
   auto request = makeRequest("https://origin.example/file");
@@ -367,6 +398,7 @@ void HttpInitiateConnectionCommandTest::
 {
   auto option = std::make_shared<Option>();
   option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
+  option->put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto requestGroup =
       std::make_shared<RequestGroup>(GroupId::create(), option);
   auto request = makeRequest("https://origin.example/file");

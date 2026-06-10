@@ -529,6 +529,26 @@ HTTP Specific Options
 
   Default: ``false``
 
+.. option:: --enable-https-rr [true|false]
+
+  Enable background HTTPS/SVCB DNS resource record discovery for direct HTTPS
+  origins.  When this option is disabled, aria2 does not issue extra HTTPS
+  TYPE65 queries only because asynchronous DNS, HTTP/2, or HTTPS is in use, and
+  it does not consume cached HTTPS/SVCB records to change the direct TCP
+  connect target.
+
+  When enabled, discovery runs in the background and does not block the first
+  A/AAAA connection attempt.  Cached HTTPS/SVCB records can later change the
+  direct TCP connect target/port, add address hints to the connect target DNS
+  cache, and narrow TLS ALPN for that selected endpoint.  Request origin,
+  HTTP ``Host``, TLS SNI, and certificate verification hostname stay based on
+  the original URL origin.  Discovery results do not yet automatically
+  configure ECH or HTTP/3 behavior.
+
+  Unsupported asynchronous-DNS builds reject ``true`` during option parsing.
+
+  Default: ``false``
+
 .. option:: --hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>
 
   Set host mappings for HTTP and HTTPS requests. Entries are comma separated
@@ -1352,15 +1372,13 @@ Advanced Options
   backend can use HTTP/2 when aria2 is built with nghttp2 and
   :option:`--enable-http2=true` is enabled and
   :option:`--enable-http-pipelining=false`; otherwise it uses HTTP/1.1.
-  Background HTTPS/SVCB TYPE65 discovery runs separately from the A/AAAA
-  download-name fallback flow. It can use c-ares for ``cares``, DoT for
-  ``dot``, DoH for ``doh``, and configured discovery resolvers for ``multi``,
-  but ``multi`` HTTPS/SVCB discovery does not yet implement the same
-  secure-first staged fallback used for download hostname A/AAAA lookups.
-  Discovery results are cached for later connection decisions, and a cached
-  direct HTTPS endpoint can change the TCP connect target/port and narrow TLS
-  ALPN. Discovery results do not yet automatically configure ECH or HTTP/3
-  behavior.
+  When :option:`--enable-https-rr=true` is set, background HTTPS/SVCB TYPE65
+  discovery runs separately from the A/AAAA download-name fallback flow. It can
+  use c-ares for ``cares``, DoT for ``dot``, DoH for ``doh``, and staged
+  secure-first discovery resolvers for ``multi``. Discovery results are cached
+  for later connection decisions, and a cached direct HTTPS endpoint can change
+  the TCP connect target/port and narrow TLS ALPN. Discovery results do not yet
+  automatically configure ECH or HTTP/3 behavior.
   Default: ``cares``
 
 .. option:: --async-dns-server=<SERVER>[,...]

@@ -185,6 +185,29 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE), option.get(PREF_ENABLE_HTTP3));
 #endif // !HAVE_HTTP3
+
+  Option httpsRrDefaultOption;
+  parser.parseDefaultValues(httpsRrDefaultOption);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       httpsRrDefaultOption.get(PREF_ENABLE_HTTPS_RR));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTPS_RR->k, A2_V_FALSE));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       option.get(PREF_ENABLE_HTTPS_RR));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_ENABLE_HTTPS_RR->k, A2_V_TRUE));
+#ifdef ENABLE_ASYNC_DNS
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE),
+                       option.get(PREF_ENABLE_HTTPS_RR));
+#else  // !ENABLE_ASYNC_DNS
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       option.get(PREF_ENABLE_HTTPS_RR));
+#endif // !ENABLE_ASYNC_DNS
 }
 
 void OptionHandlerTest::testNumberOptionHandler()
