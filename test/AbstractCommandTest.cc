@@ -42,6 +42,7 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetHttpsServiceBindingEndpointsKeepsConnectTarget);
 #ifdef ENABLE_ASYNC_DNS
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit);
 #ifdef ENABLE_SSL
@@ -86,6 +87,7 @@ public:
   void testGetHttpsServiceBindingEndpointsKeepsConnectTarget();
 #ifdef ENABLE_ASYNC_DNS
   void testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault();
+  void testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns();
   void testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem();
   void testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit();
 #ifdef ENABLE_SSL
@@ -630,8 +632,22 @@ void AbstractCommandTest::
     testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_CARES);
   option.put(PREF_ASYNC_DNS_SERVER, "");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{}, option);
+}
+
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
+  option.put(PREF_ASYNC_DNS_MODE, V_CARES);
+  option.put(PREF_ASYNC_DNS_SERVER, "1.1.1.1");
 
   assertHttpsServiceBindingDiscoveryPhases(
       std::vector<HttpsServiceBindingDiscoveryPhase>{}, option);
@@ -640,6 +656,7 @@ void AbstractCommandTest::
 void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_CARES);
   option.put(PREF_ASYNC_DNS_SERVER, "");
@@ -653,6 +670,7 @@ void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresSyste
 void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_CARES);
   option.put(PREF_ASYNC_DNS_SERVER, "1.1.1.1");
@@ -668,6 +686,7 @@ void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresExpli
 void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesDot()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOT);
   option.put(PREF_ASYNC_DNS_SERVER, "dns.example.org");
@@ -682,6 +701,7 @@ void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesDot()
 void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesDoh()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_DOH);
   option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
@@ -697,6 +717,7 @@ void AbstractCommandTest::
     testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
   option.put(PREF_ASYNC_DNS_SERVER,
@@ -715,6 +736,7 @@ void AbstractCommandTest::
     testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
   option.put(PREF_ASYNC_DNS_SERVER,
@@ -731,6 +753,7 @@ void AbstractCommandTest::
     testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
   option.put(PREF_ASYNC_DNS_SERVER, "udp://1.1.1.1,tcp://1.0.0.1");
@@ -746,6 +769,7 @@ void AbstractCommandTest::
     testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly()
 {
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_ASYNC_DNS_MODE, V_MULTI);
   option.put(PREF_ASYNC_DNS_SERVER, "");

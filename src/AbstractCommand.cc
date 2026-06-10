@@ -950,7 +950,8 @@ std::vector<HttpsServiceBindingDiscoveryPhase>
 createHttpsServiceBindingDiscoveryPhases(const Option* option)
 {
   std::vector<HttpsServiceBindingDiscoveryPhase> phases;
-  if (!option || !option->getAsBool(PREF_ENABLE_HTTPS_RR)) {
+  if (!option || !option->getAsBool(PREF_ASYNC_DNS) ||
+      !option->getAsBool(PREF_ENABLE_HTTPS_RR)) {
     return phases;
   }
   const auto& mode = option->get(PREF_ASYNC_DNS_MODE);
