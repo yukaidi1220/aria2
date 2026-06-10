@@ -919,6 +919,18 @@ bool DownloadEngine::cacheIPAddress(const std::string& hostname,
 void DownloadEngine::markBadIPAddress(const std::string& hostname,
                                       const std::string& ipaddr, uint16_t port)
 {
+  auto family = getNumericAddressFamily(ipaddr);
+  const char* familyName = "unknown";
+  if (family == AF_INET) {
+    familyName = "IPv4";
+  }
+  else if (family == AF_INET6) {
+    familyName = "IPv6";
+  }
+  A2_LOG_NETWORK(fmt("DNS: marking bad address host=%s port=%u ip=%s "
+                     "family=%s",
+                     hostname.c_str(), static_cast<unsigned int>(port),
+                     ipaddr.c_str(), familyName));
   dnsCache_->markBad(hostname, ipaddr, port);
 }
 

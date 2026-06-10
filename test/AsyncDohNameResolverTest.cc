@@ -24,6 +24,7 @@
 #include "Logger.h"
 #include "TestUtil.h"
 #include "a2functional.h"
+#include "prefs.h"
 #include "util.h"
 
 namespace aria2 {
@@ -1317,9 +1318,14 @@ void AsyncDohNameResolverTest::testRetryNextServerOnConnectError()
                            "https://198.51.100.1:443/dns-query via "
                            "198.51.100.1 for A www.example.com") !=
                  std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: DoH endpoint 198.51.100.1 for server "
+                           "https://198.51.100.1:443/dns-query failed: "
+                           "DoH connection failed: connection refused") !=
+                 std::string::npos);
   CPPUNIT_ASSERT(logs.find("DNS: DoH server "
                            "https://198.51.100.1:443/dns-query failed: "
-                           "connection refused") != std::string::npos);
+                           "DoH connection failed: connection refused") !=
+                 std::string::npos);
   CPPUNIT_ASSERT(logs.find("DNS: DoH connecting to "
                            "https://1.1.1.1:443/dns-query via 1.1.1.1 "
                            "for A www.example.com") != std::string::npos);

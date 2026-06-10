@@ -13,7 +13,12 @@
 #include "AsyncDnsServerConfig.h"
 #include "DnsMessage.h"
 #include "EventPoll.h"
+#include "File.h"
+#include "LogFactory.h"
+#include "Logger.h"
+#include "TestUtil.h"
 #include "a2functional.h"
+#include "prefs.h"
 
 namespace aria2 {
 
@@ -438,6 +443,34 @@ public:
   std::vector<int> families;
 };
 
+class ScopedNetworkLog {
+public:
+  explicit ScopedNetworkLog(std::string path) : path_(std::move(path))
+  {
+    File(path_).remove();
+    LogFactory::setLogFile(path_);
+    LogFactory::setLogLevel(V_NETWORK);
+    LogFactory::reconfigure();
+  }
+
+  ~ScopedNetworkLog()
+  {
+    LogFactory::setLogFile("");
+    LogFactory::setLogLevel(Logger::A2_DEBUG);
+    LogFactory::reconfigure();
+  }
+
+  std::string closeAndRead() const
+  {
+    LogFactory::setLogFile("");
+    LogFactory::reconfigure();
+    return readFile(path_);
+  }
+
+private:
+  std::string path_;
+};
+
 AsyncDotTransportFactory makeTransportFactory(FakeDotTransportFactory& factory)
 {
   return [&factory](const AsyncDnsServerConfig& server) {
@@ -809,6 +842,10 @@ void AsyncDotNameResolverTest::testResponseIdMismatchFails()
 
 void AsyncDotNameResolverTest::testRetryNextServerOnConnectError()
 {
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncDotNameResolverTest_testRetryNextServerOnConnectError.log";
+  ScopedNetworkLog log(logPath);
   FakeDotTransportFactory factory;
   AsyncDotNameResolver resolver(AF_INET,
                                 {{"198.51.100.1", 853, "bad.example.org"},
@@ -833,6 +870,24 @@ void AsyncDotNameResolverTest::testRetryNextServerOnConnectError()
   CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
   CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.7"),
                        resolver.getResolvedAddresses()[0]);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: DoT connecting to "
+                           "dot://198.51.100.1:853#bad.example.org via "
+                           "198.51.100.1 for A www.example.com") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: DoT endpoint 198.51.100.1 for server "
+                           "dot://198.51.100.1:853#bad.example.org failed: "
+                           "DoT connection failed: connection refused") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: DoT server "
+                           "dot://198.51.100.1:853#bad.example.org failed: "
+                           "DoT connection failed: connection refused") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: DoT connecting to "
+                           "dot://203.0.113.8:853#dns.example.org via "
+                           "203.0.113.8 for A www.example.com") !=
+                 std::string::npos);
 }
 
 void AsyncDotNameResolverTest::testDomainServerUsesBootstrapAddress()

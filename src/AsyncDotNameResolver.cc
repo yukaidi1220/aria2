@@ -382,11 +382,13 @@ bool AsyncDotNameResolver::startCurrentEndpoint()
 bool AsyncDotNameResolver::failCurrentEndpointOrServer(std::string error)
 {
   const auto& server = servers_[serverIndex_];
-  if (currentEndpointIndex_ + 1 < currentEndpoints_.size()) {
+  if (currentEndpointIndex_ < currentEndpoints_.size()) {
     A2_LOG_NETWORK(fmt("DNS: DoT endpoint %s for server %s failed: %s",
                        formatHost(currentEndpoints_[currentEndpointIndex_])
                            .c_str(),
                        formatDotServer(server).c_str(), error.c_str()));
+  }
+  if (currentEndpointIndex_ + 1 < currentEndpoints_.size()) {
     ++currentEndpointIndex_;
     transport_.reset();
     state_ = DOT_IDLE;

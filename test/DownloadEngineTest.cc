@@ -8,9 +8,14 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "File.h"
+#include "LogFactory.h"
+#include "Logger.h"
 #include "SelectEventPoll.h"
 #include "SocketCore.h"
+#include "TestUtil.h"
 #include "a2functional.h"
+#include "prefs.h"
 
 #ifdef HAVE_LIBNGHTTP2
 #  include "GroupId.h"
@@ -30,6 +35,7 @@ class DownloadEngineTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPopPooledSocketWithPredicate);
   CPPUNIT_TEST(testPopPooledSocketSkipsPredicateMismatch);
   CPPUNIT_TEST(testPopPooledSocketByAddressListWithPredicate);
+  CPPUNIT_TEST(testMarkBadIPAddressLogsAddressFamily);
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testFindActiveHttp2ConnectionHonorsRemoteStreamLimit);
   CPPUNIT_TEST(testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit);
@@ -47,6 +53,7 @@ public:
   void testPopPooledSocketWithPredicate();
   void testPopPooledSocketSkipsPredicateMismatch();
   void testPopPooledSocketByAddressListWithPredicate();
+  void testMarkBadIPAddressLogsAddressFamily();
 #ifdef HAVE_LIBNGHTTP2
   void testFindActiveHttp2ConnectionHonorsRemoteStreamLimit();
   void testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit();
@@ -63,6 +70,34 @@ public:
 CPPUNIT_TEST_SUITE_REGISTRATION(DownloadEngineTest);
 
 namespace {
+
+class ScopedNetworkLog {
+public:
+  explicit ScopedNetworkLog(std::string path) : path_(std::move(path))
+  {
+    File(path_).remove();
+    LogFactory::setLogFile(path_);
+    LogFactory::setLogLevel(V_NETWORK);
+    LogFactory::reconfigure();
+  }
+
+  ~ScopedNetworkLog()
+  {
+    LogFactory::setLogFile("");
+    LogFactory::setLogLevel(Logger::A2_DEBUG);
+    LogFactory::reconfigure();
+  }
+
+  std::string closeAndRead() const
+  {
+    LogFactory::setLogFile("");
+    LogFactory::reconfigure();
+    return readFile(path_);
+  }
+
+private:
+  std::string path_;
+};
 
 std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>
 createSocketPair()
@@ -163,6 +198,30 @@ void DownloadEngineTest::testPopPooledSocketByAddressListWithPredicate()
                                return true;
                              });
   CPPUNIT_ASSERT(pooled == sockets.first);
+}
+
+void DownloadEngineTest::testMarkBadIPAddressLogsAddressFamily()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_DownloadEngineTest_testMarkBadIPAddressLogsAddressFamily.log";
+  ScopedNetworkLog log(logPath);
+  DownloadEngine e(make_unique<SelectEventPoll>());
+
+  e.cacheIPAddress("example.org", "192.0.2.1", 443);
+  e.cacheIPAddress("example.org", "2001:db8::1", 443);
+  e.markBadIPAddress("example.org", "192.0.2.1", 443);
+  e.markBadIPAddress("example.org", "2001:db8::1", 443);
+
+  CPPUNIT_ASSERT_EQUAL(std::string(), e.findCachedIPAddress("example.org", 443));
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: marking bad address host=example.org "
+                           "port=443 ip=192.0.2.1 family=IPv4") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: marking bad address host=example.org "
+                           "port=443 ip=2001:db8::1 family=IPv6") !=
+                 std::string::npos);
 }
 
 #ifdef HAVE_LIBNGHTTP2
