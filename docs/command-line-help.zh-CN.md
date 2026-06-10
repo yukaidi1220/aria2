@@ -19,6 +19,24 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 - `OptionHandlerFactory.cc` 是当前可注册选项的准绳；`usage_text.h` 是 `aria2c --help` 文案；英文 manual 是长说明。三者不一致时，本文会标出差异。
 - 以下表格里的“默认值”优先来自 `OptionHandlerFactory.cc` / manual；没有明确默认值的写“无”或“依构建/平台”。
 
+### 1.1 配置加载和优先级
+
+启动期会先解析命令行里的启动控制选项，再决定是否读取配置文件。源码落点是 `src/option_processing.cc::option_processing()`：
+
+- `--no-conf=true` 优先级最高。命令行显式打开后，不读取任何 `aria2.conf`，也不会尝试自动发现配置文件。
+- 显式 `--conf-path=PATH` 时只读这个路径；相对路径按当前工作目录解析。显式路径不存在会启动失败并打印配置文件不存在。
+- 未显式 `--conf-path` 且未启用 `--no-conf=true` 时，自动发现顺序是当前工作目录 `aria2.conf`，然后程序所在目录 `aria2.conf`，最后用户目录默认配置。用户目录默认值仍来自 `util::getConfigFile()`。
+- `--conf-precedence=command|conf` 控制命令行和配置文件重复定义同一选项时谁赢。默认 `command`，也就是命令行覆盖配置；设为 `conf` 时配置文件覆盖重复的命令行选项。
+- `conf-precedence` 自己的取值先看命令行，再看配置文件，最后看默认值；命令行显式指定时，会从配置层移除同名本地值，避免自己把自己覆盖乱。
+- HTTP/HTTPS/FTP/all proxy 相关环境变量会覆盖配置层的代理选项，然后再按 `conf-precedence` 和命令行合并。这个行为是历史兼容逻辑，不是 DNS 专属逻辑。
+
+启动日志来源：
+
+- `src/Context.cc::logStartupOptions()` 会在日志里打印关键选项最终值和来源，例如 `Option: async-dns=true (source=command)`。
+- 当前记录的是关键网络和下载参数：`no-conf`、`conf-path`、`conf-precedence`、`async-dns`、`async-dns-mode`、`async-dns-server`、`disable-ipv6`、`enable-http2`、`enable-http3`、`enable-https-rr`、`split`、`max-connection-per-server`、`min-split-size`。
+- 来源含义是 `command`、`conf`、`default` 或 `runtime`。`runtime` 表示默认层里的值已经不同于 option handler 的编译期默认值，通常来自程序运行期或嵌入调用写入的 option。
+- 这不是全量 option provenance。要排查网络行为，先看这些关键项；RPC 运行期修改等更细粒度来源日志仍属于后续增强项。
+
 多 URL 和下载项：
 
 - 命令行里连续给出多个 HTTP/FTP 等 URL 时，默认会作为同一个下载项的多个 URI 进入同一个 `RequestGroup`，通常表示同一个文件的多个镜像源，而不是多个独立下载。源码落点是 `src/download_helper.cc::createRequestGroupForUri()`：在未启用 `--force-sequential=true` 时，流式协议 URL 会先被 `splitURI()` 合并成一组，再创建一个 `RequestGroup`。
@@ -148,6 +166,25 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 
 ### 2.3 DoH/DoT / 异步 DNS
 
+解析路径总览：
+
+```text
+URL hostname
+  -> hosts mapping
+  -> aria2 DNS cache / HTTPS RR address hints
+  -> async DNS enabled?
+       no  -> getaddrinfo
+       yes -> async-dns-mode
+               cares: c-ares system DNS or explicit c-ares servers
+               dot:   DoT servers; server hostname needs plain bootstrap
+               doh:   DoH servers; server hostname needs plain bootstrap
+               multi: secure DoT/DoH first, explicit plain fallback, system c-ares fallback
+  -> selected IP / address-family choice
+  -> TCP/TLS connect
+```
+
+这张图只描述直连下载域名解析。代理解析、BT peer、DHT、UDP tracker 有各自入口，但新增的 async resolver/fallback 骨架也会尽量复用同一套 `AsyncNameResolverMan` 阶段语义。`--hosts-mapping=HOST:IP` 命中后会直接写 aria2 DNS cache，不再继续查询 DNS；`--hosts-mapping=IP:HOST` 改的是 HTTP/TLS 逻辑主机，不是 DNS 查询目标。
+
 注册路径：
 
 - `src/OptionHandlerFactory.cc` 在 `ENABLE_ASYNC_DNS` 下注册 `--async-dns`、`--async-dns-mode`、`--async-dns-server`。
@@ -157,6 +194,23 @@ aria2c --hosts-mapping=[2001:db8::1]:origin.example https://[2001:db8::1]/file
 - `src/AsyncNameResolverMan.cc::createResolver()` 创建单后端 resolver；`createResolvers()` 在 `multi` 模式下按阶段展开 resolver slot：主阶段只跑 DoT/DoH，失败后才进入显式 plain DNS，再失败才进入系统 c-ares。
 - `src/AsyncDnsServerConfig.cc` 解析和校验 DoT/DoH server 格式。
 - `src/AsyncDotNameResolver.cc` / `src/AsyncDohNameResolver.cc` 驱动网络状态机并写 `A2_LOG_NETWORK`。
+
+mode/server 对照：
+
+| `--async-dns-mode` | `--async-dns-server` 格式 | 下载域名主解析 | secure server 域名 bootstrap | fallback |
+| --- | --- | --- | --- | --- |
+| `cares` | 空、裸 IP、`IP:PORT`、`[IPv6]:PORT` 等 c-ares 可接受 server | 未配置 server 时用系统 DNS；配置 server 时优先只用配置 server | 不涉及 | 显式 c-ares server 全失败后进入系统 c-ares，再失败由调用方进入 `getaddrinfo` 或报错 |
+| `dot` | `HOST[:PORT][#TLS_HOST]`、`IP[:PORT][#TLS_HOST]`、`[IPv6][:PORT][#TLS_HOST]` | 只用 DoT resolver 解析下载域名 | server 是域名时用 plain c-ares bootstrap；server 是 IP 时不 bootstrap | DoT server 列表全失败后进入系统 c-ares；直连下载域名随后可由调用方 fallback 到 `getaddrinfo`，其它入口按各自调用方处理 |
+| `doh` | `https://HOST[:PORT]/PATH[#TLS_HOST]`、IPv4/IPv6 HTTPS URL | 只用 DoH resolver 解析下载域名 | URL host 是域名时用 plain c-ares bootstrap；URL host 是 IP 时不 bootstrap | DoH server 列表全失败后进入系统 c-ares；直连下载域名随后可由调用方 fallback 到 `getaddrinfo`，其它入口按各自调用方处理 |
+| `multi` | 逗号列表；`dot://...` 是 DoT，`https://...` 是 DoH，`udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP | 有 DoT/DoH 时先并发 secure resolver，任意 secure 成功即可继续；未完成 resolver 后台补 cache | 优先用显式 plain server；没有显式 plain 时用系统 c-ares，仅限 secure server bootstrap | secure 全失败 -> 显式 plain DNS -> 系统 c-ares -> 调用方 `getaddrinfo` 或 `NAME_RESOLVE_ERROR` |
+
+配置语法和阶段边界：
+
+- `dot://223.6.6.6,180.184.1.1` 在 `multi` 中表示第一项是 DoT，第二项是裸 IP/plain UDP；如果两个都要 DoT，必须写 `dot://223.6.6.6,dot://180.184.1.1`。
+- plain DNS server 只接受数值地址。域名形式 DNS server 请写成 DoT 或 DoH secure server，让它经过 bootstrap。
+- 语法错误在启动期或配置校验期失败；服务器不可达属于运行期失败，只影响当前 resolver/server，并继续尝试同列表后续 server 或下一 fallback 阶段。
+- 如果配置里存在 secure server，plain DNS 默认不是下载域名主解析路径。plain 只有两个角色：secure server 域名 bootstrap，或 secure 全失败后的明确 fallback。
+- fallback 必须出现在 network 日志里，典型文本包含 `falling back to explicit plain DNS`、`falling back to system c-ares` 或 `falling back to getaddrinfo`。
 
 命令行到源码的调用链：
 
@@ -348,6 +402,32 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 - `AsyncDotNameResolver.cc` / `AsyncDohNameResolver.cc`：DoT/DoH 连接、失败、解析结果。
 - `AbstractCommand.cc`：hosts mapping、DNS cache hit、解析完成。
 - `HttpRequestCommand.cc` / `HttpInitiateConnectionCommand.cc` / `DownloadEngine.cc`：HTTPS 连接建立、H2 active context 注册与复用。
+
+`network` 级别不是 `debug` 全开。`LogFactory.cc` 会把普通日志阈值保持在 `INFO`，再额外打开 `A2_LOG_NETWORK` 事件；它只改变日志输出，不改变 DNS、TLS、HTTP 或连接调度行为。
+
+排障时重点看这些字段：
+
+| 日志类型 | 关键字段 | 含义 |
+| --- | --- | --- |
+| 启动 option | `Option: name=value (source=...)` | 最终值和来源，来源可能是 `command`、`conf`、`default`、`runtime` |
+| DNS query plan | `host`、`qtype`、`mode`、`phase`、`backend`、`transport`、`server`、`bootstrap`、`fallback_from` | 本次 A/AAAA 查询准备用哪个 resolver、哪个 server、是否处于 fallback 阶段 |
+| DNS 最终选址 | `host`、`port`、`source`、`addr_types`、`selected`、`family`、`candidates` | DNS cache/async/getaddrinfo 得到哪些地址、最终选了哪个 IP |
+| TLS 成功 | `remote`、`sni`、`verify`、`version`、`alpn` | 实际远端 IP:port、SNI、证书校验主机、TLS 版本、ALPN |
+| HTTP response | `Response status`、`remote` | HTTP response network 日志对应的实际远端 IP，便于和 DNS selected/TLS remote 对账 |
+| HTTPS RR | `HTTPS RR`、`phase`、`falling back`、`address hint`、`connect target` | TYPE65 查询、fallback、address hints 和 selected endpoint 是否生效 |
+
+典型样例：
+
+```text
+Option: async-dns-mode=multi (source=command)
+DNS: CUID#7 - query plan host=example.com qtype=AAAA mode=multi phase=primary backend=dot transport=tls server=dot://dns.example bootstrap=explicit-plain-dns fallback_from=none
+DNS: secure DNS failed; falling back to explicit plain DNS for example.com
+DNS: CUID#7 - query plan host=example.com qtype=A mode=multi phase=explicit-plain-fallback backend=cares transport=udp server=1.1.1.1 bootstrap=none fallback_from=secure-dns
+DNS: CUID#7 - selected host=example.com port=443 source=async-dns addr_types=A,AAAA selected=93.184.216.34 family=IPv4 candidates=[93.184.216.34, 2606:2800:220:1:248:1893:25c8:1946]
+TLS: connected remote=93.184.216.34:443 sni=example.com verify=example.com version=TLSv1.3 alpn=h2
+```
+
+`async-dns=false` 时，期望看到 secure DNS 被忽略或没有 async resolver plan；下载域名解析会回到 hosts/cache 后的 `getaddrinfo` 路径。DoH over H2 成功协商时，会出现 `DNS: DoH using HTTP/2`；没有 nghttp2、未启用 `--enable-http2=true`、启用了 HTTP pipelining、TLS ALPN 未选中 `h2` 时，都不应出现这条日志。
 
 ### 2.7 ECH / `--enable-ech` / `--ech-config-base64`
 
@@ -654,7 +734,7 @@ Alt-Svc 源码状态：
 | `--auto-file-renaming [true\|false]` | `true` | 同名文件自动追加 `.1` 到 `.9999`。 |
 | `--auto-save-interval=<SEC>` | `60` | 定期保存 `.aria2` 控制文件。 |
 | `--conditional-get [true\|false]` | `false` | 本地文件较旧时才下载。 |
-| `--conf-path=<PATH>` | 自动发现：当前工作目录 `aria2.conf` -> 程序目录 `aria2.conf` -> 用户默认配置 | 指定配置文件路径；显式写 `--conf-path=aria2.conf` 时按当前工作目录解析相对路径。 |
+| `--conf-path=<PATH>` | 默认行为为自动发现 | 指定配置文件路径；显式写 `--conf-path=aria2.conf` 时按当前工作目录解析相对路径。未显式指定时按当前工作目录 `aria2.conf` -> 程序目录 `aria2.conf` -> 用户默认配置查找。 |
 | `--conf-precedence=<command\|conf>` | `command` | 命令行和配置文件重复设置同一选项时谁优先；默认保持命令行优先，设为 `conf` 时配置文件优先。 |
 | `--no-conf [true\|false]` | `false` | 不读取任何配置文件；仍保留命令行和 API 传入选项。 |
 | `--console-log-level=<LEVEL>` | `notice` | 控制台日志级别：`debug`、`info`、`notice`、`warn`、`error`、`network`。 |
@@ -774,7 +854,26 @@ aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,
 
 `multi` 示例在下载域名解析时会先发起 DoT/DoH secure resolver，任意 secure resolver 成功就用于当前连接，未完成 resolver 后台继续填 DNS cache。显式配置的 plain server 会用于 DoT/DoH 域名 server 的 bootstrap；这个 bootstrap 只走 plain resolver 子集，不递归启动 secure resolver。只有所有 secure resolver 都失败时，下载域名解析才进入显式 plain DNS fallback；显式 plain 也失败或未配置时，再进入系统 c-ares fallback。network 日志会打印从哪个阶段降级到哪个阶段。
 
-### 5.5 双栈 DNS 和连接竞速
+### 5.5 `split` / `-x` / `-k` 和多连接
+
+```console
+aria2c -s 16 -x 16 -k 2M --file-allocation=none https://example.com/big.bin
+aria2c -s 32 -x 32 -k 2M --file-allocation=none https://example.com/big.bin
+```
+
+三者关系：
+
+- `-s, --split=N` 是“这个下载最多拆成多少个分片/连接”的目标值。默认 `16`，但它不是保证值。
+- `-x, --max-connection-per-server=N` 是同一个 URL `protocol + hostname` 的连接上限。当前允许 `1..64`，默认 `1`。同一个 hostname 解析出多个 IPv4/IPv6 地址，也不能按不同 IP 绕过这个上限。
+- `-k, --min-split-size=SIZE` 控制范围是否继续拆分。默认 `2M`；小于 `2*SIZE` 的范围不会继续拆，所以小文件或剩余范围太小的时候，实际连接数会少于 `-s`。
+- 文件服务器必须支持 Range 请求，aria2 才能把同一个文件拆成多个 HTTP range 下载。服务器不支持 Range、文件大小未知、资源太小、已有分片不足、镜像 URI 不够、或 `-x` 太低，都会让实际连接数少于 `-s`。
+- 命令行多个 URL 默认可能是同一下载项的镜像 URI，不一定是多个独立下载项。这个会影响 `RequestGroup`、H2 复用和连接数统计。
+- 双栈 DNS 提供更多候选 IP，不直接增加分片数。长期同时使用 IPv4/IPv6 多条下载流，需要 DNS cache 里已有两族地址、文件可分片、`-s>=2`、`-x>=2`，并且调度器确实创建了后续分片连接。
+- backup connection 是一次建连里的候补 socket，胜出的 socket 接管当前请求；它不是额外长期下载流，也不会绕过 `-x`。
+
+用户常用命令里的 `-s 32 -x 32 --min-split-size=2M` 表示“最多拆 32、同 hostname 最多 32、范围小于 4M 不再拆”。如果文件本身只有几 MB，或者服务端不支持 Range，看不到 32 条连接是正常行为。
+
+### 5.6 双栈 DNS 和连接竞速
 
 ```console
 aria2c --async-dns=true --disable-ipv6=false --console-log-level=network https://example.com/file
@@ -785,11 +884,14 @@ aria2c --async-dns=true --disable-ipv6=false -s 16 -x 16 --console-log-level=net
 如果解析结果同时包含 IPv4 和仅限本地/非公网 scope 的 IPv6（例如 ULA `fc00::/7`、link-local `fe80::/10` 或 site-local `fec0::/10`），主连接会优先 IPv4，避免“IPv4 能出公网、IPv6 只在局域网里有地址”的机器把首连押到 IPv6 黑洞；IPv4 主连接的备份连接也会跳过这类非公网 IPv6。
 真正让同一下载任务长期同时使用 IPv4/IPv6 多条连接，还需要 DNS cache 里已有两族地址、文件可分片、`--split>=2`，并且同一 URL `protocol + hostname` 的 `--max-connection-per-server` 足够大，例如第二条命令里的 `-x 16`。不同 IP 不能绕过这个上限。backup connection 是主/备份竞速，胜者接管 socket，不能等同于长期两条下载流。
 
-### 5.6 网络调试日志
+### 5.7 网络调试日志
 
 ```console
 aria2c --log=- --log-level=network --console-log-level=network https://example.com/file
+aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,dot://dns.example.org --log=- --log-level=network --console-log-level=network https://example.com/file
 ```
+
+调试 DNS/fallback 时，重点搜 `DNS: CUID#`、`query plan`、`falling back`、`selected host=`、`TLS: connected remote=` 和 `Response status:`。如果开启 DoH over H2，还应能搜到 `DNS: DoH using HTTP/2`；如果 `--enable-https-rr=false`，不应出现新的 HTTPS RR/TYPE65 查询。
 
 ## 6. 待补齐/确认
 

@@ -141,6 +141,8 @@
    - 失败 run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27246792087
    - 编译修复已提交为 `f354ff58 Fix DoH server list string construction`，GitHub Actions build 已通过，run id `27247443220`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27247443220
+   - 报告更新已提交为 `0a13f069 Update async DNS progress report`，GitHub Actions build 已通过，run id `27248076745`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27248076745
 
 3. artifact：
    - `0e483039` artifacts：
@@ -163,6 +165,9 @@
       - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27247443220/artifacts/7524663979
       - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27247443220/artifacts/7524650119
       - artifact 过期时间：`2026-09-08T01:42:31Z`。
+   - `0a13f069` artifacts：
+      - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27248076745
+      - artifact 精确下载链接待补。当前 `gh api repos/yukaidi1220/aria2/actions/runs/27248076745/artifacts` 触发 GitHub API rate limit；已确认 run 本身结论为 success，待 API 恢复后补 artifact id 和过期时间。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
