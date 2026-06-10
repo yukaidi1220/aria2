@@ -852,8 +852,10 @@ bool AsyncNameResolverMan::getNextFallbackPhase(ResolverPhase& nextPhase) const
 bool AsyncNameResolverMan::startFallback(DownloadEngine* e, Command* command)
 {
   ResolverPhase nextPhase;
-  if (hostname_.empty() || getStatus() != -1 ||
-      !getNextFallbackPhase(nextPhase)) {
+  if (hostname_.empty() || getStatus() != -1) {
+    return false;
+  }
+  if (!getNextFallbackPhase(nextPhase)) {
     return false;
   }
 

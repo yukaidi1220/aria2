@@ -32,7 +32,7 @@
    - 行为：info 级 `Response received` 由 `CUID#... - Response received:` 改为 `CUID#... - Response received from <ip:port>:`；原 network 级 `HTTP: ... Response status ... remote=...` 继续保留，并复用同一个 remote endpoint 字符串。
    - 目的：用户常看的 `Response received` 日志本身即可关联实际 remote IP，不必再额外找相邻 network 日志。
 
-## 复查补强（当前未提交）
+## 复查补强（上一轮已提交）
 
 复查发现源码行为已补，但部分关键日志和 gate 没被回归测试钉死。本节只补稳定单元测试和可解释报告，不继续扩展新功能。
 
@@ -59,6 +59,29 @@
 5. v4/v6 端到端验收边界。
    - 只读复查结论：现有单测能证明 A/AAAA 并发返回、双栈地址选择、非 global IPv6 backup 避让、地址族失败惩罚和同 hostname 连接数限制；但测试入口默认 `SocketCore::setProtocolFamily(AF_INET)`，不能稳定证明“同一下载真实同时跑 v4/v6 请求”或“公网 IPv6 不通后端到端快速切 v4”。
    - 后续验收建议：需要新增 fake resolver + fake socket/connection factory 注入点，模拟 IPv6 立即失败、IPv4 成功，再断言 family penalty、下一连接目标、hostname 维度连接数和 remote IP 日志；不建议依赖 CI/本机真实 IPv6 环境。
+
+## 继续补强（当前未提交）
+
+本节只处理上一轮复查后仍缺的稳定自动化覆盖，不把依赖真实网络、真实 IPv6 或抓包环境的功能验收伪装成 CI 单测。
+
+1. 全 fake DNS / fallback 链路耗尽测试。
+   - 落点：`test/AsyncNameResolverTest.cc`
+   - 行为：不在 `startFallback()` 的最终 false 路径额外打印“一路耗尽”日志，避免外层轮询重复刷屏；最终进入 `getaddrinfo` fallback 或失败仍由调用方日志记录。
+   - 测试：`testStartAsyncMultiAllFakeDnsExhaustsFallbacks()` 用 mock resolver 跑完 `multi` 的 secure DNS -> explicit plain DNS -> system c-ares DNS 三段全失败，断言两段 fallback 日志、query plan 日志和 `createResolvers()` 调用数停在 3 次，证明没有继续启动第四条未声明 async DNS 路径。
+
+2. `multi` 未声明阶段负断言。
+   - 落点：`test/AsyncNameResolverTest.cc`
+   - 行为：`testStartAsyncMultiSecureOnlySkipsPlainFallback()` 覆盖只有 DoT/DoH、没有 plain server 时，secure DNS 失败后直接进入 system c-ares fallback，日志中不出现 `phase=explicit-plain-fallback`。
+   - 行为：`testStartAsyncMultiPlainOnlySkipsSecureBackends()` 覆盖只有 plain DNS、没有 DoT/DoH 时，primary 阶段 query plan 只记录 UDP/TCP c-ares，日志中不出现 `backend=DoT` 或 `backend=DoH`。
+
+3. DoH endpoint 运行期成败日志测试。
+   - 落点：`test/AsyncDohNameResolverTest.cc`
+   - 行为：`testRetryNextServerOnConnectError()` 在 fake DoH transport 的第一个 server 连接失败、第二个 server 成功路径上抓 network log，断言 `DNS: DoH connecting to ... via ...`、`DNS: DoH server ... failed: connection refused` 和下一 server 连接日志。
+   - 边界：该测试不依赖真实网络，不验证 DoT 同类日志，也不验证抓包级 v4/v6 对账；这些仍归入后续功能验收。
+
+4. v4/v6 混合并发端到端边界复核。
+   - 复核结论：当前稳定单测仍只能覆盖选择、backup delay、非 global IPv6 避让和地址族惩罚等策略层；真正的“同一下载同时跑 IPv4/IPv6 请求”需要给主连接和 backup 连接引入 fake socket/connection factory 或测试可观察入口。
+   - 后续实现建议：不要依赖 CI runner 真实 IPv6；先加最小连接工厂注入，让测试可模拟 IPv6 立即失败、IPv4 backup 成功，再断言 request remote、bad IP、family penalty、hostname 维度连接上限和相关日志。
 
 ## 最新增量（03:40-04:06）
 

@@ -53,6 +53,9 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testStartAsyncMultiLogsQueryPlans);
   CPPUNIT_TEST(testStartAsyncMultiStartsSecureBackendsBeforePlainFallback);
   CPPUNIT_TEST(testStartAsyncMultiFallsBackToExplicitPlainThenSystem);
+  CPPUNIT_TEST(testStartAsyncMultiAllFakeDnsExhaustsFallbacks);
+  CPPUNIT_TEST(testStartAsyncMultiSecureOnlySkipsPlainFallback);
+  CPPUNIT_TEST(testStartAsyncMultiPlainOnlySkipsSecureBackends);
   CPPUNIT_TEST(testValidateConfigAcceptsDotIpServers);
   CPPUNIT_TEST(testValidateConfigAcceptsDotDomainServer);
   CPPUNIT_TEST(testValidateConfigRejectsDotEmptyServerList);
@@ -105,6 +108,9 @@ public:
   void testStartAsyncMultiLogsQueryPlans();
   void testStartAsyncMultiStartsSecureBackendsBeforePlainFallback();
   void testStartAsyncMultiFallsBackToExplicitPlainThenSystem();
+  void testStartAsyncMultiAllFakeDnsExhaustsFallbacks();
+  void testStartAsyncMultiSecureOnlySkipsPlainFallback();
+  void testStartAsyncMultiPlainOnlySkipsSecureBackends();
   void testValidateConfigAcceptsDotIpServers();
   void testValidateConfigAcceptsDotDomainServer();
   void testValidateConfigRejectsDotEmptyServerList();
@@ -745,6 +751,123 @@ void AsyncNameResolverTest::testStartAsyncMultiFallsBackToExplicitPlainThenSyste
   CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
   CPPUNIT_ASSERT_EQUAL((size_t)3, resolverMan.getCreateResolversCalls());
   CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiAllFakeDnsExhaustsFallbacks()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiAllFakeDnsExhaustsFallbacks.log";
+  ScopedNetworkLog log(logPath);
+  MockFallbackAsyncNameResolverMan resolverMan({2, 2, 1});
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("udp://192.0.2.53,tcp://192.0.2.54,"
+                         "dot://dns.example.org,"
+                         "https://dns.example.org/dns-query");
+  resolverMan.setIPv6(false);
+  MockCommand command(103);
+
+  resolverMan.startAsync("fake.example", nullptr, &command);
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT_EQUAL((size_t)2,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT_EQUAL((size_t)2,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)3, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT_EQUAL((size_t)1,
+                       countQueryStatusEntries(resolverMan.getQueryStatus()));
+
+  CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL((size_t)3, resolverMan.getCreateResolversCalls());
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: secure DNS failed; falling back to "
+                           "explicit plain DNS for fake.example") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: explicit plain DNS failed; falling back to "
+                           "system c-ares DNS for fake.example") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("no further async DNS fallback") ==
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("phase=explicit-plain-fallback backend=c-ares "
+                           "transport=udp server=192.0.2.53") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("phase=system-cares-fallback backend=c-ares "
+                           "transport=system-cares server=system") !=
+                 std::string::npos);
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiSecureOnlySkipsPlainFallback()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiSecureOnlySkipsPlainFallback.log";
+  ScopedNetworkLog log(logPath);
+  MockFallbackAsyncNameResolverMan resolverMan({2, 1});
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("dot://dns.example.org,"
+                         "https://dns.example.org/dns-query");
+  resolverMan.setIPv6(false);
+  MockCommand command(104);
+
+  resolverMan.startAsync("secure-only.example", nullptr, &command);
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolverMan.getCreateResolversCalls());
+
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: secure DNS failed; falling back to "
+                           "system c-ares DNS for secure-only.example") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("phase=explicit-plain-fallback") ==
+                 std::string::npos);
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiPlainOnlySkipsSecureBackends()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiPlainOnlySkipsSecureBackends.log";
+  ScopedNetworkLog log(logPath);
+  MockFallbackAsyncNameResolverMan resolverMan({2, 1});
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("udp://192.0.2.53,tcp://192.0.2.54");
+  resolverMan.setIPv6(false);
+  MockCommand command(105);
+
+  resolverMan.startAsync("plain-only.example", nullptr, &command);
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolverMan.getCreateResolversCalls());
+
+  CPPUNIT_ASSERT(resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL(-1, resolverMan.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+  CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+  CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("phase=primary backend=c-ares transport=udp "
+                           "server=192.0.2.53") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("phase=primary backend=c-ares transport=tcp "
+                           "server=192.0.2.54") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: explicit plain DNS failed; falling back to "
+                           "system c-ares DNS for plain-only.example") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("backend=DoT") == std::string::npos);
+  CPPUNIT_ASSERT(logs.find("backend=DoH") == std::string::npos);
 }
 
 void AsyncNameResolverTest::testValidateConfigAcceptsDotIpServers()

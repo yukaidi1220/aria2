@@ -1283,6 +1283,10 @@ void AsyncDohNameResolverTest::testResponseIdMismatchFails()
 
 void AsyncDohNameResolverTest::testRetryNextServerOnConnectError()
 {
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncDohNameResolverTest_testRetryNextServerOnConnectError.log";
+  ScopedNetworkLog log(logPath);
   FakeDohTransportFactory factory;
   AsyncDohNameResolver resolver(AF_INET,
                                 {{"198.51.100.1", 443, "", "/dns-query"},
@@ -1307,6 +1311,18 @@ void AsyncDohNameResolverTest::testRetryNextServerOnConnectError()
   CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_SUCCESS, resolver.getStatus());
   CPPUNIT_ASSERT_EQUAL(std::string("198.51.100.9"),
                        resolver.getResolvedAddresses()[0]);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: DoH connecting to "
+                           "https://198.51.100.1:443/dns-query via "
+                           "198.51.100.1 for A www.example.com") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: DoH server "
+                           "https://198.51.100.1:443/dns-query failed: "
+                           "connection refused") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: DoH connecting to "
+                           "https://1.1.1.1:443/dns-query via 1.1.1.1 "
+                           "for A www.example.com") != std::string::npos);
 }
 
 void AsyncDohNameResolverTest::testDomainServerUsesBootstrapAddress()
