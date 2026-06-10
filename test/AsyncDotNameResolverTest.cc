@@ -594,6 +594,10 @@ void AsyncDotNameResolverTest::testResolveAAAAResponse()
 
 void AsyncDotNameResolverTest::testResolveHttpsServiceBindingResponse()
 {
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncDotNameResolverTest_testResolveHttpsServiceBindingResponse.log";
+  ScopedNetworkLog log(logPath);
   FakeDotTransportFactory factory;
   AsyncDotNameResolver resolver(
       AF_INET, {{"203.0.113.8", 853, "dns.example.org"}},
@@ -619,6 +623,14 @@ void AsyncDotNameResolverTest::testResolveHttpsServiceBindingResponse()
   CPPUNIT_ASSERT_EQUAL((uint32_t)120, record.ttl);
   CPPUNIT_ASSERT_EQUAL((size_t)1, record.alpn.size());
   CPPUNIT_ASSERT_EQUAL(std::string("h2"), record.alpn[0]);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find(
+                     "DNS: DoT HTTPS RR www.example.com returned 1 record(s) "
+                     "qname=_8443._https.www.example.com "
+                     "server=dot://203.0.113.8:853#dns.example.org "
+                     "endpoint=203.0.113.8 transport=tls") !=
+                 std::string::npos);
 }
 
 void AsyncDotNameResolverTest::testNumericServerUsesAddressForHandshake()

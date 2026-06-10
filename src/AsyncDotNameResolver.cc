@@ -101,15 +101,24 @@ std::string formatHost(const std::string& host)
 
 std::string formatDotServer(const AsyncDnsServerConfig& server)
 {
-  auto result = formatHost(server.connectHost);
+  std::string result = "dot://";
+  result += formatHost(server.connectHost);
   result += ":";
   result += util::uitos(server.port);
   if (!server.tlsHost.empty() && server.tlsHost != server.connectHost) {
-    result += " (TLS ";
+    result += "#";
     result += server.tlsHost;
-    result += ")";
   }
   return result;
+}
+
+std::string formatEndpoint(const std::vector<std::string>& endpoints,
+                           size_t index)
+{
+  if (index >= endpoints.size()) {
+    return "-";
+  }
+  return formatHost(endpoints[index]);
 }
 
 class SocketCoreDotTransport : public AsyncDotTransport {
@@ -746,10 +755,15 @@ void AsyncDotNameResolver::finishResponse()
     status_ = STATUS_SUCCESS;
     state_ = DOT_DONE;
     socks_.clear();
-    A2_LOG_NETWORK(fmt("DNS: DoT HTTPS RR %s returned %lu record(s)",
+    const auto& server = servers_[serverIndex_];
+    auto endpoint = formatEndpoint(currentEndpoints_, currentEndpointIndex_);
+    A2_LOG_NETWORK(fmt("DNS: DoT HTTPS RR %s returned %lu record(s) "
+                       "qname=%s server=%s endpoint=%s transport=tls",
                        hostname_.c_str(),
                        static_cast<unsigned long>(
-                           serviceBindingRecords_.size())));
+                           serviceBindingRecords_.size()),
+                       queryName_.c_str(), formatDotServer(server).c_str(),
+                       endpoint.c_str()));
     return;
   }
 

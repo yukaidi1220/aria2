@@ -728,6 +728,10 @@ void AsyncDohNameResolverTest::testResolveAAAAResponse()
 
 void AsyncDohNameResolverTest::testResolveHttpsServiceBindingResponse()
 {
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncDohNameResolverTest_testResolveHttpsServiceBindingResponse.log";
+  ScopedNetworkLog log(logPath);
   FakeDohTransportFactory factory;
   AsyncDohNameResolver resolver(
       AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
@@ -754,6 +758,14 @@ void AsyncDohNameResolverTest::testResolveHttpsServiceBindingResponse()
   CPPUNIT_ASSERT_EQUAL((uint32_t)120, record.ttl);
   CPPUNIT_ASSERT_EQUAL((size_t)1, record.alpn.size());
   CPPUNIT_ASSERT_EQUAL(std::string("h2"), record.alpn[0]);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find(
+                     "DNS: DoH HTTPS RR www.example.com returned 1 record(s) "
+                     "qname=_8443._https.www.example.com "
+                     "server=https://1.1.1.1:443/dns-query "
+                     "endpoint=1.1.1.1 transport=https-h1") !=
+                 std::string::npos);
 }
 
 void AsyncDohNameResolverTest::testRequestPathPreservesQuery()
@@ -932,6 +944,10 @@ void AsyncDohNameResolverTest::testResolveAResponseOverHttp2()
 
 void AsyncDohNameResolverTest::testResolveHttpsServiceBindingResponseOverHttp2()
 {
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncDohNameResolverTest_testResolveHttpsServiceBindingResponseOverHttp2.log";
+  ScopedNetworkLog log(logPath);
   FakeDohTransportFactory factory;
   AsyncDohNameResolver resolver(
       AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
@@ -966,6 +982,14 @@ void AsyncDohNameResolverTest::testResolveHttpsServiceBindingResponseOverHttp2()
   CPPUNIT_ASSERT_EQUAL((size_t)1, resolver.getServiceBindingRecords().size());
   CPPUNIT_ASSERT_EQUAL(std::string("h2"),
                        resolver.getServiceBindingRecords()[0].alpn[0]);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find(
+                     "DNS: DoH HTTPS RR www.example.com returned 1 record(s) "
+                     "qname=www.example.com "
+                     "server=https://1.1.1.1:443/dns-query "
+                     "endpoint=1.1.1.1 transport=https-h2") !=
+                 std::string::npos);
 }
 
 void AsyncDohNameResolverTest::testRetryNextServerOnHttp2RstBeforeHeaders()

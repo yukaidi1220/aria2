@@ -117,16 +117,38 @@ std::string formatHost(const std::string& host)
 
 std::string formatDohServer(const AsyncDohServerConfig& server)
 {
-  auto result = formatHost(server.connectHost);
+  std::string result = "https://";
+  result += formatHost(server.connectHost);
   result += ":";
   result += util::uitos(server.port);
   result += server.path;
   if (!server.tlsHost.empty() && server.tlsHost != server.connectHost) {
-    result += " (TLS ";
+    result += "#";
     result += server.tlsHost;
-    result += ")";
   }
   return result;
+}
+
+std::string formatEndpoint(const std::vector<std::string>& endpoints,
+                           size_t index)
+{
+  if (index >= endpoints.size()) {
+    return "-";
+  }
+  return formatHost(endpoints[index]);
+}
+
+const char* dohProtocolToString(HttpProtocol protocol)
+{
+  switch (protocol) {
+  case HTTP_PROTOCOL_HTTP1:
+    return "https-h1";
+  case HTTP_PROTOCOL_H2:
+    return "https-h2";
+  case HTTP_PROTOCOL_UNKNOWN:
+    return "https-unknown";
+  }
+  return "https-unknown";
 }
 
 std::string createHostHeader(const AsyncDohServerConfig& server)
@@ -1163,10 +1185,17 @@ void AsyncDohNameResolver::finishResponse()
     status_ = STATUS_SUCCESS;
     state_ = DOH_DONE;
     socks_.clear();
-    A2_LOG_NETWORK(fmt("DNS: DoH HTTPS RR %s returned %lu record(s)",
+    const auto& server = servers_[serverIndex_];
+    auto endpoint = formatEndpoint(currentEndpoints_, currentEndpointIndex_);
+    auto protocol =
+        httpProtocolFromSelectedAlpn(transport_->getSelectedAlpnProtocol());
+    A2_LOG_NETWORK(fmt("DNS: DoH HTTPS RR %s returned %lu record(s) "
+                       "qname=%s server=%s endpoint=%s transport=%s",
                        hostname_.c_str(),
                        static_cast<unsigned long>(
-                           serviceBindingRecords_.size())));
+                           serviceBindingRecords_.size()),
+                       queryName_.c_str(), formatDohServer(server).c_str(),
+                       endpoint.c_str(), dohProtocolToString(protocol)));
     return;
   }
 
