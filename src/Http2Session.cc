@@ -103,7 +103,6 @@ struct Http2Session::Impl {
     checkNghttp2Result(nghttp2_session_callbacks_new(&callbacks),
                        "nghttp2_session_callbacks_new");
     nghttp2_session_callbacks_set_send_callback(callbacks, sendCallback);
-    nghttp2_session_callbacks_set_read_callback(callbacks, readCallback);
     nghttp2_session_callbacks_set_on_frame_recv_callback(
         callbacks, onFrameRecvCallback);
     nghttp2_session_callbacks_set_on_header_callback(
