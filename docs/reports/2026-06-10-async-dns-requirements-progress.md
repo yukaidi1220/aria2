@@ -211,6 +211,8 @@
 13. Windows MinGW artifact 编入 HTTP/2/nghttp2。
     - 落点：`Dockerfile.mingw-ci`、`mingw-config`、`.github/workflows/build.yml`
     - 行为：Windows 依赖镜像静态交叉编译 nghttp2 1.64.0；`mingw-config` 显式启用 `--with-libnghttp2` 并传入静态库 CFLAGS/LIBS；Windows CI 在 configure 后检查 `config.h` 含 `HAVE_LIBNGHTTP2`，并在 strip 前用 `strings src/aria2c.exe | grep -aq 'nghttp2/'` 检查最终 exe 确实带 nghttp2/H2 能力。
+    - 修复：Windows 静态 libnghttp2 需要 `-DNGHTTP2_STATICLIB`，否则 MinGW 链接阶段会把 nghttp2 API 声明为 `dllimport` 并报 `_imp__nghttp2_*` 未定义；`mingw-config` 已通过 `LIBNGHTTP2_CFLAGS` 注入该宏。H2 源码编译同时修复了 `Request::supportsPersistentConnection()` 的 const getter 和错误的 session-level nghttp2 read callback 注册。
+    - CI：提交 `92b5cbc8 Define static nghttp2 for MinGW` 的 GitHub Actions build 已通过，run id `27284908231`；页面确认 i686/x86_64 两个 Windows artifact 均已生成，且 workflow guard 已覆盖 `HAVE_LIBNGHTTP2` 和最终 exe `nghttp2/` 版本串。
     - 边界：继续使用 OpenSSL 1.1.1w 维持 XP 基线；H2/DoH over H2 依赖 ALPN，协商不到 `h2` 时回落 HTTP/1.1。H3 仍不编入 Windows XP 基线 artifact，因为当前源码没有 QUIC/H3 下载路径；ECH 在 OpenSSL 1.1.1w 上没有 OpenSSL ECH API，按后端不支持失败。
 
 14. DNS query plan 日志第二阶段。
@@ -429,6 +431,12 @@
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7536172604/zip
       - artifact 过期时间：`2026-09-08T12:45:19Z`。
       - 本机未完成 artifact 功能运行：`gh run download 27277165024 --name aria2-x86_64-w64-mingw32` 返回 `HTTP 401: Requires authentication`，需要有效 GitHub 认证后才能下载 zip。
+   - `92b5cbc8` artifacts：
+      - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27284908231
+      - run 结论：`success`；页面确认 `Status: Success`，`Total duration: 8m 40s`，`Artifacts: 2`。
+      - `aria2-i686-w64-mingw32`：3.75 MB，digest `sha256:d9d74a2475faf3ef4cc8b175802a9e4b25bd51eaa1385a72fb21091188ab24cf`。
+      - `aria2-x86_64-w64-mingw32`：3.74 MB，digest `sha256:93a1caad1eb556fcc8e57d6f33f6671dacd317c8c2b1092b664854d544f7c171`。
+      - artifact 精确 API zip URL 和过期时间待有效 GitHub 认证恢复后补；本轮未执行真实 artifact 功能运行。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
