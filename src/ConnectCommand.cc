@@ -101,8 +101,8 @@ bool ConnectCommand::executeInternal()
         getNumericAddressFamily(backupConnectionInfo_->ipaddr);
     if (!mainSocketError.empty()) {
       getDownloadEngine()->markBadIPAddress(
-          getRequest()->getConnectedHostname(), getRequest()->getConnectedAddr(),
-          getRequest()->getConnectedPort());
+          getCuid(), getRequest()->getConnectedHostname(),
+          getRequest()->getConnectedAddr(), getRequest()->getConnectedPort());
       if (getFileEntry()) {
         getFileEntry()->recordAddressFamilyFailure(
             getRequest()->getConnectedHostname(),

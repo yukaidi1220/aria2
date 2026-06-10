@@ -425,6 +425,8 @@ public:
 
   void markBadIPAddress(const std::string& hostname, const std::string& ipaddr,
                         uint16_t port);
+  void markBadIPAddress(cuid_t cuid, const std::string& hostname,
+                        const std::string& ipaddr, uint16_t port);
 
   void removeCachedIPAddress(const std::string& hostname, uint16_t port);
 

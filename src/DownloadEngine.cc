@@ -919,6 +919,12 @@ bool DownloadEngine::cacheIPAddress(const std::string& hostname,
 void DownloadEngine::markBadIPAddress(const std::string& hostname,
                                       const std::string& ipaddr, uint16_t port)
 {
+  markBadIPAddress(0, hostname, ipaddr, port);
+}
+
+void DownloadEngine::markBadIPAddress(cuid_t cuid, const std::string& hostname,
+                                      const std::string& ipaddr, uint16_t port)
+{
   auto family = getNumericAddressFamily(ipaddr);
   const char* familyName = "unknown";
   if (family == AF_INET) {
@@ -927,10 +933,19 @@ void DownloadEngine::markBadIPAddress(const std::string& hostname,
   else if (family == AF_INET6) {
     familyName = "IPv6";
   }
-  A2_LOG_NETWORK(fmt("DNS: marking bad address host=%s port=%u ip=%s "
-                     "family=%s",
-                     hostname.c_str(), static_cast<unsigned int>(port),
-                     ipaddr.c_str(), familyName));
+  if (cuid > 0) {
+    A2_LOG_NETWORK(fmt("DNS: CUID#%" PRId64
+                       " - marking bad address host=%s port=%u ip=%s "
+                       "family=%s",
+                       cuid, hostname.c_str(), static_cast<unsigned int>(port),
+                       ipaddr.c_str(), familyName));
+  }
+  else {
+    A2_LOG_NETWORK(fmt("DNS: marking bad address host=%s port=%u ip=%s "
+                       "family=%s",
+                       hostname.c_str(), static_cast<unsigned int>(port),
+                       ipaddr.c_str(), familyName));
+  }
   dnsCache_->markBad(hostname, ipaddr, port);
 }
 

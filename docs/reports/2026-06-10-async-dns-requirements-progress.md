@@ -86,9 +86,9 @@
 
 5. 失败 IP / 临时避让地址日志测试。
    - 落点：`src/DownloadEngine.cc`、`test/DownloadEngineTest.cc`
-   - 行为：`DownloadEngine::markBadIPAddress()` 统一打印 network 日志 `DNS: marking bad address host=... port=... ip=... family=...`，覆盖连接失败、TLS handshake fallback 等复用该入口的路径；HTTPS RR endpoint 临时避让仍保留独立 `HTTPS RR: temporarily avoiding failed endpoint ...` 日志。
-   - 测试：`testMarkBadIPAddressLogsAddressFamily()` 不依赖真实网络，断言 IPv4 和 IPv6 地址被标记为 bad 时日志都包含 host、port、ip 和 family。
-   - 边界：该测试只覆盖 bad-address 统一入口；真实 artifact 运行日志、CUID 上下文和抓包级 v4/v6 对账仍需后续功能验收。
+   - 行为：`DownloadEngine::markBadIPAddress()` 统一打印 network 日志 `DNS: marking bad address host=... port=... ip=... family=...`，并新增带 `CUID#...` 的重载；下载连接、backup、TLS handshake retry 和 FTP proxy tunnel 失败路径会把当前 CUID 传进去。HTTPS RR endpoint 临时避让仍保留独立 `HTTPS RR: temporarily avoiding failed endpoint ...` 日志。
+   - 测试：`testMarkBadIPAddressLogsAddressFamily()` 不依赖真实网络，断言 IPv4 和 IPv6 地址被标记为 bad 时日志都包含 host、port、ip 和 family，并覆盖带 CUID 与不带 CUID 的兼容日志格式。
+   - 边界：该测试只覆盖 bad-address 统一入口；真实 artifact 运行日志和抓包级 v4/v6 对账仍需后续功能验收。
 
 6. v4/v6 混合并发端到端边界复核。
    - 复核结论：当前稳定单测仍只能覆盖选择、backup delay、非 global IPv6 避让和地址族惩罚等策略层；真正的“同一下载同时跑 IPv4/IPv6 请求”需要给主连接和 backup 连接引入 fake socket/connection factory 或测试可观察入口。
@@ -398,7 +398,7 @@
 
 ### 日志可观测性（31-35）
 
-部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。后续又补 DoH/DoT endpoint 运行期 connect failure 日志断言，并在 `DownloadEngine::markBadIPAddress()` 统一打印失败 IP/临时避让地址的 host、port、ip、family。尚未完整覆盖真实 artifact 运行日志、HTTPS RR resolver 内部 server 明细、CUID 贯穿 bad-address 入口、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和连接失败路径补细日志与测试。
+部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。后续又补 DoH/DoT endpoint 运行期 connect failure 日志断言，并在 `DownloadEngine::markBadIPAddress()` 统一打印失败 IP/临时避让地址的 host、port、ip、family；下载连接、backup、TLS handshake retry 和 FTP proxy tunnel 失败路径已传入 CUID，并有单元日志断言。尚未完整覆盖真实 artifact 运行日志、HTTPS RR resolver 内部 server 明细、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和真实功能测试里补齐。
 
 复查补充：已补 HTTPS 建连成功日志、`Response received from` 和 `Response status ... remote=` 的格式级回归测试，防止后续把 remote endpoint 从用户可见日志里删掉。
 
@@ -424,8 +424,8 @@
    - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。
    - 已完成第二刀：async DNS query plan 日志代码路径和单元日志断言，记录 CUID、host、qtype、mode、phase、backend、transport、server、bootstrap 和 fallback 来源。
    - 本轮阶段修复：HTTPS 建连成功日志和 `Response received` info 日志本身追加 remote IP，解决普通日志里看不出连接 IP 的测试问题。
-   - 当前继续补强：DoH/DoT endpoint connect failure 日志已有 fake transport 回归断言，失败 IP/临时避让地址已有 `DownloadEngine::markBadIPAddress()` 统一 network 日志和 IPv4/IPv6 单测。
-   - 后续待实现：HTTPS RR resolver 内部 server 明细、bad-address CUID 贯穿、真实 artifact 日志和抓包级 v4/v6 对账断言。
+   - 当前继续补强：DoH/DoT endpoint connect failure 日志已有 fake transport 回归断言，失败 IP/临时避让地址已有 `DownloadEngine::markBadIPAddress()` 统一 network 日志和 IPv4/IPv6/CUID 单测。
+   - 后续待实现：HTTPS RR resolver 内部 server 明细、真实 artifact 日志和抓包级 v4/v6 对账断言。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
    - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。

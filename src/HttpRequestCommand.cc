@@ -152,7 +152,7 @@ bool tryRetryTLSHandshakeWithNextAddress(
 
   const auto& connectedAddr = req->getConnectedAddr();
   const auto connectedPort = req->getConnectedPort();
-  e->markBadIPAddress(req->getConnectedHostname(), connectedAddr,
+  e->markBadIPAddress(cuid, req->getConnectedHostname(), connectedAddr,
                       connectedPort);
   if (e->findCachedIPAddress(req->getConnectedHostname(),
                              connectedPort)

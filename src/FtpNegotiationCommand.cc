@@ -750,7 +750,8 @@ bool FtpNegotiationCommand::sendTunnelRequest()
       std::string error = getSocket()->getSocketError();
       if (!error.empty()) {
         std::shared_ptr<Request> proxyReq = createProxyRequest();
-        getDownloadEngine()->markBadIPAddress(proxyReq->getHost(), proxyAddr_,
+        getDownloadEngine()->markBadIPAddress(getCuid(), proxyReq->getHost(),
+                                              proxyAddr_,
                                               proxyReq->getPort());
         std::string nextProxyAddr = getDownloadEngine()->findCachedIPAddress(
             proxyReq->getHost(), proxyReq->getPort());

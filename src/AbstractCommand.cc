@@ -1261,7 +1261,8 @@ bool AbstractCommand::execute()
         A2_LOG_NETWORK(
             fmt("CUID#%" PRId64 " - Marking IP address %s as bad (timeout)",
                 getCuid(), connectedAddr.c_str()));
-        e_->markBadIPAddress(connectedHostname, connectedAddr, connectedPort);
+        e_->markBadIPAddress(getCuid(), connectedHostname, connectedAddr,
+                             connectedPort);
         if (fileEntry_) {
           fileEntry_->recordAddressFamilyFailure(
               connectedHostname, connectedPort,
@@ -2236,7 +2237,8 @@ bool AbstractCommand::checkIfConnectionEstablished(
   }
 
   // See also InitiateConnectionCommand::executeInternal()
-  e_->markBadIPAddress(connectedHostname, connectedAddr, connectedPort);
+  e_->markBadIPAddress(getCuid(), connectedHostname, connectedAddr,
+                       connectedPort);
   if (fileEntry_) {
     fileEntry_->recordAddressFamilyFailure(
         connectedHostname, connectedPort,

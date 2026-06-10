@@ -124,7 +124,7 @@ bool InitiateConnectionCommand::executeInternal()
     // See also AbstractCommand::checkIfConnectionEstablished
 
     // TODO ipaddr might not be used if pooled socket was found.
-    getDownloadEngine()->markBadIPAddress(hostname, ipaddr, port);
+    getDownloadEngine()->markBadIPAddress(getCuid(), hostname, ipaddr, port);
     if (!getDownloadEngine()->findCachedIPAddress(hostname, port).empty()) {
       A2_LOG_INFO_EX(EX_EXCEPTION_CAUGHT, ex);
       A2_LOG_INFO(

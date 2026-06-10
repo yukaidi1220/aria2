@@ -210,14 +210,15 @@ void DownloadEngineTest::testMarkBadIPAddressLogsAddressFamily()
 
   e.cacheIPAddress("example.org", "192.0.2.1", 443);
   e.cacheIPAddress("example.org", "2001:db8::1", 443);
-  e.markBadIPAddress("example.org", "192.0.2.1", 443);
+  e.markBadIPAddress(42, "example.org", "192.0.2.1", 443);
   e.markBadIPAddress("example.org", "2001:db8::1", 443);
 
   CPPUNIT_ASSERT_EQUAL(std::string(), e.findCachedIPAddress("example.org", 443));
 
   auto logs = log.closeAndRead();
-  CPPUNIT_ASSERT(logs.find("DNS: marking bad address host=example.org "
-                           "port=443 ip=192.0.2.1 family=IPv4") !=
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#42 - marking bad address "
+                           "host=example.org port=443 ip=192.0.2.1 "
+                           "family=IPv4") !=
                  std::string::npos);
   CPPUNIT_ASSERT(logs.find("DNS: marking bad address host=example.org "
                            "port=443 ip=2001:db8::1 family=IPv6") !=
