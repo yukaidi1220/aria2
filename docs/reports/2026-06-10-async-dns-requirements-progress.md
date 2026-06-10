@@ -16,18 +16,18 @@
    - 外审：Volta 只读复审无阻断。
    - CI：GitHub Actions run `27254138777` 已通过。
 
-2. DoH HTTP/2 transport 门控日志测试补强：当前未提交，待外审/CI
+2. DoH HTTP/2 transport 门控日志测试补强：`cf425451 Expose remote endpoint in HTTP logs`
    - 落点：`test/AsyncNameResolverTest.cc`
    - 行为：新增 `testConfigureDohHttp2AffectsLoggedTransport()`，断言 `--enable-http2=true --enable-http-pipelining=false` 时 DoH query plan 记录 `transport=https-h1-or-h2`（无 nghttp2 构建记录 `https-h1`），而 `--enable-http-pipelining=true` 时回落 `transport=https-h1`。
    - 边界：测试显式固定 `resolverMan.setIPv4(true)`、`resolverMan.setIPv6(false)`，避免 CI 主机 IPv4/IPv6 探测结果影响日志断言。
-   - 验证：`git diff --check -- test/AsyncNameResolverTest.cc` 通过；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
+   - 验证：Volta、Euclid 外审无阻断；GitHub Actions run `27255420287` 已通过。
 
-3. HTTPS 建连成功日志补 remote IP：当前未提交，待外审/CI
+3. HTTPS 建连成功日志补 remote IP：`cf425451 Expose remote endpoint in HTTP logs`
    - 落点：`src/HttpRequestCommand.cc`
    - 行为：用户可见的 network 日志 `HTTPS connection to ... established` 追加 `remote=<ip:port>`；IPv6 使用 `[addr]:port` 格式。
    - 目的：抓包看到连接 IP 时，可以直接从 HTTPS 建连成功日志里对上本次 CUID 和 remote endpoint，不再只看 hostname。
 
-4. `Response received` 日志补 remote IP：当前未提交，待外审/CI
+4. `Response received` 日志补 remote IP：`cf425451 Expose remote endpoint in HTTP logs`
    - 落点：`src/HttpConnection.cc`
    - 行为：info 级 `Response received` 由 `CUID#... - Response received:` 改为 `CUID#... - Response received from <ip:port>:`；原 network 级 `HTTP: ... Response status ... remote=...` 继续保留，并复用同一个 remote endpoint 字符串。
    - 目的：用户常看的 `Response received` 日志本身即可关联实际 remote IP，不必再额外找相邻 network 日志。
@@ -185,7 +185,7 @@
    - `4c0af2e3 Log async DNS query plans` 首次 CI 失败后，经外部 review 定位到 `formatDohServerList()` 中 `auto entry = "https://";` 被 C++11 推导成 `const char*`，后续 `+= std::string` 在 MinGW 编译期失败；`f354ff58 Fix DoH server list string construction` 改成显式 `std::string` 后通过 GitHub Actions。
    - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27253605059`。
    - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27254138777`。
-   - 本轮 HTTPS established / Response received remote IP 日志补强和 DoH H2 transport 门控测试已通过 `git diff --check -- src/HttpRequestCommand.cc src/HttpConnection.cc test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；尚待外部 review、提交和 GitHub Actions 编译验证。
+   - HTTPS established / Response received remote IP 日志补强和 DoH H2 transport 门控测试已通过 `git diff --check -- src/HttpRequestCommand.cc src/HttpConnection.cc test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、Volta/Euclid 外审和 GitHub Actions，run id `27255420287`。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -218,6 +218,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27253605059
    - disabled async DNS 配置扩展已提交为 `2c192561 Expand disabled async DNS config coverage`，GitHub Actions build 已通过，run id `27254138777`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27254138777
+   - HTTPS/Response remote IP 日志与 DoH H2 transport 门控测试已提交为 `cf425451 Expose remote endpoint in HTTP logs`，GitHub Actions build 已通过，run id `27255420287`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27255420287
 
 3. artifact：
    - `0e483039` artifacts：
@@ -251,6 +253,10 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526960957/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526944357/zip
       - artifact 过期时间：`2026-09-08T04:54:51Z`。
+   - `cf425451` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7527410601/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7527389521/zip
+      - artifact 过期时间：`2026-09-08T05:30:21Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
