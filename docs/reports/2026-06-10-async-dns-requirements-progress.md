@@ -102,7 +102,7 @@
 8. HTTPS RR c-ares resolver server 明细日志测试。
    - 落点：`src/AsyncServiceBindingResolver.cc`、`test/AsyncServiceBindingResolverTest.cc`
    - 行为：`AsyncServiceBindingResolver` 的 network 日志新增 `server_source=system|configured`、`servers=...` 和 `transport=UDP|TCP`，并在 resolver 初始化时打印系统 DNS 或显式 server 列表来源。
-   - 测试：`testLogsSystemDnsServerSource()`、`testLogsConfiguredDnsServerSource()` 和具备 c-ares TCP 能力时的 `testLogsTcpTransport()` 不依赖真实 DNS 响应，只断言 HTTPS RR c-ares 查询日志能看出 server 来源、server 列表和传输协议。
+   - 测试：`testLogsSystemDnsServerSource()`、`testLogsConfiguredDnsServerSource()`、`testRejectedServerLogsSystemFallback()` 和具备 c-ares TCP 能力时的 `testLogsTcpTransport()` 不依赖真实 DNS 响应，只断言 HTTPS RR c-ares 查询日志能看出 server 来源、server 列表和传输协议；其中 rejected server 测试覆盖域名形式 c-ares server 被拒绝后查询日志回到 `server_source=system servers=system transport=UDP`。
    - 边界：该测试只覆盖 c-ares HTTPS RR resolver 的格式级可观测性；真实 DoT/DoH HTTPS RR 查询、真实网络 resolver 行为和 artifact 日志仍需后续验收。
 
 9. DoT/DoH HTTPS RR 成功日志明细测试。
@@ -340,6 +340,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27274353270
    - c-ares 拒绝配置 server 后的 system fallback 日志回归测试已提交为 `6761fb0e Cover rejected c-ares server query logs`，GitHub Actions build 已通过，run id `27275634793`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27275634793
+   - HTTPS RR c-ares 拒绝配置 server 后的 system fallback 日志回归测试已提交为 `21e816d4 Cover rejected HTTPS RR c-ares server logs`，GitHub Actions build 已通过，run id `27277165024`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27277165024
 
 3. artifact：
    - `0e483039` artifacts：
@@ -415,6 +417,10 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535533884/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535531490/zip
       - artifact 过期时间：`2026-09-08T12:17:37Z`。
+   - `21e816d4` artifacts：
+      - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27277165024
+      - run 结论：`success`。
+      - artifact 精确下载链接待补。当前 `gh auth status` 显示 token invalid，`gh api repos/yukaidi1220/aria2/actions/runs/27277165024/artifacts` 返回 unauthenticated rate limit；已确认 run 本身结论为 success，待认证恢复或 API 限流解除后补 artifact id 和过期时间。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
@@ -492,4 +498,4 @@
 
 5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback，并新增 `--enable-https-rr` 显式 opt-in 门控；下一步补 fake/真实 DNS 验收，确认默认不发 TYPE65、不消费 SVCB cache，开启后按当前 DNS backend 查询并允许 selected endpoint 生效，DoH over H2 日志可断言。H3 继续保持默认关闭和 unsupported 快速拒绝。
 
-6. 验收报告：最新自动化 CI 和 artifact 链接已补；真实 artifact 功能测试结果仍待后续按矩阵执行并追加。
+6. 验收报告：最新自动化 CI 结论已补，已可获取的 artifact 链接已补；`21e816d4` 的 artifact 精确链接仍待 gh 认证恢复或 API 限流解除后追加。真实 artifact 功能测试结果仍待后续按矩阵执行并追加。
