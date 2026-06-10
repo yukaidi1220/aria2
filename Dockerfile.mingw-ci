@@ -25,6 +25,7 @@ RUN curl --fail -L --retry 5 --retry-all-errors -O https://ftp.gnu.org/gnu/gmp/g
     curl --fail -L --retry 5 --retry-all-errors -O https://www.sqlite.org/2026/sqlite-autoconf-3530200.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o zlib-1.3.dfsg+really1.3.2.tar.gz https://deb.debian.org/debian/pool/main/z/zlib/zlib_1.3.dfsg+really1.3.2.orig.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o c-ares-1.34.6.tar.gz https://deb.debian.org/debian/pool/main/c/c-ares/c-ares_1.34.6.orig.tar.gz && \
+    curl --fail -L --retry 5 --retry-all-errors -o nghttp2-1.64.0.tar.gz https://github.com/nghttp2/nghttp2/releases/download/v1.64.0/nghttp2-1.64.0.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o libssh2-1.11.1.tar.gz https://libssh2.org/download/libssh2-1.11.1.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o openssl-1.1.1w.tar.gz https://deb.debian.org/debian/pool/main/o/openssl/openssl_1.1.1w.orig.tar.gz
 
@@ -71,6 +72,26 @@ RUN tar xf zlib-1.3.dfsg+really1.3.2.tar.gz && \
         --libdir=/usr/local/$HOST/lib \
         --includedir=/usr/local/$HOST/include \
         --static && \
+    make -j$(nproc) install
+
+# nghttp2 for HTTP/2 and DoH over H2.  Build lib-only so the Windows artifact
+# gains protocol support without dragging nghttp2 command-line tools along.
+RUN tar xf nghttp2-1.64.0.tar.gz && \
+    cd nghttp2-1.64.0 && \
+    autoreconf -i && \
+    ./configure \
+        --disable-shared --enable-static \
+        --enable-lib-only \
+        --disable-threads \
+        --disable-examples \
+        --without-libxml2 \
+        --without-openssl \
+        --without-jemalloc \
+        --without-zlib \
+        --prefix=/usr/local/$HOST \
+        --host=$HOST \
+        --build=$(dpkg-architecture -qDEB_BUILD_GNU_TYPE) \
+        CFLAGS="$XP_CFLAGS" && \
     make -j$(nproc) install
 
 # c-ares

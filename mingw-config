@@ -52,6 +52,7 @@
 # * expat
 # * sqlite3
 # * zlib
+# * nghttp2
 # * libssh2
 # * cppunit
 
@@ -73,6 +74,7 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --with-libz \
     --with-libgmp \
     --with-libssh2 \
+    --with-libnghttp2 \
     --without-wintls \
     --without-libgcrypt \
     --without-libnettle \
@@ -88,6 +90,8 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     SQLITE3_LIBS="-L$PREFIX/lib -lsqlite3" \
     LIBCARES_CFLAGS="-I$PREFIX/include" \
     LIBCARES_LIBS="-L$PREFIX/lib -lcares -lws2_32" \
+    LIBNGHTTP2_CFLAGS="-I$PREFIX/include" \
+    LIBNGHTTP2_LIBS="-L$PREFIX/lib -lnghttp2" \
     LIBSSH2_CFLAGS="-I$PREFIX/include" \
     LIBSSH2_LIBS="-L$PREFIX/lib -lssh2 -lssl -lcrypto -lz -lws2_32 -lgdi32 -lcrypt32 -ladvapi32" \
     PKG_CONFIG="/usr/bin/pkg-config" \

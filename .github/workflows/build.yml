@@ -128,7 +128,12 @@ jobs:
             python3 ci/embed-ca-bundle.py /etc/ssl/certs/ca-certificates.crt src/EmbeddedCABundle.h &&
             autoreconf -i &&
             ./mingw-config &&
+            grep -q '^#define HAVE_LIBNGHTTP2 1' config.h &&
             make -j\$(nproc) &&
+            if ! strings src/aria2c.exe | grep -aq 'nghttp2/'; then
+              echo 'aria2c.exe was expected to include nghttp2 HTTP/2 support.'
+              exit 1
+            fi &&
             if ${{ matrix.host }}-objdump -p src/aria2c.exe | grep -Eiq 'ConvertInterfaceIndexToLuid|ConvertInterfaceLuidToNameA|if_indextoname|if_nametoindex'; then
               echo 'aria2c.exe imports a Windows Vista+ IPHLPAPI symbol unavailable on Windows XP.'
               ${{ matrix.host }}-objdump -p src/aria2c.exe | grep -Ei 'ConvertInterfaceIndexToLuid|ConvertInterfaceLuidToNameA|if_indextoname|if_nametoindex'
