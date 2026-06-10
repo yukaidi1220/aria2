@@ -131,7 +131,7 @@ public:
     supportsPersistentConnection_ = f;
   }
 
-  bool supportsPersistentConnection() { return supportsPersistentConnection_; }
+  bool supportsPersistentConnection() const { return supportsPersistentConnection_; }
 
   bool isKeepAliveEnabled() const
   {
