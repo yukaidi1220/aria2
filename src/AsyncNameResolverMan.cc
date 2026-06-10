@@ -34,6 +34,7 @@
 /* copyright --> */
 #include "AsyncNameResolverMan.h"
 
+#include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
@@ -56,7 +57,6 @@
 #include "fmt.h"
 #include "LogFactory.h"
 #include "Option.h"
-#include "PlainBootstrapResolver.h"
 #include "SocketCore.h"
 #include "prefs.h"
 #include "a2functional.h"
@@ -171,6 +171,248 @@ void appendCsv(std::string& dst, const std::string& value)
   }
   dst += value;
 }
+
+class WindowedAsyncResolver : public AsyncResolver {
+public:
+  typedef std::function<std::shared_ptr<AsyncResolver>()> ResolverFactory;
+
+private:
+  int family_;
+  std::string label_;
+  std::vector<ResolverFactory> factories_;
+  size_t activeLimit_;
+  size_t nextFactory_;
+  STATUS status_;
+  std::string hostname_;
+  std::string error_;
+  std::vector<std::shared_ptr<AsyncResolver>> activeResolvers_;
+  std::vector<std::string> resolvedAddresses_;
+  std::vector<AsyncResolverSocketEntry> socks_;
+  size_t startOffset_;
+
+  bool socketBelongsTo(const AsyncResolver* resolver, sock_t fd) const
+  {
+    if (fd == badSocket()) {
+      return false;
+    }
+    const auto& entries = resolver->getsock();
+    return std::find_if(std::begin(entries), std::end(entries),
+                        [fd](const AsyncResolverSocketEntry& entry) {
+                          return entry.fd == fd;
+                        }) != std::end(entries);
+  }
+
+  void updateSockets()
+  {
+    socks_.clear();
+    for (const auto& resolver : activeResolvers_) {
+      const auto& entries = resolver->getsock();
+      socks_.insert(std::end(socks_), std::begin(entries), std::end(entries));
+    }
+  }
+
+  void succeedFrom(const std::shared_ptr<AsyncResolver>& resolver)
+  {
+    resolvedAddresses_.clear();
+    for (const auto& activeResolver : activeResolvers_) {
+      if (activeResolver->getStatus() == STATUS_SUCCESS) {
+        const auto& addrs = activeResolver->getResolvedAddresses();
+        resolvedAddresses_.insert(std::end(resolvedAddresses_),
+                                  std::begin(addrs), std::end(addrs));
+      }
+    }
+    if (resolvedAddresses_.empty()) {
+      const auto& addrs = resolver->getResolvedAddresses();
+      resolvedAddresses_.insert(std::end(resolvedAddresses_), std::begin(addrs),
+                                std::end(addrs));
+    }
+    status_ = STATUS_SUCCESS;
+    activeResolvers_.clear();
+    socks_.clear();
+  }
+
+  bool startOneResolver()
+  {
+    while (nextFactory_ < factories_.size()) {
+      auto index = nextFactory_++;
+      auto candidateIndex =
+          factories_.empty() ? index : (startOffset_ + index) % factories_.size();
+      try {
+        auto resolver = factories_[index]();
+        if (!resolver) {
+          error_ = fmt("%s resolver factory returned null", label_.c_str());
+          continue;
+        }
+        resolver->resolve(hostname_);
+        A2_LOG_NETWORK(fmt("DNS: %s window activated candidate=%lu "
+                           "active_limit=%lu",
+                           label_.c_str(),
+                           static_cast<unsigned long>(candidateIndex + 1),
+                           static_cast<unsigned long>(activeLimit_)));
+        activeResolvers_.push_back(std::move(resolver));
+        return true;
+      }
+      catch (Exception& e) {
+        error_ = e.what();
+        A2_LOG_NETWORK(fmt("DNS: %s window candidate=%lu failed: %s",
+                           label_.c_str(),
+                           static_cast<unsigned long>(candidateIndex + 1),
+                           error_.c_str()));
+      }
+    }
+    return false;
+  }
+
+  void pump()
+  {
+    if (status_ != STATUS_QUERYING) {
+      return;
+    }
+
+    bool changed = true;
+    while (changed && status_ == STATUS_QUERYING) {
+      changed = false;
+      for (auto i = activeResolvers_.begin(); i != activeResolvers_.end();) {
+        const auto status = (*i)->getStatus();
+        if (status == STATUS_SUCCESS) {
+          succeedFrom(*i);
+          return;
+        }
+        if (status == STATUS_ERROR) {
+          error_ = (*i)->getError();
+          A2_LOG_NETWORK(fmt("DNS: %s window resolver failed: %s",
+                             label_.c_str(), error_.c_str()));
+          i = activeResolvers_.erase(i);
+          changed = true;
+          continue;
+        }
+        ++i;
+      }
+      while (status_ == STATUS_QUERYING &&
+             activeResolvers_.size() < activeLimit_ &&
+             nextFactory_ < factories_.size()) {
+        changed = startOneResolver() || changed;
+      }
+    }
+
+    if (status_ == STATUS_QUERYING && activeResolvers_.empty() &&
+        nextFactory_ >= factories_.size()) {
+      status_ = STATUS_ERROR;
+      if (error_.empty()) {
+        error_ = fmt("%s window exhausted", label_.c_str());
+      }
+    }
+    updateSockets();
+  }
+
+public:
+  WindowedAsyncResolver(int family, std::string label,
+                        std::vector<ResolverFactory> factories,
+                        size_t activeLimit, size_t startOffset)
+      : family_(family),
+        label_(std::move(label)),
+        factories_(std::move(factories)),
+        activeLimit_(std::max<size_t>(1, activeLimit)),
+        nextFactory_(0),
+        status_(STATUS_READY),
+        startOffset_(0)
+  {
+    if (!factories_.empty()) {
+      startOffset %= factories_.size();
+      startOffset_ = startOffset;
+      std::rotate(std::begin(factories_), std::begin(factories_) + startOffset,
+                  std::end(factories_));
+    }
+  }
+
+  virtual void resolve(const std::string& name) CXX11_OVERRIDE
+  {
+    hostname_ = name;
+    error_.clear();
+    resolvedAddresses_.clear();
+    activeResolvers_.clear();
+    socks_.clear();
+    nextFactory_ = 0;
+    status_ = factories_.empty() ? STATUS_ERROR : STATUS_QUERYING;
+    if (status_ == STATUS_ERROR) {
+      error_ = fmt("%s window has no resolver candidates", label_.c_str());
+      return;
+    }
+    pump();
+  }
+
+  virtual const std::vector<std::string>&
+  getResolvedAddresses() const CXX11_OVERRIDE
+  {
+    return resolvedAddresses_;
+  }
+
+  virtual const std::string& getError() const CXX11_OVERRIDE { return error_; }
+
+  virtual STATUS getStatus() const CXX11_OVERRIDE { return status_; }
+
+  virtual bool usable() const CXX11_OVERRIDE
+  {
+    if (status_ != STATUS_QUERYING) {
+      return false;
+    }
+    for (const auto& resolver : activeResolvers_) {
+      if (resolver->usable()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  virtual int getFamily() const CXX11_OVERRIDE { return family_; }
+
+  virtual const std::vector<AsyncResolverSocketEntry>&
+  getsock() const CXX11_OVERRIDE
+  {
+    return socks_;
+  }
+
+  virtual void process(sock_t readfd, sock_t writefd) CXX11_OVERRIDE
+  {
+    if (status_ != STATUS_QUERYING) {
+      return;
+    }
+    if (readfd == badSocket() && writefd == badSocket()) {
+      for (const auto& resolver : activeResolvers_) {
+        resolver->process(readfd, writefd);
+      }
+      pump();
+      return;
+    }
+    for (const auto& resolver : activeResolvers_) {
+      auto childReadfd =
+          socketBelongsTo(resolver.get(), readfd) ? readfd : badSocket();
+      auto childWritefd =
+          socketBelongsTo(resolver.get(), writefd) ? writefd : badSocket();
+      if (childReadfd == badSocket() && childWritefd == badSocket()) {
+        continue;
+      }
+      resolver->process(childReadfd, childWritefd);
+    }
+    pump();
+  }
+
+  virtual void processTimeout() CXX11_OVERRIDE
+  {
+    if (status_ != STATUS_QUERYING) {
+      return;
+    }
+    for (const auto& resolver : activeResolvers_) {
+      resolver->processTimeout();
+    }
+    pump();
+  }
+
+  virtual const std::string& getHostname() const CXX11_OVERRIDE
+  {
+    return hostname_;
+  }
+};
 
 std::string formatDnsServerEndpoint(const std::string& host, uint16_t port)
 {
@@ -354,27 +596,101 @@ AsyncDnsMultiServerConfig parseAsyncDnsMultiServerConfigList(
   return config;
 }
 
+std::vector<std::string> splitServerCsv(const std::string& servers)
+{
+  std::vector<std::string> entries;
+  if (servers.empty()) {
+    return entries;
+  }
+  util::split(std::begin(servers), std::end(servers),
+              std::back_inserter(entries), ',', true, true);
+  return entries;
+}
+
+size_t getMultiWindowLimit(bool ipv4, bool ipv6)
+{
+  return ipv4 && ipv6 ? 1 : 2;
+}
+
+size_t getMultiFamilyStartOffset(int family, bool ipv4, bool ipv6)
+{
+  return ipv4 && ipv6 && family == AF_INET ? 1 : 0;
+}
+
+std::vector<WindowedAsyncResolver::ResolverFactory> createPlainResolverFactories(
+    int family, const AsyncDnsMultiServerConfig& config)
+{
+  auto udpServers = splitServerCsv(config.udpServers);
+  auto tcpServers = splitServerCsv(config.tcpServers);
+  std::vector<WindowedAsyncResolver::ResolverFactory> factories;
+  auto maxLen = std::max(udpServers.size(), tcpServers.size());
+  for (size_t i = 0; i < maxLen; ++i) {
+    if (i < udpServers.size()) {
+      auto server = udpServers[i];
+      factories.push_back([family, server]() -> std::shared_ptr<AsyncResolver> {
+        return std::make_shared<AsyncNameResolver>(family, server);
+      });
+    }
+    if (i < tcpServers.size()) {
+      auto server = tcpServers[i];
+      factories.push_back([family, server]() -> std::shared_ptr<AsyncResolver> {
+        return std::make_shared<AsyncNameResolver>(family, server, true);
+      });
+    }
+  }
+  return factories;
+}
+
+std::vector<WindowedAsyncResolver::ResolverFactory> createSecureResolverFactories(
+    int family, const AsyncDnsMultiServerConfig& config, bool dohHttp2,
+    std::function<std::unique_ptr<AsyncResolver>(int)> bootstrapFactory,
+    int bootstrapFamily)
+{
+  std::vector<WindowedAsyncResolver::ResolverFactory> factories;
+  auto maxLen = std::max(config.dotServers.size(), config.dohServers.size());
+  for (size_t i = 0; i < maxLen; ++i) {
+    if (i < config.dotServers.size()) {
+      auto server = config.dotServers[i];
+      factories.push_back([family, server, bootstrapFactory,
+                           bootstrapFamily]() -> std::shared_ptr<AsyncResolver> {
+        std::vector<AsyncDnsServerConfig> servers;
+        servers.push_back(server);
+        return std::make_shared<AsyncDotNameResolver>(
+            family, std::move(servers), AsyncDotTransportFactory(),
+            bootstrapFactory, bootstrapFamily);
+      });
+    }
+    if (i < config.dohServers.size()) {
+      auto server = config.dohServers[i];
+      factories.push_back(
+          [family, server, dohHttp2, bootstrapFactory,
+           bootstrapFamily]() -> std::shared_ptr<AsyncResolver> {
+            std::vector<AsyncDohServerConfig> servers;
+            servers.push_back(server);
+            return std::make_shared<AsyncDohNameResolver>(
+                family, std::move(servers), AsyncDohTransportFactory(),
+                dohHttp2, bootstrapFactory, bootstrapFamily);
+          });
+    }
+  }
+  return factories;
+}
+
 std::function<std::unique_ptr<AsyncResolver>(int)>
 createPlainBootstrapResolverFactory(const AsyncDnsMultiServerConfig& config)
 {
-  const auto udpServers = config.udpServers;
-  const auto tcpServers = config.tcpServers;
-  if (udpServers.empty() && tcpServers.empty()) {
+  if (config.udpServers.empty() && config.tcpServers.empty()) {
     return [](int family) {
       return make_unique<AsyncNameResolver>(family, std::string());
     };
   }
-  return [udpServers, tcpServers](int family) {
-    std::vector<std::shared_ptr<AsyncResolver>> resolvers;
-    if (!udpServers.empty()) {
-      resolvers.push_back(
-          std::make_shared<AsyncNameResolver>(family, udpServers));
+  return [config](int family) -> std::unique_ptr<AsyncResolver> {
+    auto factories = createPlainResolverFactories(family, config);
+    if (factories.empty()) {
+      return make_unique<AsyncNameResolver>(family, std::string());
     }
-    if (!tcpServers.empty()) {
-      resolvers.push_back(
-          std::make_shared<AsyncNameResolver>(family, tcpServers, true));
-    }
-    return make_unique<PlainBootstrapResolver>(family, std::move(resolvers));
+    return make_unique<WindowedAsyncResolver>(
+        family, "multi plain bootstrap", std::move(factories), 1, 0);
   };
 }
 #endif // ENABLE_SSL
@@ -481,33 +797,28 @@ AsyncNameResolverMan::createResolvers(int family) const
         !config.udpServers.empty() || !config.tcpServers.empty();
     const auto hasSecure =
         !config.dotServers.empty() || !config.dohServers.empty();
+    const auto windowLimit = getMultiWindowLimit(ipv4_, ipv6_);
+    const auto startOffset = getMultiFamilyStartOffset(family, ipv4_, ipv6_);
 
     if (resolverPhase_ == RESOLVER_PHASE_PRIMARY && hasSecure) {
       auto plainBootstrapResolverFactory =
           createPlainBootstrapResolverFactory(config);
-      if (!config.dotServers.empty()) {
-        resolvers.push_back(std::make_shared<AsyncDotNameResolver>(
-            family, std::move(config.dotServers), AsyncDotTransportFactory(),
-            plainBootstrapResolverFactory, getBootstrapFamily(ipv4_, ipv6_)));
-      }
-      if (!config.dohServers.empty()) {
-        resolvers.push_back(std::make_shared<AsyncDohNameResolver>(
-            family, std::move(config.dohServers), AsyncDohTransportFactory(),
-            dohHttp2_, plainBootstrapResolverFactory,
-            getBootstrapFamily(ipv4_, ipv6_)));
-      }
+      auto factories = createSecureResolverFactories(
+          family, config, dohHttp2_, plainBootstrapResolverFactory,
+          getBootstrapFamily(ipv4_, ipv6_));
+      resolvers.push_back(std::make_shared<WindowedAsyncResolver>(
+          family, "multi secure DNS", std::move(factories), windowLimit,
+          startOffset));
       return resolvers;
     }
 
     if ((resolverPhase_ == RESOLVER_PHASE_PRIMARY && !hasSecure) ||
         resolverPhase_ == RESOLVER_PHASE_EXPLICIT_PLAIN_FALLBACK) {
-      if (!config.udpServers.empty()) {
-        resolvers.push_back(
-            std::make_shared<AsyncNameResolver>(family, config.udpServers));
-      }
-      if (!config.tcpServers.empty()) {
-        resolvers.push_back(std::make_shared<AsyncNameResolver>(
-            family, config.tcpServers, true));
+      auto factories = createPlainResolverFactories(family, config);
+      if (!factories.empty()) {
+        resolvers.push_back(std::make_shared<WindowedAsyncResolver>(
+            family, "multi plain DNS", std::move(factories), windowLimit,
+            startOffset));
       }
       if (!resolvers.empty()) {
         return resolvers;

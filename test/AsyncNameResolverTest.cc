@@ -2,7 +2,6 @@
 #ifdef ENABLE_SSL
 #  include "AsyncDohNameResolver.h"
 #  include "AsyncDotNameResolver.h"
-#  include "PlainBootstrapResolver.h"
 #endif // ENABLE_SSL
 #include "AsyncNameResolverMan.h"
 
@@ -57,6 +56,9 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testConfigureDohHttp2AffectsLoggedTransport);
   CPPUNIT_TEST(testStartAsyncMultiLogsQueryPlans);
   CPPUNIT_TEST(testStartAsyncMultiStartsSecureBackendsBeforePlainFallback);
+  CPPUNIT_TEST(testStartAsyncMultiLimitsSecureWindowForSingleStack);
+  CPPUNIT_TEST(testStartAsyncMultiLimitsSecureWindowForDualStack);
+  CPPUNIT_TEST(testStartAsyncMultiLimitsPlainWindowForDualStack);
   CPPUNIT_TEST(testStartAsyncMultiFallsBackToExplicitPlainThenSystem);
   CPPUNIT_TEST(testStartAsyncMultiAllFakeDnsExhaustsFallbacks);
   CPPUNIT_TEST(testStartAsyncMultiSecureOnlySkipsPlainFallback);
@@ -117,6 +119,9 @@ public:
   void testConfigureDohHttp2AffectsLoggedTransport();
   void testStartAsyncMultiLogsQueryPlans();
   void testStartAsyncMultiStartsSecureBackendsBeforePlainFallback();
+  void testStartAsyncMultiLimitsSecureWindowForSingleStack();
+  void testStartAsyncMultiLimitsSecureWindowForDualStack();
+  void testStartAsyncMultiLimitsPlainWindowForDualStack();
   void testStartAsyncMultiFallsBackToExplicitPlainThenSystem();
   void testStartAsyncMultiAllFakeDnsExhaustsFallbacks();
   void testStartAsyncMultiSecureOnlySkipsPlainFallback();
@@ -316,6 +321,17 @@ size_t countQueryStatusEntries(const std::string& status)
   while ((pos = status.find(", ", pos)) != std::string::npos) {
     ++count;
     pos += 2;
+  }
+  return count;
+}
+
+size_t countSubstring(const std::string& haystack, const std::string& needle)
+{
+  size_t count = 0;
+  std::string::size_type pos = 0;
+  while ((pos = haystack.find(needle, pos)) != std::string::npos) {
+    ++count;
+    pos += needle.size();
   }
   return count;
 }
@@ -786,15 +802,101 @@ void AsyncNameResolverTest::testStartAsyncMultiStartsSecureBackendsBeforePlainFa
   MockCommand command(1);
 
   auto resolvers = resolverMan.createResolvers(AF_INET);
-  CPPUNIT_ASSERT_EQUAL((size_t)2, resolvers.size());
-  CPPUNIT_ASSERT(dynamic_cast<AsyncDotNameResolver*>(resolvers[0].get()));
-  CPPUNIT_ASSERT(dynamic_cast<AsyncDohNameResolver*>(resolvers[1].get()));
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolvers.size());
+  CPPUNIT_ASSERT_EQUAL(AF_INET, resolvers[0]->getFamily());
 
   resolverMan.startAsync("example.org", nullptr, &command);
 
   auto status = resolverMan.getQueryStatus();
+  CPPUNIT_ASSERT_EQUAL((size_t)1, countQueryStatusEntries(status));
+  CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiLimitsSecureWindowForSingleStack()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiLimitsSecureWindowForSingleStack.log";
+  ScopedNetworkLog log(logPath);
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("dot://192.0.2.1,https://192.0.2.2/dns-query,"
+                         "dot://192.0.2.3,https://192.0.2.4/dns-query");
+  resolverMan.setIPv6(false);
+  MockCommand command(106);
+
+  resolverMan.startAsync("single-stack.example", nullptr, &command);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)2,
+      countSubstring(logs, "DNS: multi secure DNS window activated"));
+  CPPUNIT_ASSERT(logs.find("multi secure DNS window activated candidate=1 "
+                           "active_limit=2") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("multi secure DNS window activated candidate=2 "
+                           "active_limit=2") != std::string::npos);
+  auto status = resolverMan.getQueryStatus();
+  CPPUNIT_ASSERT_EQUAL((size_t)1, countQueryStatusEntries(status));
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiLimitsSecureWindowForDualStack()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiLimitsSecureWindowForDualStack.log";
+  ScopedNetworkLog log(logPath);
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("dot://192.0.2.1,https://192.0.2.2/dns-query,"
+                         "dot://192.0.2.3,https://192.0.2.4/dns-query");
+  MockCommand command(107);
+
+  resolverMan.startAsync("dual-stack.example", nullptr, &command);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)2,
+      countSubstring(logs, "DNS: multi secure DNS window activated"));
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)2,
+      countSubstring(logs, "multi secure DNS window activated candidate="));
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)1,
+      countSubstring(logs, "multi secure DNS window activated candidate=1 "
+                           "active_limit=1"));
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)1,
+      countSubstring(logs, "multi secure DNS window activated candidate=2 "
+                           "active_limit=1"));
+  auto status = resolverMan.getQueryStatus();
   CPPUNIT_ASSERT_EQUAL((size_t)2, countQueryStatusEntries(status));
   CPPUNIT_ASSERT(status.find("A=") != std::string::npos);
+  CPPUNIT_ASSERT(status.find("AAAA=") != std::string::npos);
+}
+
+void AsyncNameResolverTest::testStartAsyncMultiLimitsPlainWindowForDualStack()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testStartAsyncMultiLimitsPlainWindowForDualStack.log";
+  ScopedNetworkLog log(logPath);
+  AsyncNameResolverMan resolverMan;
+  resolverMan.setResolverMode(AsyncNameResolverMan::RESOLVER_MULTI);
+  resolverMan.setServers("udp://192.0.2.53,udp://192.0.2.54,"
+                         "udp://192.0.2.55,udp://192.0.2.56");
+  MockCommand command(108);
+
+  resolverMan.startAsync("plain-window.example", nullptr, &command);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)2,
+      countSubstring(logs, "DNS: multi plain DNS window activated"));
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)2,
+      countSubstring(logs, "active_limit=1"));
+  auto status = resolverMan.getQueryStatus();
+  CPPUNIT_ASSERT_EQUAL((size_t)2, countQueryStatusEntries(status));
 }
 
 void AsyncNameResolverTest::testStartAsyncMultiFallsBackToExplicitPlainThenSystem()
@@ -1075,13 +1177,25 @@ void AsyncNameResolverTest::testConfigureRejectsDotEmptyServerList()
 
 void AsyncNameResolverTest::testPlainBootstrapFactoryUsesConfiguredPlainServers()
 {
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testPlainBootstrapFactoryUsesConfiguredPlainServers.log";
+  ScopedNetworkLog log(logPath);
   auto config =
       parseAsyncDnsMultiServerConfigList("udp://1.1.1.1,tcp://1.0.0.1");
   auto factory = createPlainBootstrapResolverFactory(config);
 
   auto resolver = factory(AF_INET);
+  resolver->resolve("dns.example.org");
 
-  CPPUNIT_ASSERT(dynamic_cast<PlainBootstrapResolver*>(resolver.get()));
+  CPPUNIT_ASSERT_EQUAL(AF_INET, resolver->getFamily());
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT_EQUAL(
+      (size_t)1,
+      countSubstring(logs, "DNS: multi plain bootstrap window activated"));
+  CPPUNIT_ASSERT(logs.find("multi plain bootstrap window activated "
+                           "candidate=1 active_limit=1") !=
+                 std::string::npos);
 }
 
 void AsyncNameResolverTest::
