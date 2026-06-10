@@ -119,7 +119,8 @@
    - 双栈 backup 避让第一阶段切片已通过 `git diff --check -- src/InitiateConnectionCommand.cc test/InitiateConnectionCommandTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；GitHub Actions run `27243094090` 已通过。
    - HTTPS RR 默认关闭切片已通过 `git diff --check`、外部 review 和 GitHub Actions；本机仍缺少 C++ 构建工具，编译验证依赖 CI。
    - `max-connection-per-server` protocol+host 切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27245665096`。
-   - DNS query plan 日志第二阶段切片已通过 `git diff --check -- src/AsyncNameResolverMan.cc src/AsyncNameResolverMan.h test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；新增单元日志断言；本机仍缺少 C++ 构建工具，提交前需外部 review，提交后依赖 GitHub Actions 编译验证。
+   - DNS query plan 日志第二阶段切片已通过 `git diff --check -- src/AsyncNameResolverMan.cc src/AsyncNameResolverMan.h test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；新增单元日志断言；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
+   - `4c0af2e3 Log async DNS query plans` 首次 CI 失败后，经外部 review 定位到 `formatDohServerList()` 中 `auto entry = "https://";` 被 C++11 推导成 `const char*`，后续 `+= std::string` 在 MinGW 编译期失败；`f354ff58 Fix DoH server list string construction` 改成显式 `std::string` 后通过 GitHub Actions。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -136,6 +137,10 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27244533609
    - `max-connection-per-server` protocol+host 切片已提交为 `8e0b8866 Key connection limit by URL server`，GitHub Actions build 已通过，run id `27245665096`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27245665096
+   - DNS query plan 日志第二阶段已提交为 `4c0af2e3 Log async DNS query plans`，首次 GitHub Actions build 失败，run id `27246792087`。
+   - 失败 run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27246792087
+   - 编译修复已提交为 `f354ff58 Fix DoH server list string construction`，GitHub Actions build 已通过，run id `27247443220`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27247443220
 
 3. artifact：
    - `0e483039` artifacts：
@@ -154,6 +159,16 @@
       - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27245665096/artifacts/7524007978
       - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27245665096/artifacts/7523998481
       - artifact 过期时间：`2026-09-08T00:52:21Z`。
+   - `f354ff58` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27247443220/artifacts/7524663979
+      - `aria2-i686-w64-mingw32`：https://github.com/yukaidi1220/aria2/actions/runs/27247443220/artifacts/7524650119
+      - artifact 过期时间：`2026-09-08T01:42:31Z`。
+
+4. 外部评审：
+   - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
+   - H2/H3/HTTPS RR 评审结论：H2 active/idle reuse 只能按当前实现口径说明为同 `RequestGroup` 内条件可用；DoH over H2 只在 `--enable-http2=true` 且 `--enable-http-pipelining=false`、ALPN 选中 h2 时发生；H3 仍是能力门，不能宣称完整 H3 下载。
+   - 双栈评审结论：现有 `FileEntry` family penalty、`selectIPAddress()` 和 backup 连接已经能作为第一阶段基础，下一步应优先补“已缓存双栈地址时的混合并发”和 bad family 避让测试，不要重写调度器。
+   - 中文帮助文档评审结论：`docs/command-line-help.zh-CN.md` 已覆盖新增网络选项和示例，但还需要补解析路径图、DNS mode/server 对照表、配置加载合并顺序、`split/-x/-k` 关系、`network` 日志语义，以及“HTTP/3 目前只是能力门”的醒目边界说明。
 
 ## 47 条需求状态
 
