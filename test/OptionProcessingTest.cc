@@ -9,6 +9,7 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "array_fun.h"
 #include "BufferedFile.h"
 #include "File.h"
 #include "Option.h"
@@ -23,6 +24,9 @@ extern error_code::Value option_processing(Option& option, bool standalone,
                                            std::vector<std::string>& uris,
                                            int argc, char** argv,
                                            const KeyVals& options);
+std::vector<std::string> createDefaultConfigFileCandidates(
+    const std::string& currentDir, const std::string& programDir,
+    const std::string& userConfigFile);
 
 namespace {
 
@@ -66,7 +70,11 @@ private:
 
 class OptionProcessingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(OptionProcessingTest);
+  CPPUNIT_TEST(testCreateDefaultConfigFileCandidates);
   CPPUNIT_TEST(testLoadsAria2ConfFromCurrentDirByDefault);
+#ifndef __MINGW32__
+  CPPUNIT_TEST(testLoadsAria2ConfFromProgramDirByDefault);
+#endif // !__MINGW32__
   CPPUNIT_TEST(testRelativeConfPathResolvedFromCurrentDir);
   CPPUNIT_TEST(testNoConfSkipsCurrentDirAria2Conf);
   CPPUNIT_TEST(testCommandLineOverridesConfByDefault);
@@ -78,7 +86,11 @@ public:
   void setUp() {}
   void tearDown() {}
 
+  void testCreateDefaultConfigFileCandidates();
   void testLoadsAria2ConfFromCurrentDirByDefault();
+#ifndef __MINGW32__
+  void testLoadsAria2ConfFromProgramDirByDefault();
+#endif // !__MINGW32__
   void testRelativeConfPathResolvedFromCurrentDir();
   void testNoConfSkipsCurrentDirAria2Conf();
   void testCommandLineOverridesConfByDefault();
@@ -87,6 +99,23 @@ public:
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(OptionProcessingTest);
+
+void OptionProcessingTest::testCreateDefaultConfigFileCandidates()
+{
+  auto candidates = createDefaultConfigFileCandidates(
+      "/tmp/current", "/tmp/program", "/tmp/user/aria2.conf");
+
+  CPPUNIT_ASSERT_EQUAL((size_t)3, candidates.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("/tmp/current/aria2.conf"), candidates[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("/tmp/program/aria2.conf"), candidates[1]);
+  CPPUNIT_ASSERT_EQUAL(std::string("/tmp/user/aria2.conf"), candidates[2]);
+
+  candidates = createDefaultConfigFileCandidates(
+      "/tmp/current", "/tmp/current", "/tmp/current/aria2.conf");
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, candidates.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("/tmp/current/aria2.conf"), candidates[0]);
+}
 
 void OptionProcessingTest::testLoadsAria2ConfFromCurrentDirByDefault()
 {
@@ -106,6 +135,37 @@ void OptionProcessingTest::testLoadsAria2ConfFromCurrentDirByDefault()
   CPPUNIT_ASSERT_EQUAL(confPath, option.get(PREF_CONF_PATH));
   File(confPath).remove();
 }
+
+#ifndef __MINGW32__
+void OptionProcessingTest::testLoadsAria2ConfFromProgramDirByDefault()
+{
+  auto currentDir =
+      testFile("aria2_OptionProcessingTest_empty_current_dir");
+  auto programDir =
+      testFile("aria2_OptionProcessingTest_program_dir");
+  auto currentConfPath = util::applyDir(currentDir, "aria2.conf");
+  auto confPath = util::applyDir(programDir, "aria2.conf");
+  File(currentConfPath).remove();
+  File(confPath).remove();
+  writeFile(confPath, "split=4\n");
+  ScopedCurrentDir cwd(currentDir);
+
+  auto programPath = util::applyDir(programDir, "fake-aria2");
+  std::vector<char> arg0(programPath.begin(), programPath.end());
+  arg0.push_back('\0');
+  char* argv[] = {arg0.data()};
+  Option option;
+  std::vector<std::string> uris;
+
+  auto rv =
+      option_processing(option, false, uris, arraySize(argv), argv, KeyVals{});
+
+  CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
+  CPPUNIT_ASSERT_EQUAL(std::string("4"), option.get(PREF_SPLIT));
+  CPPUNIT_ASSERT_EQUAL(confPath, option.get(PREF_CONF_PATH));
+  File(confPath).remove();
+}
+#endif // !__MINGW32__
 
 void OptionProcessingTest::testRelativeConfPathResolvedFromCurrentDir()
 {

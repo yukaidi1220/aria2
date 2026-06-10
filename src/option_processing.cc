@@ -34,6 +34,7 @@
 /* copyright --> */
 #include "common.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>
@@ -72,6 +73,27 @@ extern void showUsage(const std::string& keyword,
                       const std::shared_ptr<OptionParser>& oparser,
                       const Console& out);
 
+std::vector<std::string> createDefaultConfigFileCandidates(
+    const std::string& currentDir, const std::string& programDir,
+    const std::string& userConfigFile)
+{
+  std::vector<std::string> candidates;
+  auto appendUnique = [&candidates](const std::string& value) {
+    if (!value.empty() &&
+        std::find(candidates.begin(), candidates.end(), value) ==
+            candidates.end()) {
+      candidates.push_back(value);
+    }
+  };
+
+  appendUnique(util::applyDir(currentDir, "aria2.conf"));
+  if (!programDir.empty()) {
+    appendUnique(util::applyDir(programDir, "aria2.conf"));
+  }
+  appendUnique(userConfigFile);
+  return candidates;
+}
+
 namespace {
 void overrideWithEnv(Option& op,
                      const std::shared_ptr<OptionParser>& optionParser,
@@ -88,14 +110,6 @@ void overrideWithEnv(Option& op,
           envName.c_str());
       global::cerr()->printf("\n%s\n", e.stackTrace().c_str());
     }
-  }
-}
-
-void appendUnique(std::vector<std::string>& values, const std::string& value)
-{
-  if (!value.empty() &&
-      std::find(values.begin(), values.end(), value) == values.end()) {
-    values.push_back(value);
   }
 }
 
@@ -138,14 +152,8 @@ std::string getProgramDir(int argc, char** argv)
 
 std::vector<std::string> getDefaultConfigFileCandidates(int argc, char** argv)
 {
-  std::vector<std::string> candidates;
-  appendUnique(candidates, util::applyDir(File::getCurrentDir(), "aria2.conf"));
-  auto programDir = getProgramDir(argc, argv);
-  if (!programDir.empty()) {
-    appendUnique(candidates, util::applyDir(programDir, "aria2.conf"));
-  }
-  appendUnique(candidates, util::getConfigFile());
-  return candidates;
+  return createDefaultConfigFileCandidates(
+      File::getCurrentDir(), getProgramDir(argc, argv), util::getConfigFile());
 }
 
 std::string selectConfigFile(bool explicitConfPath,
