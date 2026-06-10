@@ -4,6 +4,7 @@
 
 #  include "Http2ResponseCommand.h"
 
+#  include <chrono>
 #  include <memory>
 #  include <string>
 #  include <utility>
@@ -12,6 +13,7 @@
 #  include <nghttp2/nghttp2.h>
 
 #  include "AuthConfigFactory.h"
+#  include "Command.h"
 #  include "DlAbortEx.h"
 #  include "DownloadContext.h"
 #  include "DownloadEngine.h"
@@ -36,19 +38,24 @@ namespace aria2 {
 
 class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2ResponseCommandTest);
+  CPPUNIT_TEST(testResponseCommandStartsActive);
+  CPPUNIT_TEST(testRefreshZeroRunsSkippedInactiveCommands);
   CPPUNIT_TEST(testWaitsForHeaders);
   CPPUNIT_TEST(testWaitsForSelectedStreamHeaders);
   CPPUNIT_TEST(testCanSkipConnectionAccounting);
   CPPUNIT_TEST(testZeroLengthResponseCompletes);
   CPPUNIT_TEST(testResponseKeepsSinglePipelinedRequest);
   CPPUNIT_TEST(testBodyDownloadCommandCreationDoesNotThrow);
+  CPPUNIT_TEST(testBodyDownloadCommandStartsActive);
   CPPUNIT_TEST(testDownloadCommandCompletesKnownLengthBody);
   CPPUNIT_TEST(testDownloadCommandWaitsForEndStreamAfterBody);
+  CPPUNIT_TEST(testDownloadCommandSchedulesAfterBodyProgress);
   CPPUNIT_TEST(testDownloadCommandCompletesBodyAcrossSegments);
   CPPUNIT_TEST(testDownloadCommandWaitsForEndStreamAcrossSegments);
   CPPUNIT_TEST(testDownloadCommandAbortsBodyLongerThanFile);
   CPPUNIT_TEST(testDownloadCommandAbortsClosedBeforeComplete);
   CPPUNIT_TEST(testSkipBodyRedirectsAfterEndStream);
+  CPPUNIT_TEST(testSkipBodySchedulesAfterBodyProgress);
   CPPUNIT_TEST(testSkipHeadRedirectsWithContentLength);
   CPPUNIT_TEST(testSkipBodyAborts404AfterEndStream);
   CPPUNIT_TEST(testSkipBodyAbortsBodyLongerThanContentLength);
@@ -61,19 +68,24 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE_END();
 
 public:
+  void testResponseCommandStartsActive();
+  void testRefreshZeroRunsSkippedInactiveCommands();
   void testWaitsForHeaders();
   void testWaitsForSelectedStreamHeaders();
   void testCanSkipConnectionAccounting();
   void testZeroLengthResponseCompletes();
   void testResponseKeepsSinglePipelinedRequest();
   void testBodyDownloadCommandCreationDoesNotThrow();
+  void testBodyDownloadCommandStartsActive();
   void testDownloadCommandCompletesKnownLengthBody();
   void testDownloadCommandWaitsForEndStreamAfterBody();
+  void testDownloadCommandSchedulesAfterBodyProgress();
   void testDownloadCommandCompletesBodyAcrossSegments();
   void testDownloadCommandWaitsForEndStreamAcrossSegments();
   void testDownloadCommandAbortsBodyLongerThanFile();
   void testDownloadCommandAbortsClosedBeforeComplete();
   void testSkipBodyRedirectsAfterEndStream();
+  void testSkipBodySchedulesAfterBodyProgress();
   void testSkipHeadRedirectsWithContentLength();
   void testSkipBodyAborts404AfterEndStream();
   void testSkipBodyAbortsBodyLongerThanContentLength();
@@ -109,6 +121,7 @@ public:
   }
 
   using Http2ResponseCommand::executeInternal;
+  using Http2ResponseCommand::createHttpDownloadCommand;
 
   bool requeued() const { return requeued_; }
   bool retried() const { return retried_; }
@@ -149,6 +162,51 @@ public:
 
 protected:
   void requeueSelf() CXX11_OVERRIDE { requeued_ = true; }
+};
+
+class CountingRequeueCommand : public Command {
+private:
+  DownloadEngine* e_;
+  int* count_;
+  int finishCount_;
+
+public:
+  CountingRequeueCommand(cuid_t cuid, DownloadEngine* e, int* count,
+                         int finishCount)
+      : Command(cuid), e_(e), count_(count), finishCount_(finishCount)
+  {
+  }
+
+  bool execute() CXX11_OVERRIDE
+  {
+    ++*count_;
+    if (*count_ >= finishCount_) {
+      return true;
+    }
+    e_->addCommand(std::unique_ptr<Command>(this));
+    return false;
+  }
+};
+
+class RefreshZeroCommand : public Command {
+private:
+  DownloadEngine* e_;
+  int* count_;
+
+public:
+  RefreshZeroCommand(cuid_t cuid, DownloadEngine* e, int* count)
+      : Command(cuid), e_(e), count_(count)
+  {
+    setStatusActive();
+  }
+
+  bool execute() CXX11_OVERRIDE
+  {
+    ++*count_;
+    e_->setNoWait(true);
+    e_->setRefreshInterval(std::chrono::milliseconds(0));
+    return true;
+  }
 };
 
 std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>
@@ -346,6 +404,41 @@ Http2HeaderBlock createHeaders(int statusCode, int64_t contentLength = -1)
 
 } // namespace
 
+void Http2ResponseCommandTest::testResponseCommandStartsActive()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+
+  CPPUNIT_ASSERT(command->statusMatch(Command::STATUS_ACTIVE));
+}
+
+void Http2ResponseCommandTest::testRefreshZeroRunsSkippedInactiveCommands()
+{
+  auto option = CommandFixture::makeOption(true, 1_m);
+  DownloadEngine engine(make_unique<SelectEventPoll>());
+  engine.setOption(option.get());
+  engine.setRequestGroupMan(make_unique<RequestGroupMan>(
+      std::vector<std::shared_ptr<RequestGroup>>{}, 1, option.get()));
+
+  int warmupCount = 0;
+  engine.addCommand(make_unique<CountingRequeueCommand>(1, &engine,
+                                                        &warmupCount, 2));
+  CPPUNIT_ASSERT_EQUAL(1, engine.run(true));
+  CPPUNIT_ASSERT_EQUAL(1, warmupCount);
+
+  int inactiveCount = 0;
+  int activeCount = 0;
+  engine.setNoWait(true);
+  engine.addCommand(make_unique<CountingRequeueCommand>(2, &engine,
+                                                        &inactiveCount, 1));
+  engine.addCommand(make_unique<RefreshZeroCommand>(3, &engine, &activeCount));
+
+  CPPUNIT_ASSERT_EQUAL(0, engine.run(true));
+  CPPUNIT_ASSERT_EQUAL(2, warmupCount);
+  CPPUNIT_ASSERT_EQUAL(1, activeCount);
+  CPPUNIT_ASSERT_EQUAL(1, inactiveCount);
+}
+
 void Http2ResponseCommandTest::testWaitsForHeaders()
 {
   CommandFixture fixture;
@@ -424,6 +517,17 @@ void Http2ResponseCommandTest::testBodyDownloadCommandCreationDoesNotThrow()
   CPPUNIT_ASSERT(command->executeInternal());
 }
 
+void Http2ResponseCommandTest::testBodyDownloadCommandStartsActive()
+{
+  CommandFixture fixture(4, false, true);
+  auto httpResponse = fixture.receiveResponseHeaders(createHeaders(200, 4));
+  auto command = fixture.makeCommand();
+  auto downloadCommand = command->createHttpDownloadCommand(
+      std::move(httpResponse), std::unique_ptr<StreamFilter>{});
+
+  CPPUNIT_ASSERT(downloadCommand->statusMatch(Command::STATUS_ACTIVE));
+}
+
 void Http2ResponseCommandTest::testDownloadCommandCompletesKnownLengthBody()
 {
   CommandFixture fixture(4, false, true);
@@ -451,6 +555,21 @@ void Http2ResponseCommandTest::testDownloadCommandWaitsForEndStreamAfterBody()
 
   CPPUNIT_ASSERT(command->execute());
   CPPUNIT_ASSERT(fixture.requestGroup->downloadFinished());
+}
+
+void Http2ResponseCommandTest::testDownloadCommandSchedulesAfterBodyProgress()
+{
+  CommandFixture fixture(4, false, true);
+  auto httpResponse = fixture.receiveResponseHeaders(createHeaders(200, 4));
+  auto command = fixture.makeDownloadCommand(std::move(httpResponse));
+  command->setStatus(Command::STATUS_INACTIVE);
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+  CPPUNIT_ASSERT(command->statusMatch(Command::STATUS_ACTIVE));
+  CPPUNIT_ASSERT(!fixture.requestGroup->downloadFinished());
 }
 
 void Http2ResponseCommandTest::testDownloadCommandCompletesBodyAcrossSegments()
@@ -520,6 +639,27 @@ void Http2ResponseCommandTest::testSkipBodyRedirectsAfterEndStream()
 
   CPPUNIT_ASSERT(command->executeInternal());
   CPPUNIT_ASSERT_EQUAL(std::string("https://origin.example/next"),
+                       fixture.request->getCurrentUri());
+}
+
+void Http2ResponseCommandTest::testSkipBodySchedulesAfterBodyProgress()
+{
+  CommandFixture fixture;
+  auto command = fixture.makeCommand();
+  auto headers = createHeaders(302, 4);
+  headers.emplace_back("location", "https://origin.example/next");
+  fixture.submitResponseHeaders(std::move(headers));
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->requeued());
+
+  command->setStatus(Command::STATUS_INACTIVE);
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "body");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(!command->executeInternal());
+  CPPUNIT_ASSERT(command->statusMatch(Command::STATUS_ACTIVE));
+  CPPUNIT_ASSERT_EQUAL(std::string("https://origin.example/file.bin"),
                        fixture.request->getCurrentUri());
 }
 

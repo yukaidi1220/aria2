@@ -49,12 +49,20 @@
 #  include "SocketCore.h"
 #  include "StreamFilter.h"
 
+#  include <chrono>
 #  include <utility>
 
 namespace aria2 {
 
 namespace {
 const size_t SKIP_BODY_CHUNK_SIZE = 16_k;
+
+void scheduleHttp2Now(Command* command, DownloadEngine* e)
+{
+  command->setStatus(Command::STATUS_ONESHOT_REALTIME);
+  e->setNoWait(true);
+  e->setRefreshInterval(std::chrono::milliseconds(0));
+}
 } // namespace
 
 Http2ResponseCommand::Http2ResponseCommand(
@@ -75,6 +83,9 @@ Http2ResponseCommand::Http2ResponseCommand(
       expectedSkipBodyLengthKnown_(false),
       incNumConnection_(incNumConnection)
 {
+  setStatus(Command::STATUS_ONESHOT_REALTIME);
+  e->setNoWait(true);
+  e->setRefreshInterval(std::chrono::milliseconds(0));
 }
 
 Http2ResponseCommand::~Http2ResponseCommand() = default;
@@ -85,7 +96,10 @@ bool Http2ResponseCommand::executeInternal()
     return drainSkippedResponseBody();
   }
 
-  exchange_->pump();
+  const bool progressed = exchange_->pump();
+  if (progressed) {
+    scheduleHttp2Now(this, getDownloadEngine());
+  }
 
   auto state = exchange_->getState(streamId_);
   if (!state.headersComplete) {
@@ -115,18 +129,24 @@ bool Http2ResponseCommand::executeInternal()
   httpResponse->setCuid(getCuid());
   httpResponse->setHttpRequest(std::move(httpRequest_));
   getRequest()->setPipeliningHint(false);
-  return processHttpResponse(std::move(httpResponse));
+  auto processed = processHttpResponse(std::move(httpResponse));
+  if (processed) {
+    getDownloadEngine()->setNoWait(true);
+  }
+  return processed;
 }
 
 std::unique_ptr<Command> Http2ResponseCommand::createHttpDownloadCommand(
     std::unique_ptr<HttpResponse> httpResponse,
     std::unique_ptr<StreamFilter> streamFilter)
 {
-  return make_unique<Http2DownloadCommand>(
+  auto command = make_unique<Http2DownloadCommand>(
       getCuid(), getRequest(), getFileEntry(), getRequestGroup(), exchange_,
       streamId_, std::move(httpResponse), std::move(streamFilter),
       getDownloadEngine(), getSocket(), incNumConnection_,
       connectionContext_);
+  command->setStatus(Command::STATUS_ONESHOT_REALTIME);
+  return std::move(command);
 }
 
 bool Http2ResponseCommand::skipResponseBody(
@@ -162,11 +182,17 @@ void Http2ResponseCommand::poolConnection()
   poolIdleConnection();
 }
 
-void Http2ResponseCommand::requeueSelf() { addCommandSelf(); }
+void Http2ResponseCommand::requeueSelf()
+{
+  addCommandSelf();
+}
 
 bool Http2ResponseCommand::drainSkippedResponseBody()
 {
-  exchange_->pump();
+  const bool progressed = exchange_->pump();
+  if (progressed) {
+    scheduleHttp2Now(this, getDownloadEngine());
+  }
 
   auto state = exchange_->getState(streamId_);
   if (state.errorCode != 0) {
@@ -205,6 +231,11 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
     disableReadCheckSocket();
     disableWriteCheckSocket();
     getDownloadEngine()->setNoWait(true);
+  }
+  auto stateAfterPump = exchange_->getState(streamId_);
+  if (stateAfterPump.bodyLength > 0 || stateAfterPump.streamClosed ||
+      stateAfterPump.errorCode != 0) {
+    scheduleHttp2Now(this, getDownloadEngine());
   }
   requeueSelf();
   return false;

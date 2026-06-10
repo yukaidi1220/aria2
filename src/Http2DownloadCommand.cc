@@ -36,6 +36,7 @@
 
 #ifdef HAVE_LIBNGHTTP2
 
+#  include <chrono>
 #  include <utility>
 
 #  include "DlAbortEx.h"
@@ -61,6 +62,13 @@ namespace aria2 {
 
 namespace {
 const size_t BODY_CHUNK_SIZE = 16_k;
+
+void scheduleHttp2Now(Command* command, DownloadEngine* e)
+{
+  command->setStatus(Command::STATUS_ONESHOT_REALTIME);
+  e->setNoWait(true);
+  e->setRefreshInterval(std::chrono::milliseconds(0));
+}
 } // namespace
 
 Http2DownloadCommand::Http2DownloadCommand(
@@ -114,7 +122,10 @@ bool Http2DownloadCommand::executeInternal()
     return false;
   }
 
-  exchange_->pump();
+  const bool progressed = exchange_->pump();
+  if (progressed) {
+    scheduleHttp2Now(this, getDownloadEngine());
+  }
 
   auto state = exchange_->getState(streamId_);
   if (state.errorCode != 0) {
@@ -202,6 +213,11 @@ bool Http2DownloadCommand::executeInternal()
     disableWriteCheckSocket();
     getDownloadEngine()->setNoWait(true);
   }
+  state = exchange_->getState(streamId_);
+  if (!pendingBody_.empty() || state.bodyLength > 0 || state.streamClosed ||
+      state.errorCode != 0) {
+    scheduleHttp2Now(this, getDownloadEngine());
+  }
   requeueSelf();
   return false;
 }
@@ -262,7 +278,10 @@ bool Http2DownloadCommand::prepareForNextSegment()
   return false;
 }
 
-void Http2DownloadCommand::requeueSelf() { addCommandSelf(); }
+void Http2DownloadCommand::requeueSelf()
+{
+  addCommandSelf();
+}
 
 } // namespace aria2
 
