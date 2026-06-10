@@ -94,6 +94,11 @@
    - 复核结论：当前稳定单测仍只能覆盖选择、backup delay、非 global IPv6 避让和地址族惩罚等策略层；真正的“同一下载同时跑 IPv4/IPv6 请求”需要给主连接和 backup 连接引入 fake socket/connection factory 或测试可观察入口。
    - 后续实现建议：不要依赖 CI runner 真实 IPv6；先加最小连接工厂注入，让测试可模拟 IPv6 立即失败、IPv4 backup 成功，再断言 request remote、bad IP、family penalty、hostname 维度连接上限和相关日志。
 
+7. v4/v6 混合并发 request 策略入口测试。
+   - 落点：`test/AbstractCommandTest.cc`
+   - 行为：新增 `testSelectIPAddressUsesBothFamiliesForConcurrentRequests()`，在同一 `FileEntry`、同一 `https://example.org`、`max-connection-per-server=2` 下创建两个 in-flight request，断言第一个 request 选择 IPv4、第二个 request 选择 IPv6，并且第三个同 hostname request 被 `max-connection-per-server` 限制挡住。
+   - 边界：该测试证明已缓存双栈地址时的并发 request family 轮换和 hostname 维度连接上限；仍不是真实 `SegmentMan` split、socket 或抓包级端到端下载验收。
+
 ## 最新增量（03:40-04:06）
 
 1. 配置发现顺序补强：`0ab1da12 Test config discovery candidate order`
@@ -269,7 +274,7 @@
    - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27253605059`。
    - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27254138777`。
    - HTTPS established / Response received remote IP 日志补强和 DoH H2 transport 门控测试已通过 `git diff --check -- src/HttpRequestCommand.cc src/HttpConnection.cc test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、Volta/Euclid 外审和 GitHub Actions，run id `27255420287`。
-   - 当前复查补强切片已通过 `git diff --check` 和外部 review；本机仍缺少 C++ 构建工具，编译验证需依赖 GitHub Actions。
+   - 当前复查补强切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27263937493`；本机仍缺少 C++ 构建工具，编译验证依赖 CI。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -304,6 +309,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27254138777
    - HTTPS/Response remote IP 日志与 DoH H2 transport 门控测试已提交为 `cf425451 Expose remote endpoint in HTTP logs`，GitHub Actions build 已通过，run id `27255420287`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27255420287
+   - DoH/DoT endpoint failure 和 bad-address family 日志补强已提交为 `be6aba92 Cover DNS endpoint failure logs`，GitHub Actions build 已通过，run id `27263937493`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27263937493
 
 3. artifact：
    - `0e483039` artifacts：
@@ -341,6 +348,10 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7527410601/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7527389521/zip
       - artifact 过期时间：`2026-09-08T05:30:21Z`。
+   - `be6aba92` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7530790021/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7530731051/zip
+      - artifact 过期时间：`2026-09-08T08:36:21Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
@@ -412,8 +423,9 @@
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
    - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。
    - 已完成第二刀：`max-connection-per-server` 按 URL `protocol + hostname` 计数，不按解析 IP 计数，避免不同 IP 绕过同 server 上限。
-   - 下一刀继续评估本机公网 IPv6 能力判断、family penalty 和 v4/v6 混合并发端到端测试。
+   - 当前补强：新增同一 `FileEntry` 的两个并发 request 分别选择 IPv4/IPv6、第三个同 hostname 被 `max-connection-per-server` 限住的单元测试。
+   - 下一刀继续评估本机公网 IPv6 能力判断、family penalty 和 v4/v6 混合并发真实端到端测试。
 
 5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback，并新增 `--enable-https-rr` 显式 opt-in 门控；下一步补 fake/真实 DNS 验收，确认默认不发 TYPE65、不消费 SVCB cache，开启后按当前 DNS backend 查询并允许 selected endpoint 生效，DoH over H2 日志可断言。H3 继续保持默认关闭和 unsupported 快速拒绝。
 
-6. 验收报告：CI 通过后补 GitHub Actions run、artifact 链接和实际功能测试结果。
+6. 验收报告：最新自动化 CI 和 artifact 链接已补；真实 artifact 功能测试结果仍待后续按矩阵执行并追加。

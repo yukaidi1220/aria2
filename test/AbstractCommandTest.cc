@@ -23,6 +23,7 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressPrefersIPv4OverScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressRotatesDualStackByFileEntry);
+  CPPUNIT_TEST(testSelectIPAddressUsesBothFamiliesForConcurrentRequests);
   CPPUNIT_TEST(testSelectIPAddressDoesNotRotateToScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressPrefersRequestedDualStackFamily);
   CPPUNIT_TEST(testSelectIPAddressPrefersUnderusedActiveFamily);
@@ -72,6 +73,7 @@ public:
   void testSelectIPAddressPrefersIPv4OverScopedIPv6();
   void testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6();
   void testSelectIPAddressRotatesDualStackByFileEntry();
+  void testSelectIPAddressUsesBothFamiliesForConcurrentRequests();
   void testSelectIPAddressDoesNotRotateToScopedIPv6();
   void testSelectIPAddressPrefersRequestedDualStackFamily();
   void testSelectIPAddressPrefersUnderusedActiveFamily();
@@ -232,6 +234,38 @@ void AbstractCommandTest::testSelectIPAddressRotatesDualStackByFileEntry()
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 5, fileEntry, "mirror.example",
                                        443));
+}
+
+void AbstractCommandTest::testSelectIPAddressUsesBothFamiliesForConcurrentRequests()
+{
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+  auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setMaxConnectionPerServer(2);
+  fileEntry->setUris(std::vector<std::string>{
+      "https://example.org/file", "https://example.org/file?part=2",
+      "https://example.org/file?part=3"});
+  InorderURISelector selector{};
+  std::vector<std::pair<size_t, std::string>> usedHosts;
+
+  auto req = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req);
+  auto ipaddr = selectIPAddress(addrs, 1, fileEntry, "example.org", 443);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), ipaddr);
+  req->setConnectedAddrInfo("example.org", ipaddr, 443);
+  req->confirmConnectedAddrInfo();
+
+  auto req2 = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(req2);
+  auto ipaddr2 = selectIPAddress(addrs, 2, fileEntry, "example.org", 443);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), ipaddr2);
+  req2->setConnectedAddrInfo("example.org", ipaddr2, 443);
+  req2->confirmConnectedAddrInfo();
+
+  auto req3 = fileEntry->getRequest(&selector, true, usedHosts);
+  CPPUNIT_ASSERT(!req3);
+  CPPUNIT_ASSERT_EQUAL((size_t)2, fileEntry->countInFlightRequest());
 }
 
 void AbstractCommandTest::testSelectIPAddressDoesNotRotateToScopedIPv6()
