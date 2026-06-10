@@ -111,6 +111,12 @@
    - 测试：`testResolveHttpsServiceBindingResponse()` 分别覆盖 fake DoT 和 fake DoH H1；`testResolveHttpsServiceBindingResponseOverHttp2()` 在 `HAVE_LIBNGHTTP2` 下覆盖 fake DoH H2。
    - 边界：该测试只覆盖 fake transport 成功路径的日志字段，不验证真实 DoT/DoH server、真实 TLS/HTTP/2 栈或抓包级 v4/v6 对账。
 
+10. c-ares 普通 A/AAAA 查询日志明细测试。
+    - 落点：`src/AsyncNameResolver.cc`、`src/AsyncNameResolver.h`、`test/AsyncNameResolverTest.cc`
+    - 行为：普通 c-ares A/AAAA 查询日志从 `DNS: query ... using c-ares` 扩展为 `DNS: query ... using c-ares server_source=... servers=... transport=...`。显式 server 只有在 `ares_set_servers_csv()` 成功后才记录为 `server_source=configured`；否则继续显示系统 resolver。
+    - 测试：`testCaresQueryLogsServerSource()` 覆盖系统 DNS 和显式 c-ares server 的 A/AAAA 查询日志；具备 `ARES_FLAG_USEVC` 和 `ARES_OPT_FLAGS` 时，`testCaresQueryLogsTcpTransport()` 覆盖 TCP transport 日志。
+    - 边界：该测试只钉住发起 c-ares 查询时的格式级可观测性，不等待真实 DNS 响应，也不验证真实网络 fallback 或抓包级行为。
+
 ## 最新增量（03:40-04:06）
 
 1. 配置发现顺序补强：`0ab1da12 Test config discovery candidate order`
@@ -330,6 +336,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27270660709
    - DoT/DoH HTTPS RR 成功日志明细已提交为 `5cc59553 Log secure HTTPS RR resolver endpoints`，GitHub Actions build 已通过，run id `27272717109`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27272717109
+   - c-ares 普通 A/AAAA 查询日志明细已提交为 `342536cf Log c-ares query server details`，GitHub Actions build 已通过，run id `27274353270`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27274353270
 
 3. artifact：
    - `0e483039` artifacts：
@@ -393,6 +401,12 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7534392989/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7534346831/zip
       - artifact 过期时间：`2026-09-08T11:21:51Z`。
+   - `342536cf` artifacts：
+      - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27274353270
+      - run 结论：`success`；`build-windows (x86_64-w64-mingw32)` 和 `build-windows (i686-w64-mingw32)` 均为 `success`。
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535050913/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7535021687/zip
+      - artifact 过期时间：`2026-09-08T11:53:47Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
@@ -432,7 +446,7 @@
 
 ### 日志可观测性（31-35）
 
-部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。后续又补 DoH/DoT endpoint 运行期 connect failure 日志断言，并在 `DownloadEngine::markBadIPAddress()` 统一打印失败 IP/临时避让地址的 host、port、ip、family；下载连接、backup、TLS handshake retry 和 FTP proxy tunnel 失败路径已传入 CUID，并有单元日志断言。HTTPS RR c-ares resolver 已补 server 来源、server 列表和 UDP/TCP transport 的 network 日志及格式级单测；DoT/DoH HTTPS RR 成功路径已补 `qname/server/endpoint/transport` 的 fake transport 日志断言。尚未完整覆盖真实 artifact 运行日志、真实 DoT/DoH HTTPS RR 网络查询行为、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和真实功能测试里补齐。
+部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。后续又补 DoH/DoT endpoint 运行期 connect failure 日志断言，并在 `DownloadEngine::markBadIPAddress()` 统一打印失败 IP/临时避让地址的 host、port、ip、family；下载连接、backup、TLS handshake retry 和 FTP proxy tunnel 失败路径已传入 CUID，并有单元日志断言。HTTPS RR c-ares resolver 和普通 A/AAAA c-ares resolver 均已补 server 来源、server 列表和 UDP/TCP transport 的 network 日志及格式级单测；DoT/DoH HTTPS RR 成功路径已补 `qname/server/endpoint/transport` 的 fake transport 日志断言。尚未完整覆盖真实 artifact 运行日志、真实 DoT/DoH HTTPS RR 网络查询行为、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和真实功能测试里补齐。
 
 复查补充：已补 HTTPS 建连成功日志、`Response received from` 和 `Response status ... remote=` 的格式级回归测试，防止后续把 remote endpoint 从用户可见日志里删掉。
 
@@ -459,7 +473,7 @@
    - 已完成第二刀：async DNS query plan 日志代码路径和单元日志断言，记录 CUID、host、qtype、mode、phase、backend、transport、server、bootstrap 和 fallback 来源。
    - 本轮阶段修复：HTTPS 建连成功日志和 `Response received` info 日志本身追加 remote IP，解决普通日志里看不出连接 IP 的测试问题。
    - 当前继续补强：DoH/DoT endpoint connect failure 日志已有 fake transport 回归断言，失败 IP/临时避让地址已有 `DownloadEngine::markBadIPAddress()` 统一 network 日志和 IPv4/IPv6/CUID 单测。
-   - 当前继续补强：HTTPS RR c-ares resolver 已有 `server_source`、`servers` 和 `transport` 格式级单测；DoT/DoH HTTPS RR 成功日志已有 `qname/server/endpoint/transport` 的 fake transport 断言。
+   - 当前继续补强：HTTPS RR c-ares resolver 和普通 A/AAAA c-ares resolver 已有 `server_source`、`servers` 和 `transport` 格式级单测；DoT/DoH HTTPS RR 成功日志已有 `qname/server/endpoint/transport` 的 fake transport 断言。
    - 后续待实现：真实 DoT/DoH HTTPS RR 网络行为、真实 artifact 日志和抓包级 v4/v6 对账断言。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
