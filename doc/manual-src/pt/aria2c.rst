@@ -187,7 +187,7 @@ Opções HTTP / FTP
 .. option:: -x, --max-connection-per-server=<NÚMERO>
 
   O número máximo de conexões para um servidor em cada download.
-  Padrão: ``1``
+  Padrão: ``64``
 
 .. option:: --max-file-not-found=<NÚMERO>
 

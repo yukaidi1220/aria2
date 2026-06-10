@@ -74,7 +74,7 @@ FileEntry::FileEntry(std::string path, int64_t length, int64_t offset,
       uris_(uris.begin(), uris.end()),
       path_(std::move(path)),
       lastFasterReplace_(Timer::zero()),
-      maxConnectionPerServer_(1),
+      maxConnectionPerServer_(64),
       requested_(true),
       uniqueProtocol_(false)
 {
@@ -83,7 +83,7 @@ FileEntry::FileEntry(std::string path, int64_t length, int64_t offset,
 FileEntry::FileEntry()
     : length_(0),
       offset_(0),
-      maxConnectionPerServer_(1),
+      maxConnectionPerServer_(64),
       requested_(false),
       uniqueProtocol_(false)
 {

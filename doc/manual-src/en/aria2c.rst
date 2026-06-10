@@ -186,7 +186,7 @@ HTTP/FTP/SFTP Options
   download.  This limit is keyed by the URL scheme and hostname, not by the
   resolved IP address, so multiple IPv4/IPv6 addresses for the same URL
   hostname do not bypass it.
-  Possible Values: ``1`` - ``64`` Default: ``1``
+  Possible Values: ``1`` - ``1024`` Default: ``64``
 
 .. option:: --max-file-not-found=<NUM>
 

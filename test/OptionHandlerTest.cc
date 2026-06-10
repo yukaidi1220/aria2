@@ -394,18 +394,23 @@ void OptionHandlerTest::testFactoryMaxConnectionPerServerLimit()
 {
   OptionParser parser;
   parser.setOptionHandlers(OptionHandlerFactory::createOptionHandlers());
-  Option option;
   KeyVals options;
 
-  options.push_back(
-      KeyVals::value_type(PREF_MAX_CONNECTION_PER_SERVER->k, "64"));
-  parser.parse(option, options);
+  Option defaultOption;
+  parser.parseDefaultValues(defaultOption);
   CPPUNIT_ASSERT_EQUAL(std::string("64"),
+                       defaultOption.get(PREF_MAX_CONNECTION_PER_SERVER));
+
+  Option option;
+  options.push_back(
+      KeyVals::value_type(PREF_MAX_CONNECTION_PER_SERVER->k, "1024"));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string("1024"),
                        option.get(PREF_MAX_CONNECTION_PER_SERVER));
 
   options.clear();
   options.push_back(
-      KeyVals::value_type(PREF_MAX_CONNECTION_PER_SERVER->k, "65"));
+      KeyVals::value_type(PREF_MAX_CONNECTION_PER_SERVER->k, "1025"));
   CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
 }
 

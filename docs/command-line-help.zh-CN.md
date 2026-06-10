@@ -53,10 +53,10 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
 | DoT / DoH / DNS multi fallback | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot|multi`；server 可写数值 IP 或域名，域名会先用 plain c-ares DNS bootstrap 成 IP 再连接；`multi` 有显式 `udp://`/`tcp://` plain server 时，DoT/DoH 域名 server 的 bootstrap 也使用这些 plain server；有 secure server 时，下载域名先由 DoT/DoH 并发解析，全部失败后才降级到显式 plain DNS，再降级到系统 c-ares；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncNameResolver.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
 | IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；已有两族地址时做 active family 均衡；如果 IPv4 存在且 IPv6 只有 ULA/link-local/site-local/loopback/multicast/unspecified/IPv4-mapped 这类非公网 scope，主选址优先 IPv4；连接失败/超时会给同一下载项的同 host/port/family 加短 TTL 软降权，连接成功清除；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand` 和 `selectIPAddress()`、`src/FileEntry.cc`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
-| DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc` |
-| HTTP/2 / H2 | 实验性可用，依赖 `HAVE_LIBNGHTTP2`、HTTPS 和 TLS ALPN | 不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc` |
-| HTTP/3 / H3 / QUIC / Alt-Svc | 第一阶段能力门；Alt-Svc parser 已落地 | 默认构建仍拒绝 `--enable-http3=true`；只有构建时显式带 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 且使用 OpenSSL TLS 后端时才接受该开关；`Alt-Svc: h3=...` parser 只解析 header 值，未接缓存、下载路径、QUIC 传输、H3 command 或 `h3` ALPN 分发 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/usage_text.h`、`src/AltSvcParser.cc` |
-| ECH | 手动 ECHConfigList 第一阶段可用 | `--ech-config-base64=BASE64` 或 `--enable-ech=true --ech-config-base64=BASE64` 对 HTTPS 启用 required ECH；HTTPS RR 后台发现已能缓存 `ech` 参数候选，但尚未接到 TLS ECH 自动配置、retry config 自动重试或 H3 discovery；不能与 `--tls-sni-host` override 混用；TLS 后端不支持或握手后未接受 ECH 会失败 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h`、`src/LibsslTLSSession.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/HttpsServiceBindingCache.cc` |
+| DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；Windows MinGW CI artifact 已把静态 nghttp2 编入 OpenSSL 构建；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc`、`Dockerfile.mingw-ci`、`mingw-config` |
+| HTTP/2 / H2 | 实验性可用，Windows MinGW CI artifact 已编入静态 nghttp2 | 依赖 HTTPS 和 TLS ALPN；不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc`、`Dockerfile.mingw-ci`、`mingw-config` |
+| HTTP/3 / H3 / QUIC / Alt-Svc | 第一阶段能力门；Alt-Svc parser 已落地 | Windows XP 基线 artifact 不启用 H3 gate；默认构建仍拒绝 `--enable-http3=true`；只有构建时显式带 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 且使用 OpenSSL TLS 后端时才接受该开关；`Alt-Svc: h3=...` parser 只解析 header 值，未接缓存、下载路径、QUIC 传输、H3 command 或 `h3` ALPN 分发 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/usage_text.h`、`src/AltSvcParser.cc` |
+| ECH | 手动 ECHConfigList 第一阶段可用，但 XP OpenSSL 1.1.1w artifact 会按后端不支持失败 | `--ech-config-base64=BASE64` 或 `--enable-ech=true --ech-config-base64=BASE64` 对 HTTPS 启用 required ECH；HTTPS RR 后台发现已能缓存 `ech` 参数候选，但尚未接到 TLS ECH 自动配置、retry config 自动重试或 H3 discovery；不能与 `--tls-sni-host` override 混用；TLS 后端不支持或握手后未接受 ECH 会失败 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h`、`src/LibsslTLSSession.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/HttpsServiceBindingCache.cc` |
 | HTTPS/SVCB TYPE65 | 显式 opt-in 后第一阶段后台发现、缓存、connect target/port、address hints、endpoint ALPN 与失败短期避让可用 | 默认 `--enable-https-rr=false`，不会因为 HTTPS、async DNS、H2 或 H3 能力门而额外查询 TYPE65，也不会消费已有 SVCB cache 改 connect target/port；显式开启后能创建 TYPE65 查询并解析 HTTPS/SVCB RDATA，包括 priority、target、mandatory、alpn、no-default-alpn、port、ipv4hint、ech、ipv6hint、unknown params；`cares` 用 plain c-ares，`dot`/`doh` 用对应加密通道，`multi` 按 secure-first 阶段式 discovery，secure 全失败后才进入显式 plain，再进入系统 c-ares；secure server 域名 bootstrap 会复用显式 plain server；不阻塞首连；直连 HTTPS 命中 cache 后可用 selected endpoint 改变 TCP connect target/port，但 Request origin、HTTP `Host`、TLS SNI 和证书校验主机仍保持原 URL origin；proxy 路径不消费 SVCB；selected endpoint 的 address hints 写入 connect target DNS cache，不污染 origin；显式 endpoint `alpn` 会收窄 TLS ALPN；connect/TLS 失败会短期避让 failed endpoint；ECH、H3/Alt-Svc 和完整 fallback origin 策略仍未接线 | `src/DnsMessage.h`、`src/DnsMessage.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/ServiceBindingSelector.cc`、`src/HttpsServiceBindingCache.cc`、`src/AbstractCommand.cc`、`src/HttpTLSHandshakeParams.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/DownloadEngine.cc` |
 | XP/Win7 兼容 | 单一运行基线，不按系统版本自动改语义 | 不做“旧系统自动禁用功能 / 拒绝启用 / 静默降级”的特殊分支；缺构建能力时按选项校验失败，TLS 后端缺 ALPN 时 H2 自然走 HTTP/1.1，缺 FakeSNI/ECH 能力时报明确错误；原则是不崩溃、不伪装已支持 | `src/FeatureConfig.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 
@@ -338,6 +338,7 @@ XP/Win7 注意：
 
 - 仅 HTTPS；依赖 TLS ALPN。
 - 依赖 libnghttp2 构建。
+- Windows MinGW CI artifact 已在 `Dockerfile.mingw-ci` 中静态构建 nghttp2，并在 `mingw-config` 中启用 `--with-libnghttp2`；CI 会检查生成的 `aria2c.exe` 内含 `nghttp2/` 版本串，避免 Windows 产物悄悄退回无 H2 构建。
 - `--enable-http-pipelining=true` 时不会向 ALPN 放入 `h2`，因此 HTTP/2 与 HTTP/1.1 pipelining 仍互斥。
 - 首条 H2 连接仍要求当前下载最多 1 个 segment；`HttpRequestCommand.cc` 中如果已有多个 segment，会记录 “HTTP/2 single-stream download does not support pipelined segments. Retrying with one segment.” 并重试为单 segment。
 - active registry 只保存仍有 active stream 的 H2 连接；最后一个 stream 完成后，同 origin 连接可进入 idle pool，默认保留 15 秒。
@@ -355,7 +356,7 @@ XP/Win7 注意：
 XP/Win7 注意：
 
 - HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 时会优雅退回 HTTP/1.1，不应因为 ALPN 缺失直接中断 HTTPS 下载。
-- 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用带 OpenSSL ALPN 或 GnuTLS ALPN 的构建；如果目标环境只要求能下载，HTTP/1.1 fallback 能保持可用。
+- 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用当前 Windows MinGW/OpenSSL artifact；该构建静态链接 nghttp2，并继续使用 OpenSSL 1.1.1w 维持 XP 基线。如果 TLS ALPN 协商失败，HTTP/1.1 fallback 能保持可用。
 - `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端 SNI override 能力限制，见 2.1。
 - 当前源码没有 WinTLS/AppleTLS 的 ALPN 接线；这不是“操作系统新一点就一定能 H2”的问题，而是 `TLSSession` 后端能力声明决定的。后续若给这些后端补 ALPN，必须同步改这里。
 - DoH over H2 继承 HTTP/2 的 ALPN 依赖。旧 Windows TLS 后端不能协商 `h2` 时，DoH 会继续走 HTTP/1.1 POST；这属于正常降级，不是解析器失败。
@@ -391,6 +392,7 @@ aria2c --enable-http2=true https://example.com/file https://example.com/file?mir
 边界：
 
 - 默认构建通常没有 `HAVE_HTTP3`，因此 `--enable-http3=true` 会在参数阶段失败。这能避免把尚未完整接线的能力门误认为成熟功能。
+- Windows XP 基线 artifact 不编入 ngtcp2/nghttp3，也不启用 `HAVE_HTTP3`。在没有 QUIC/H3 下载链路前，不把 `--enable-http3=true` 做成 Windows 上可接受的假开关。
 - 即使构建出了 `HAVE_HTTP3`，也不代表 aria2 已能通过 QUIC 下载文件；真实下载仍走当前 HTTP/1.1 或 HTTP/2 路径。
 - XP/Win7 上没有额外运行时禁用分支；旧系统表现仍取决于同一个构建是否有 HTTP/3 gate 和后续 QUIC 实现。当前没有运行时 H3 下载路径，所以也谈不上旧系统自动降级 H3。
 
@@ -459,7 +461,7 @@ TLS: connected remote=93.184.216.34:443 sni=example.com verify=example.com versi
 
 - 目前 HTTPS RR 后台 discovery 可以缓存 SVCB `ech` 候选，但不会把它接到 ECH 自动配置；ECH retry config 自动重试也还没实现，TLS ClientHello 不会等待 HTTPS RR 发现结果。
 - 当前没有 H3/QUIC discovery；不要把 `--enable-ech` 理解成 HTTP/3 或 TLS ECH 自动配置开关。
-- WinTLS/AppleTLS 当前不支持 ECH；旧 Windows 需要 OpenSSL 且 configure 探测到相应 ECH API 才可能使用。
+- WinTLS/AppleTLS 当前不支持 ECH；旧 Windows artifact 使用 OpenSSL 1.1.1w 保持 XP 兼容，但该版本没有 OpenSSL ECH API，所以设置 ECHConfigList 会按“后端不支持”失败，不会崩溃或静默退回普通 TLS。
 
 示例：
 
@@ -569,7 +571,7 @@ Alt-Svc 源码状态：
 | `--server-stat-if=<FILE>` | 无 | 读取 server 性能统计。 |
 | `--server-stat-timeout=<SEC>` | `86400` | server 性能统计过期时间。 |
 | `-s, --split=<N>` | `16` | 单文件分片下载连接数。 |
-| `-x, --max-connection-per-server=<NUM>` | `1` | 每 URL `protocol + hostname` server 最大连接数；当前允许范围 `1..64`，不按解析 IP 绕过。 |
+| `-x, --max-connection-per-server=<NUM>` | `64` | 每 URL `protocol + hostname` server 最大连接数；当前允许范围 `1..1024`，不按解析 IP 绕过。 |
 | `-k, --min-split-size=<SIZE>` | `2M` | 小于 `2*SIZE` 的范围不继续拆分。 |
 | `--stream-piece-selector=<SELECTOR>` | `default` | piece 选择：`default`、`inorder`、`random`、`geom`。 |
 | `--uri-selector=<SELECTOR>` | `feedback` | URI 选择：`inorder`、`feedback`、`adaptive`。 |
@@ -864,7 +866,7 @@ aria2c -s 32 -x 32 -k 2M --file-allocation=none https://example.com/big.bin
 三者关系：
 
 - `-s, --split=N` 是“这个下载最多拆成多少个分片/连接”的目标值。默认 `16`，但它不是保证值。
-- `-x, --max-connection-per-server=N` 是同一个 URL `protocol + hostname` 的连接上限。当前允许 `1..64`，默认 `1`。同一个 hostname 解析出多个 IPv4/IPv6 地址，也不能按不同 IP 绕过这个上限。
+- `-x, --max-connection-per-server=N` 是同一个 URL `protocol + hostname` 的连接上限。当前允许 `1..1024`，默认 `64`。同一个 hostname 解析出多个 IPv4/IPv6 地址，也不能按不同 IP 绕过这个上限。
 - `-k, --min-split-size=SIZE` 控制范围是否继续拆分。默认 `2M`；小于 `2*SIZE` 的范围不会继续拆，所以小文件或剩余范围太小的时候，实际连接数会少于 `-s`。
 - 文件服务器必须支持 Range 请求，aria2 才能把同一个文件拆成多个 HTTP range 下载。服务器不支持 Range、文件大小未知、资源太小、已有分片不足、镜像 URI 不够、或 `-x` 太低，都会让实际连接数少于 `-s`。
 - 命令行多个 URL 默认可能是同一下载项的镜像 URI，不一定是多个独立下载项。这个会影响 `RequestGroup`、H2 复用和连接数统计。

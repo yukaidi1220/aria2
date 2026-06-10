@@ -811,7 +811,8 @@
     "                              be saved.")
 #define TEXT_MAX_CONNECTION_PER_SERVER          \
   _(" -x, --max-connection-per-server=NUM The maximum number of connections to one\n" \
-    "                              protocol+host server for each download.")
+    "                              protocol+host server for each download.\n" \
+    "                              Possible values: 1-1024. Default: 64.")
 #define TEXT_MIN_SPLIT_SIZE                     \
   _(" -k, --min-split-size=SIZE    aria2 does not split less than 2*SIZE byte range.\n" \
     "                              For example, let's consider downloading 20MiB\n" \

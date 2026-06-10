@@ -159,12 +159,12 @@
    - 落点：`src/OptionHandlerFactory.cc`
    - 行为：`--disable-ipv6` 默认值为 `false`，包括 32-bit MinGW；旧 Windows IPv6 栈不稳时仍可显式设置 `--disable-ipv6=true` 降级。
 
-4. `max-connection-per-server` 上限收紧为 64。
+4. `max-connection-per-server` 默认值和上限调整为 `64` / `1024`。
    - 落点：`src/OptionHandlerFactory.cc`
-   - 行为：`-x 64` 可接受，`-x 65` 在参数解析阶段失败；默认值保持 `1`。
+   - 行为：`-x 1024` 可接受，`-x 1025` 在参数解析阶段失败；默认值为 `64`。
 
 5. 文档同步。
-   - `docs/command-line-help.zh-CN.md` 记录 async DNS disabled 行为、DoT/DoH bootstrap、IPv6 默认值、`-x` 范围、SVCB endpoint ALPN 与失败短期避让。
+   - `docs/command-line-help.zh-CN.md` 记录 async DNS disabled 行为、DoT/DoH bootstrap、IPv6 默认值、`-x` 范围和默认值、SVCB endpoint ALPN 与失败短期避让。
    - `doc/manual-src/en/aria2c.rst` 同步 `-x` 范围，并修正 HTTPS/SVCB 已可改变 TCP connect target/port 和收窄 ALPN 的说明。
 
 6. 配置加载第二阶段基础能力。
@@ -208,7 +208,12 @@
     - 行为：`http://example.org` 和 `ftp://example.org` 视为不同 server key，分别受 `-x` 上限约束。
     - 文档：`src/usage_text.h`、`doc/manual-src/en/aria2c.rst`、`docs/command-line-help.zh-CN.md` 已同步 `protocol+host` 语义，并修正英文手册里的 `split=16`、`min-split-size=2M` 默认值。
 
-13. DNS query plan 日志第二阶段。
+13. Windows MinGW artifact 编入 HTTP/2/nghttp2。
+    - 落点：`Dockerfile.mingw-ci`、`mingw-config`、`.github/workflows/build.yml`
+    - 行为：Windows 依赖镜像静态交叉编译 nghttp2 1.64.0；`mingw-config` 显式启用 `--with-libnghttp2` 并传入静态库 CFLAGS/LIBS；Windows CI 在 configure 后检查 `config.h` 含 `HAVE_LIBNGHTTP2`，并在 strip 前用 `strings src/aria2c.exe | grep -aq 'nghttp2/'` 检查最终 exe 确实带 nghttp2/H2 能力。
+    - 边界：继续使用 OpenSSL 1.1.1w 维持 XP 基线；H2/DoH over H2 依赖 ALPN，协商不到 `h2` 时回落 HTTP/1.1。H3 仍不编入 Windows XP 基线 artifact，因为当前源码没有 QUIC/H3 下载路径；ECH 在 OpenSSL 1.1.1w 上没有 OpenSSL ECH API，按后端不支持失败。
+
+14. DNS query plan 日志第二阶段。
     - 落点：`src/AsyncNameResolverMan.cc`、`src/AsyncNameResolverMan.h`
     - 行为：每个 async DNS A/AAAA family 启动前的代码路径会打印统一 network 日志，包含 `CUID`、hostname、qtype、mode、phase、backend、transport、server、bootstrap 来源和 `fallback_from`。
     - 行为：`multi` secure-first 阶段会分别打印 DoT/DoH plan；secure server 为域名时可看出 bootstrap 来自显式 plain DNS 还是系统 c-ares；显式 plain fallback 和系统 c-ares fallback 也会记录来源。当前已用单元日志断言覆盖这三个阶段，真实 artifact 运行日志仍待后续功能测试确认。
@@ -469,7 +474,7 @@
 
 ### 下载连接参数（36-39）
 
-部分完成。第 36 条已在源码中改为 URL `protocol + hostname` server key，不按解析 IP 绕过限制；`http://host` 与 `ftp://host` 分开计数，同一 `https://host` 的多 IPv4/IPv6 地址仍共享上限。第 37 条已实现：`max-connection-per-server` 上限为 64。第 38 条已核验并记录：`split=16`、`min-split-size=2M`、`max-connection-per-server=1`，英文手册旧默认值已同步修正。第 39 条已在中文帮助和英文手册补充三者关系，后续还要加真实下载行为验收。
+部分完成。第 36 条已在源码中改为 URL `protocol + hostname` server key，不按解析 IP 绕过限制；`http://host` 与 `ftp://host` 分开计数，同一 `https://host` 的多 IPv4/IPv6 地址仍共享上限。第 37 条已按新验收口径调整：`max-connection-per-server` 允许范围为 `1..1024`，默认值为 `64`。第 38 条已核验并记录：`split=16`、`min-split-size=2M`、`max-connection-per-server=64`，英文手册旧默认值已同步修正。第 39 条已在中文帮助和英文手册补充三者关系，后续还要加真实下载行为验收。
 
 ### 兼容性（40-42）
 
