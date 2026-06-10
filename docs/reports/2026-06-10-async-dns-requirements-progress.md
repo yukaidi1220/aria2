@@ -6,6 +6,32 @@
 
 总方向是：DoH/DoT 优先，plain DNS 只用于 bootstrap 或明确 fallback；日志要能解释 DNS server、协议、bootstrap 来源、fallback 阶段、remote IP 和 CUID 关联；XP/Win7/无 SSL/nghttp2/ngtcp2/nghttp3 构建不崩溃， unsupported 能力要在配置或运行边界清楚失败。
 
+## 阶段性交付修复（04:54 之后）
+
+本节只记录测试暴露后必须尽快修好的阶段性问题。47 条总需求里仍未闭环的项目继续保留在后文“47 条需求状态”和“下一阶段计划”，本轮不继续扩大战线。
+
+1. disabled async DNS 配置覆盖已补强：`2c192561 Expand disabled async DNS config coverage`
+   - 落点：`test/AsyncNameResolverTest.cc`、`docs/reports/2026-06-10-async-dns-requirements-progress.md`
+   - 行为：`testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled()` 从单一 DoH 空 server 扩展为三组本应在 `async-dns=true` 下失败的配置：DoT 空 server、DoH 空 server、`multi` 裸域名 plain server。`async-dns=false` 时这些配置不再触发 secure DNS 校验失败。
+   - 外审：Volta 只读复审无阻断。
+   - CI：GitHub Actions run `27254138777` 已通过。
+
+2. DoH HTTP/2 transport 门控日志测试补强：当前未提交，待外审/CI
+   - 落点：`test/AsyncNameResolverTest.cc`
+   - 行为：新增 `testConfigureDohHttp2AffectsLoggedTransport()`，断言 `--enable-http2=true --enable-http-pipelining=false` 时 DoH query plan 记录 `transport=https-h1-or-h2`（无 nghttp2 构建记录 `https-h1`），而 `--enable-http-pipelining=true` 时回落 `transport=https-h1`。
+   - 边界：测试显式固定 `resolverMan.setIPv4(true)`、`resolverMan.setIPv6(false)`，避免 CI 主机 IPv4/IPv6 探测结果影响日志断言。
+   - 验证：`git diff --check -- test/AsyncNameResolverTest.cc` 通过；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
+
+3. HTTPS 建连成功日志补 remote IP：当前未提交，待外审/CI
+   - 落点：`src/HttpRequestCommand.cc`
+   - 行为：用户可见的 network 日志 `HTTPS connection to ... established` 追加 `remote=<ip:port>`；IPv6 使用 `[addr]:port` 格式。
+   - 目的：抓包看到连接 IP 时，可以直接从 HTTPS 建连成功日志里对上本次 CUID 和 remote endpoint，不再只看 hostname。
+
+4. `Response received` 日志补 remote IP：当前未提交，待外审/CI
+   - 落点：`src/HttpConnection.cc`
+   - 行为：info 级 `Response received` 由 `CUID#... - Response received:` 改为 `CUID#... - Response received from <ip:port>:`；原 network 级 `HTTP: ... Response status ... remote=...` 继续保留，并复用同一个 remote endpoint 字符串。
+   - 目的：用户常看的 `Response received` 日志本身即可关联实际 remote IP，不必再额外找相邻 network 日志。
+
 ## 最新增量（03:40-04:06）
 
 1. 配置发现顺序补强：`0ab1da12 Test config discovery candidate order`
@@ -107,6 +133,7 @@
 
 1. `test/AsyncNameResolverTest.cc`
    - `testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 `async-dns=false` 时 DoT 空 server、DoH 空 server、`multi` 裸域名 plain server 这些本应启动期失败的 secure DNS 配置不触发校验失败。
+   - `testConfigureDohHttp2AffectsLoggedTransport`：覆盖 DoH query plan 的 transport 受 `enable-http2` 和 `enable-http-pipelining` 共同门控；开启 HTTP/2 且关闭 pipelining 时允许 `https-h1-or-h2`，开启 pipelining 时保持 `https-h1`。
    - `testPlainBootstrapFactoryUsesConfiguredPlainServers`：覆盖 `multi` 显式 `udp://`/`tcp://` plain server 会生成 `PlainBootstrapResolver`。
    - `testStartAsyncCaresWithExplicitServerFallsBackToSystem`：覆盖显式 c-ares server 失败后进入系统 c-ares。
    - `testStartAsyncDotFallsBackToSystem`：覆盖 DoT 失败后进入系统 c-ares。
@@ -157,7 +184,8 @@
    - DNS query plan 日志第二阶段切片已通过 `git diff --check -- src/AsyncNameResolverMan.cc src/AsyncNameResolverMan.h test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；新增单元日志断言；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
    - `4c0af2e3 Log async DNS query plans` 首次 CI 失败后，经外部 review 定位到 `formatDohServerList()` 中 `auto entry = "https://";` 被 C++11 推导成 `const char*`，后续 `+= std::string` 在 MinGW 编译期失败；`f354ff58 Fix DoH server list string construction` 改成显式 `std::string` 后通过 GitHub Actions。
    - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27253605059`。
-   - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
+   - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27254138777`。
+   - 本轮 HTTPS established / Response received remote IP 日志补强和 DoH H2 transport 门控测试已通过 `git diff --check -- src/HttpRequestCommand.cc src/HttpConnection.cc test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；尚待外部 review、提交和 GitHub Actions 编译验证。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -188,6 +216,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27252444409
    - disabled async DNS 入口级防回归已提交为 `9781c20a Cover disabled async DNS entry points`，GitHub Actions build 已通过，run id `27253605059`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27253605059
+   - disabled async DNS 配置扩展已提交为 `2c192561 Expand disabled async DNS config coverage`，GitHub Actions build 已通过，run id `27254138777`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27254138777
 
 3. artifact：
    - `0e483039` artifacts：
@@ -217,6 +247,10 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526761566/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526747997/zip
       - artifact 过期时间：`2026-09-08T04:39:47Z`。
+   - `2c192561` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526960957/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526944357/zip
+      - artifact 过期时间：`2026-09-08T04:54:51Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
@@ -252,7 +286,7 @@
 
 ### 日志可观测性（31-35）
 
-部分完成。第一阶段已补 DNS 最终选中日志、HTTP response remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。尚未完整覆盖真实 artifact 运行日志、每个 DNS server 的运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 内部 server 明细、失败 IP、临时避让 IP、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和连接失败路径补细日志与测试。
+部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。尚未完整覆盖真实 artifact 运行日志、每个 DNS server 的运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 内部 server 明细、失败 IP、临时避让 IP、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和连接失败路径补细日志与测试。
 
 ### 下载连接参数（36-39）
 
@@ -275,7 +309,8 @@
 3. DNS/连接可观测性：统一记录 DNS query、server、协议、bootstrap/fallback 阶段、A/AAAA、最终地址列表、选中/失败/避让 IP，并让连接成功、TLS 成功和 response received 都能关联 remote IP。
    - 已完成第一刀：DNS selected、HTTP response remote、TLS connected remote/SNI/ALPN。
    - 已完成第二刀：async DNS query plan 日志代码路径和单元日志断言，记录 CUID、host、qtype、mode、phase、backend、transport、server、bootstrap 和 fallback 来源。
-   - 下一刀继续补 resolver 内部运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 明细、失败 IP 和临时避让 IP。
+   - 本轮阶段修复：HTTPS 建连成功日志和 `Response received` info 日志本身追加 remote IP，解决普通日志里看不出连接 IP 的测试问题。
+   - 后续待实现：resolver 内部运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 明细、失败 IP、临时避让 IP 和抓包级 v4/v6 对账断言。
 
 4. 双栈下载：继续实现/验证 v4/v6 混合并发、坏 IPv6 快速避让、同 hostname 连接数限制不被不同 IP 绕过。
    - 已完成第一刀：IPv4 主连时不再把非公网 IPv6 地址选作 backup。

@@ -49,6 +49,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateDohResolverUsesUnspecBootstrapForDualStack);
   CPPUNIT_TEST(testCreateDohResolverRejectsEmptyServerList);
   CPPUNIT_TEST(testStartAsyncDotFallsBackToSystem);
+  CPPUNIT_TEST(testConfigureDohHttp2AffectsLoggedTransport);
   CPPUNIT_TEST(testStartAsyncMultiLogsQueryPlans);
   CPPUNIT_TEST(testStartAsyncMultiStartsSecureBackendsBeforePlainFallback);
   CPPUNIT_TEST(testStartAsyncMultiFallsBackToExplicitPlainThenSystem);
@@ -100,6 +101,7 @@ public:
   void testCreateDohResolverUsesUnspecBootstrapForDualStack();
   void testCreateDohResolverRejectsEmptyServerList();
   void testStartAsyncDotFallsBackToSystem();
+  void testConfigureDohHttp2AffectsLoggedTransport();
   void testStartAsyncMultiLogsQueryPlans();
   void testStartAsyncMultiStartsSecureBackendsBeforePlainFallback();
   void testStartAsyncMultiFallsBackToExplicitPlainThenSystem();
@@ -581,6 +583,71 @@ void AsyncNameResolverTest::testStartAsyncDotFallsBackToSystem()
                        countQueryStatusEntries(resolverMan.getQueryStatus()));
   CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
   CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
+}
+
+void AsyncNameResolverTest::testConfigureDohHttp2AffectsLoggedTransport()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testConfigureDohHttp2AffectsLoggedTransport.log";
+  ScopedNetworkLog log(logPath);
+
+  {
+    Option option;
+    option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+    option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
+    option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+    option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
+    option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+    option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_FALSE);
+    MockFallbackAsyncNameResolverMan resolverMan({1});
+
+    configureAsyncNameResolverMan(&resolverMan, &option);
+    resolverMan.setIPv4(true);
+    resolverMan.setIPv6(false);
+    MockCommand command(101);
+    resolverMan.startAsync("example.org", nullptr, &command);
+  }
+
+  {
+    Option option;
+    option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+    option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
+    option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+    option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
+    option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+    option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_TRUE);
+    MockFallbackAsyncNameResolverMan resolverMan({1});
+
+    configureAsyncNameResolverMan(&resolverMan, &option);
+    resolverMan.setIPv4(true);
+    resolverMan.setIPv6(false);
+    MockCommand command(102);
+    resolverMan.startAsync("example.org", nullptr, &command);
+  }
+
+  auto logs = log.closeAndRead();
+#ifdef HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#101 - query plan host=example.org "
+                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "transport=https-h1-or-h2 "
+                           "server=https://dns.example.org:443/dns-query "
+                           "bootstrap=system-cares fallback_from=none") !=
+                 std::string::npos);
+#else  // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#101 - query plan host=example.org "
+                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "transport=https-h1 "
+                           "server=https://dns.example.org:443/dns-query "
+                           "bootstrap=system-cares fallback_from=none") !=
+                 std::string::npos);
+#endif // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#102 - query plan host=example.org "
+                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "transport=https-h1 "
+                           "server=https://dns.example.org:443/dns-query "
+                           "bootstrap=system-cares fallback_from=none") !=
+                 std::string::npos);
 }
 
 void AsyncNameResolverTest::testStartAsyncMultiLogsQueryPlans()

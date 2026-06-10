@@ -202,13 +202,14 @@ std::unique_ptr<HttpResponse> HttpConnection::receiveResponse()
   const auto& proc = outstandingHttpRequests_.front()->getHttpHeaderProcessor();
   if (proc->parse(socketRecvBuffer_->getBuffer(),
                   socketRecvBuffer_->getBufferLength())) {
-    A2_LOG_INFO(fmt(MSG_RECEIVE_RESPONSE, cuid_,
+    auto remoteEndpoint = getRemoteEndpointForLog(socket_);
+    A2_LOG_INFO(fmt("CUID#%" PRId64 " - Response received from %s:\n%s",
+                    cuid_, remoteEndpoint.c_str(),
                     eraseConfidentialInfo(proc->getHeaderString()).c_str()));
     auto result = proc->getResult();
     A2_LOG_NETWORK(
         fmt("HTTP: CUID#%" PRId64 " - Response status: %d remote=%s",
-            cuid_, result->getStatusCode(),
-            getRemoteEndpointForLog(socket_).c_str()));
+            cuid_, result->getStatusCode(), remoteEndpoint.c_str()));
     if (result->getStatusCode() / 100 == 1) {
       socketRecvBuffer_->drain(proc->getLastBytesProcessed());
       outstandingHttpRequests_.front()->resetHttpHeaderProcessor();
