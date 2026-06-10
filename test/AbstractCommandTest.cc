@@ -37,6 +37,7 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder);
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress);
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHints);
+  CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsHonorsAsyncDns);
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6);
   CPPUNIT_TEST(testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only);
   CPPUNIT_TEST(testGetHttpsServiceBindingEndpointsKeepsConnectTarget);
@@ -46,6 +47,7 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit);
 #ifdef ENABLE_SSL
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesIgnoresSecureConfigWhenAsyncDnsOff);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDot);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDoh);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst);
@@ -82,6 +84,7 @@ public:
   void testPrioritizeAndInterleaveIPAddressKeepsSingleFamilyOrder();
   void testPrioritizeAndInterleaveIPAddressKeepsNonNumericAddress();
   void testGetUsableHttpsServiceBindingAddressHints();
+  void testGetUsableHttpsServiceBindingAddressHintsHonorsAsyncDns();
   void testGetUsableHttpsServiceBindingAddressHintsHonorsDisableIPv6();
   void testGetUsableHttpsServiceBindingAddressHintsRejectsH2Only();
   void testGetHttpsServiceBindingEndpointsKeepsConnectTarget();
@@ -91,6 +94,8 @@ public:
   void testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem();
   void testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit();
 #ifdef ENABLE_SSL
+  void
+  testCreateHttpsServiceBindingDiscoveryPhasesIgnoresSecureConfigWhenAsyncDnsOff();
   void testCreateHttpsServiceBindingDiscoveryPhasesDot();
   void testCreateHttpsServiceBindingDiscoveryPhasesDoh();
   void testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst();
@@ -537,6 +542,8 @@ void AbstractCommandTest::testGetUsableHttpsServiceBindingAddressHints()
   records.push_back(differentTarget);
 
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto hints =
       getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
                                                &option);
@@ -544,6 +551,26 @@ void AbstractCommandTest::testGetUsableHttpsServiceBindingAddressHints()
   CPPUNIT_ASSERT_EQUAL((size_t)2, hints.size());
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), hints[0]);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), hints[1]);
+}
+
+void AbstractCommandTest::
+    testGetUsableHttpsServiceBindingAddressHintsHonorsAsyncDns()
+{
+  auto usable = createHttpsServiceBindingRecord(
+      1, "example.org", std::string());
+  usable.ipv4hint.push_back("192.0.2.1");
+
+  std::vector<dns::ServiceBindingRecord> records;
+  records.push_back(usable);
+
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
+  auto hints =
+      getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
+                                               &option);
+
+  CPPUNIT_ASSERT(hints.empty());
 }
 
 void AbstractCommandTest::
@@ -558,6 +585,8 @@ void AbstractCommandTest::
   records.push_back(usable);
 
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
   auto hints =
       getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
@@ -581,6 +610,8 @@ void AbstractCommandTest::
   records.push_back(h2Only);
 
   Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto hints =
       getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
                                                &option);
@@ -620,6 +651,8 @@ void AbstractCommandTest::testGetHttpsServiceBindingEndpointsKeepsConnectTarget(
   CPPUNIT_ASSERT_EQUAL((uint16_t)443, endpoints[1].connectPort);
   CPPUNIT_ASSERT(!endpoints[1].serviceBindingUsed());
 
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
   auto hints =
       getUsableHttpsServiceBindingAddressHints(records, "example.org", 443,
                                                &option);
@@ -683,6 +716,19 @@ void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresExpli
 }
 
 #ifdef ENABLE_SSL
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesIgnoresSecureConfigWhenAsyncDnsOff()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
+  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{}, option);
+}
+
 void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesDot()
 {
   Option option;

@@ -900,6 +900,7 @@ bool appendHttpsServiceBindingAddressHints(std::vector<std::string>& addrs,
                                            uint16_t port)
 {
   if (!e || !e->getOption() ||
+      !e->getOption()->getAsBool(PREF_ASYNC_DNS) ||
       !e->getOption()->getAsBool(PREF_ENABLE_HTTPS_RR)) {
     return false;
   }
@@ -1882,6 +1883,10 @@ std::vector<std::string> getUsableHttpsServiceBindingAddressHints(
     const std::string& hostname, uint16_t port, const Option* option)
 {
   std::vector<std::string> hints;
+  if (!option || !option->getAsBool(PREF_ASYNC_DNS) ||
+      !option->getAsBool(PREF_ENABLE_HTTPS_RR)) {
+    return hints;
+  }
   for (const auto& endpoint :
        getHttpsServiceBindingEndpoints(records, hostname, port, option)) {
     if (endpoint.serviceBindingUsed()) {
