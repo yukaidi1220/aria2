@@ -40,13 +40,13 @@
 #include <string>
 
 #include "Command.h"
+#include "a2netcompat.h"
 
 namespace aria2 {
 
 class Request;
-struct Endpoint;
 
-std::string formatEndpointForLog(const Endpoint& endpoint);
+std::string formatEndpointForLog(const ::Endpoint& endpoint);
 std::string formatRequestRemoteEndpointForLog(const Request* req);
 std::string formatHttpsConnectionEstablishedLog(cuid_t cuid,
                                                 const std::string& host,

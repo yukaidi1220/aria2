@@ -36,12 +36,11 @@
 
 #include "Request.h"
 #include "SocketCore.h"
-#include "a2netcompat.h"
 #include "fmt.h"
 
 namespace aria2 {
 
-std::string formatEndpointForLog(const Endpoint& endpoint)
+std::string formatEndpointForLog(const ::Endpoint& endpoint)
 {
   if (endpoint.family == AF_INET6) {
     return fmt("[%s]:%u", endpoint.addr.c_str(),
