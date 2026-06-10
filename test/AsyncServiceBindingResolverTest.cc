@@ -48,6 +48,7 @@ class AsyncServiceBindingResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateHttpsServiceBindingQueryNameUsesPortPrefix);
   CPPUNIT_TEST(testLogsSystemDnsServerSource);
   CPPUNIT_TEST(testLogsConfiguredDnsServerSource);
+  CPPUNIT_TEST(testRejectedServerLogsSystemFallback);
 #if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
   CPPUNIT_TEST(testLogsTcpTransport);
 #endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
@@ -58,6 +59,7 @@ public:
   void testCreateHttpsServiceBindingQueryNameUsesPortPrefix();
   void testLogsSystemDnsServerSource();
   void testLogsConfiguredDnsServerSource();
+  void testRejectedServerLogsSystemFallback();
 #if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
   void testLogsTcpTransport();
 #endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
@@ -117,6 +119,23 @@ void AsyncServiceBindingResolverTest::testLogsConfiguredDnsServerSource()
       logs.find("DNS: query HTTPS RR _8443._https.www.example.com using "
                 "c-ares server_source=configured servers=192.0.2.53 "
                 "transport=UDP") != std::string::npos);
+}
+
+void AsyncServiceBindingResolverTest::testRejectedServerLogsSystemFallback()
+{
+  auto logPath = std::string(A2_TEST_OUT_DIR) +
+                 "/aria2_AsyncServiceBindingResolverTest_rejected.log";
+  ScopedNetworkLog log(logPath);
+
+  AsyncServiceBindingResolver resolver("dns.example.org");
+  resolver.resolve("www.example.com", 443);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: HTTPS RR c-ares rejected configured server "
+                           "list dns.example.org:") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: query HTTPS RR www.example.com using c-ares "
+                           "server_source=system servers=system "
+                           "transport=UDP") != std::string::npos);
 }
 
 #if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
