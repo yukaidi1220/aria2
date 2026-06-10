@@ -274,7 +274,12 @@ void AsyncNameResolver::handle_sock_state(ares_socket_t fd, int read, int write)
 
 AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers,
                                      bool useTcp)
-    : status_(STATUS_READY), family_(family), channel_(nullptr)
+    : status_(STATUS_READY),
+      family_(family),
+      channel_(nullptr),
+      servers_(servers),
+      useTcp_(useTcp),
+      configuredServers_(false)
 {
   ares_options opts{};
   opts.sock_state_cb = sock_state_cb;
@@ -329,6 +334,9 @@ AsyncNameResolver::AsyncNameResolver(int family, const std::string& servers,
               "existing resolver configuration",
               servers.c_str(), ares_strerror(rv)));
     }
+    else {
+      configuredServers_ = true;
+    }
   }
 }
 
@@ -354,7 +362,12 @@ void AsyncNameResolver::resolve(const std::string& name)
   hints.ai_family = family_;
 
   const auto famStr = familyToString(family_);
-  A2_LOG_NETWORK(fmt("DNS: query %s %s using c-ares", famStr, name.c_str()));
+  const char* serverSource = configuredServers_ ? "configured" : "system";
+  const char* servers = configuredServers_ ? servers_.c_str() : "system";
+  A2_LOG_NETWORK(fmt("DNS: query %s %s using c-ares server_source=%s "
+                     "servers=%s transport=%s",
+                     famStr, name.c_str(), serverSource, servers,
+                     useTcp_ ? "TCP" : "UDP"));
   ares_getaddrinfo(channel_, name.c_str(), nullptr, &hints, callback, this);
 }
 

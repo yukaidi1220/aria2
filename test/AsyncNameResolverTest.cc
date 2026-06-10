@@ -39,6 +39,10 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testAsyncResolverExceptFdIsProcessedAsWriteReady);
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
   CPPUNIT_TEST(testStartAsyncCaresWithExplicitServerFallsBackToSystem);
+  CPPUNIT_TEST(testCaresQueryLogsServerSource);
+#if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
+  CPPUNIT_TEST(testCaresQueryLogsTcpTransport);
+#endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
 #ifdef ENABLE_SSL
   CPPUNIT_TEST(testCreateDotResolver);
   CPPUNIT_TEST(testCreateDotResolverAcceptsDomainServer);
@@ -94,6 +98,10 @@ public:
   void testAsyncResolverExceptFdIsProcessedAsWriteReady();
   void testValidateConfigLeavesCaresServersUnchanged();
   void testStartAsyncCaresWithExplicitServerFallsBackToSystem();
+  void testCaresQueryLogsServerSource();
+#if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
+  void testCaresQueryLogsTcpTransport();
+#endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
 #ifdef ENABLE_SSL
   void testCreateDotResolver();
   void testCreateDotResolverAcceptsDomainServer();
@@ -476,6 +484,52 @@ void AsyncNameResolverTest::testStartAsyncCaresWithExplicitServerFallsBackToSyst
   CPPUNIT_ASSERT_EQUAL((size_t)2, resolverMan.getCreateResolversCalls());
   CPPUNIT_ASSERT(!resolverMan.startFallback(nullptr, &command));
 }
+
+void AsyncNameResolverTest::testCaresQueryLogsServerSource()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testCaresQueryLogsServerSource.log";
+  ScopedNetworkLog log(logPath);
+
+  {
+    AsyncNameResolver resolver(AF_INET, std::string());
+    resolver.resolve("system.example");
+  }
+
+  {
+    AsyncNameResolver resolver(AF_INET6, "192.0.2.53");
+    resolver.resolve("configured.example");
+  }
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: query A system.example using c-ares "
+                           "server_source=system servers=system "
+                           "transport=UDP") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: query AAAA configured.example using c-ares "
+                           "server_source=configured servers=192.0.2.53 "
+                           "transport=UDP") != std::string::npos);
+}
+
+#if defined(ARES_FLAG_USEVC) && defined(ARES_OPT_FLAGS)
+void AsyncNameResolverTest::testCaresQueryLogsTcpTransport()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncNameResolverTest_testCaresQueryLogsTcpTransport.log";
+  ScopedNetworkLog log(logPath);
+
+  AsyncNameResolver resolver(AF_INET, "192.0.2.53", true);
+  resolver.resolve("tcp.example");
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: c-ares plain resolver forcing TCP "
+                           "transport") != std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: query A tcp.example using c-ares "
+                           "server_source=configured servers=192.0.2.53 "
+                           "transport=TCP") != std::string::npos);
+}
+#endif // ARES_FLAG_USEVC && ARES_OPT_FLAGS
 
 #ifdef ENABLE_SSL
 void AsyncNameResolverTest::testCreateDotResolver()

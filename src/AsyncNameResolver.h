@@ -55,6 +55,9 @@ private:
   STATUS status_;
   int family_;
   ares_channel channel_;
+  std::string servers_;
+  bool useTcp_;
+  bool configuredServers_;
 
   std::vector<std::string> resolvedAddresses_;
   std::string error_;
