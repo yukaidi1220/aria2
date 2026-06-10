@@ -1,5 +1,10 @@
 #include "common.h"
 
+#ifdef __MINGW32__
+#  include <direct.h>
+#endif // __MINGW32__
+#include <unistd.h>
+
 #include <vector>
 
 #include <cppunit/extensions/HelperMacros.h>
@@ -33,10 +38,37 @@ void writeFile(const std::string& path, const std::string& data)
   fp.write(data.c_str(), data.size());
 }
 
+int changeCurrentDir(const std::string& path)
+{
+#ifdef __MINGW32__
+  return _wchdir(utf8ToWChar(path).c_str());
+#else  // !__MINGW32__
+  return chdir(path.c_str());
+#endif // !__MINGW32__
+}
+
+class ScopedCurrentDir {
+public:
+  explicit ScopedCurrentDir(const std::string& path)
+      : currentDir_(File::getCurrentDir())
+  {
+    File(path).mkdirs();
+    CPPUNIT_ASSERT_EQUAL(0, changeCurrentDir(path));
+  }
+
+  ~ScopedCurrentDir() { changeCurrentDir(currentDir_); }
+
+private:
+  std::string currentDir_;
+};
+
 } // namespace
 
 class OptionProcessingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(OptionProcessingTest);
+  CPPUNIT_TEST(testLoadsAria2ConfFromCurrentDirByDefault);
+  CPPUNIT_TEST(testRelativeConfPathResolvedFromCurrentDir);
+  CPPUNIT_TEST(testNoConfSkipsCurrentDirAria2Conf);
   CPPUNIT_TEST(testCommandLineOverridesConfByDefault);
   CPPUNIT_TEST(testConfCanOverrideCommandLine);
   CPPUNIT_TEST(testNoConfSkipsExplicitConfPath);
@@ -46,12 +78,73 @@ public:
   void setUp() {}
   void tearDown() {}
 
+  void testLoadsAria2ConfFromCurrentDirByDefault();
+  void testRelativeConfPathResolvedFromCurrentDir();
+  void testNoConfSkipsCurrentDirAria2Conf();
   void testCommandLineOverridesConfByDefault();
   void testConfCanOverrideCommandLine();
   void testNoConfSkipsExplicitConfPath();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(OptionProcessingTest);
+
+void OptionProcessingTest::testLoadsAria2ConfFromCurrentDirByDefault()
+{
+  auto dir = testFile("aria2_OptionProcessingTest_default_current_dir");
+  auto confPath = util::applyDir(dir, "aria2.conf");
+  File(confPath).remove();
+  writeFile(confPath, "split=4\n");
+  ScopedCurrentDir cwd(dir);
+
+  Option option;
+  std::vector<std::string> uris;
+
+  auto rv = option_processing(option, false, uris, 0, nullptr, KeyVals{});
+
+  CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
+  CPPUNIT_ASSERT_EQUAL(std::string("4"), option.get(PREF_SPLIT));
+  CPPUNIT_ASSERT_EQUAL(confPath, option.get(PREF_CONF_PATH));
+  File(confPath).remove();
+}
+
+void OptionProcessingTest::testRelativeConfPathResolvedFromCurrentDir()
+{
+  auto dir = testFile("aria2_OptionProcessingTest_relative_conf_path");
+  auto confPath = util::applyDir(dir, "custom.conf");
+  File(confPath).remove();
+  writeFile(confPath, "split=4\n");
+  ScopedCurrentDir cwd(dir);
+
+  Option option;
+  std::vector<std::string> uris;
+  KeyVals options{{"conf-path", "custom.conf"}};
+
+  auto rv = option_processing(option, false, uris, 0, nullptr, options);
+
+  CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
+  CPPUNIT_ASSERT_EQUAL(std::string("4"), option.get(PREF_SPLIT));
+  CPPUNIT_ASSERT_EQUAL(std::string("custom.conf"), option.get(PREF_CONF_PATH));
+  File(confPath).remove();
+}
+
+void OptionProcessingTest::testNoConfSkipsCurrentDirAria2Conf()
+{
+  auto dir = testFile("aria2_OptionProcessingTest_no_conf_current_dir");
+  auto confPath = util::applyDir(dir, "aria2.conf");
+  File(confPath).remove();
+  writeFile(confPath, "split=4\n");
+  ScopedCurrentDir cwd(dir);
+
+  Option option;
+  std::vector<std::string> uris;
+  KeyVals options{{"no-conf", A2_V_TRUE}};
+
+  auto rv = option_processing(option, false, uris, 0, nullptr, options);
+
+  CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
+  CPPUNIT_ASSERT_EQUAL(std::string("16"), option.get(PREF_SPLIT));
+  File(confPath).remove();
+}
 
 void OptionProcessingTest::testCommandLineOverridesConfByDefault()
 {
