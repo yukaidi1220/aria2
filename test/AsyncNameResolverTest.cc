@@ -823,13 +823,20 @@ void AsyncNameResolverTest::testPlainBootstrapFactoryUsesConfiguredPlainServers(
 void AsyncNameResolverTest::
     testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled()
 {
-  Option option;
-  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
-  option.put(PREF_ASYNC_DNS_MODE, V_DOH);
-  option.put(PREF_ASYNC_DNS_SERVER, "");
-  AsyncNameResolverMan resolverMan;
+  std::vector<std::pair<std::string, std::string>> configs;
+  configs.push_back({V_DOT, ""});
+  configs.push_back({V_DOH, ""});
+  configs.push_back({V_MULTI, "dns.example.org"});
 
-  configureAsyncNameResolverMan(&resolverMan, &option);
+  for (const auto& config : configs) {
+    Option option;
+    option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+    option.put(PREF_ASYNC_DNS_MODE, config.first);
+    option.put(PREF_ASYNC_DNS_SERVER, config.second);
+    AsyncNameResolverMan resolverMan;
+
+    configureAsyncNameResolverMan(&resolverMan, &option);
+  }
 }
 
 void AsyncNameResolverTest::testConfigureAcceptsDohIpServers()

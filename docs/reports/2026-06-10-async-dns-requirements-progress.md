@@ -106,7 +106,7 @@
 ## 已加测试
 
 1. `test/AsyncNameResolverTest.cc`
-   - `testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 `async-dns=false` 时 secure DNS 配置不触发启动期校验失败。
+   - `testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 `async-dns=false` 时 DoT 空 server、DoH 空 server、`multi` 裸域名 plain server 这些本应启动期失败的 secure DNS 配置不触发校验失败。
    - `testPlainBootstrapFactoryUsesConfiguredPlainServers`：覆盖 `multi` 显式 `udp://`/`tcp://` plain server 会生成 `PlainBootstrapResolver`。
    - `testStartAsyncCaresWithExplicitServerFallsBackToSystem`：覆盖显式 c-ares server 失败后进入系统 c-ares。
    - `testStartAsyncDotFallsBackToSystem`：覆盖 DoT 失败后进入系统 c-ares。
@@ -156,7 +156,8 @@
    - `max-connection-per-server` protocol+host 切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27245665096`。
    - DNS query plan 日志第二阶段切片已通过 `git diff --check -- src/AsyncNameResolverMan.cc src/AsyncNameResolverMan.h test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；新增单元日志断言；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
    - `4c0af2e3 Log async DNS query plans` 首次 CI 失败后，经外部 review 定位到 `formatDohServerList()` 中 `auto entry = "https://";` 被 C++11 推导成 `const char*`，后续 `+= std::string` 在 MinGW 编译期失败；`f354ff58 Fix DoH server list string construction` 改成显式 `std::string` 后通过 GitHub Actions。
-   - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
+   - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27253605059`。
+   - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md` 和外部 review；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -185,6 +186,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27251874742
    - HTTPS RR/SVCB cache async DNS 门控已提交为 `c175661a Disable cached HTTPS RR when async DNS is off`，GitHub Actions build 已通过，run id `27252444409`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27252444409
+   - disabled async DNS 入口级防回归已提交为 `9781c20a Cover disabled async DNS entry points`，GitHub Actions build 已通过，run id `27253605059`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27253605059
 
 3. artifact：
    - `0e483039` artifacts：
@@ -210,6 +213,10 @@
    - `0a13f069` artifacts：
       - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27248076745
       - artifact 精确下载链接待补。当前 `gh api repos/yukaidi1220/aria2/actions/runs/27248076745/artifacts` 触发 GitHub API rate limit；已确认 run 本身结论为 success，待 API 恢复后补 artifact id 和过期时间。
+   - `9781c20a` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526761566/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7526747997/zip
+      - artifact 过期时间：`2026-09-08T04:39:47Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
