@@ -419,8 +419,11 @@
       - artifact 过期时间：`2026-09-08T12:17:37Z`。
    - `21e816d4` artifacts：
       - run 页面：https://github.com/yukaidi1220/aria2/actions/runs/27277165024
-      - run 结论：`success`。
-      - artifact 精确下载链接待补。当前 `gh auth status` 显示 token invalid，`gh api repos/yukaidi1220/aria2/actions/runs/27277165024/artifacts` 返回 unauthenticated rate limit；已确认 run 本身结论为 success，待认证恢复或 API 限流解除后补 artifact id 和过期时间。
+      - run 结论：`success`；`gh api repos/yukaidi1220/aria2/actions/runs/27277165024/artifacts` 已返回 artifact 元数据。
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7536217031/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7536172604/zip
+      - artifact 过期时间：`2026-09-08T12:45:19Z`。
+      - 本机未完成 artifact 功能运行：`gh run download 27277165024 --name aria2-x86_64-w64-mingw32` 返回 `HTTP 401: Requires authentication`，需要有效 GitHub 认证后才能下载 zip。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
@@ -498,4 +501,4 @@
 
 5. HTTPS RR/H2/H3 边界：TYPE65 discovery 已切到 secure-first 阶段式 fallback，并新增 `--enable-https-rr` 显式 opt-in 门控；下一步补 fake/真实 DNS 验收，确认默认不发 TYPE65、不消费 SVCB cache，开启后按当前 DNS backend 查询并允许 selected endpoint 生效，DoH over H2 日志可断言。H3 继续保持默认关闭和 unsupported 快速拒绝。
 
-6. 验收报告：最新自动化 CI 结论已补，已可获取的 artifact 链接已补；`21e816d4` 的 artifact 精确链接仍待 gh 认证恢复或 API 限流解除后追加。真实 artifact 功能测试结果仍待后续按矩阵执行并追加。
+6. 验收报告：最新自动化 CI 结论已补，已可获取的 artifact 链接已补；artifact 下载和真实功能运行仍受当前 gh 认证失效影响。真实 artifact 功能测试结果仍待后续按矩阵执行并追加。
