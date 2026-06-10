@@ -6,6 +6,32 @@
 
 总方向是：DoH/DoT 优先，plain DNS 只用于 bootstrap 或明确 fallback；日志要能解释 DNS server、协议、bootstrap 来源、fallback 阶段、remote IP 和 CUID 关联；XP/Win7/无 SSL/nghttp2/ngtcp2/nghttp3 构建不崩溃， unsupported 能力要在配置或运行边界清楚失败。
 
+## 最新增量（03:40-04:06）
+
+1. 配置发现顺序补强：`0ab1da12 Test config discovery candidate order`
+   - 落点：`src/option_processing.cc`、`test/OptionProcessingTest.cc`
+   - 行为：抽出 `createDefaultConfigFileCandidates()` 纯函数，测试覆盖当前目录、程序目录、用户配置的候选顺序和去重；非 MinGW 测试覆盖程序目录 `aria2.conf` 自动发现。MinGW 下不伪造 `GetModuleFileNameW()`，避免把测试写成假覆盖。
+   - 外审：Volta 两轮只读复审，结论无阻断。
+   - CI：GitHub Actions run `27251537049` 已通过。
+
+2. HTTPS RR discovery 绑定 `async-dns=true`：`1697ce06 Gate HTTPS RR discovery on async DNS`
+   - 落点：`src/AbstractCommand.cc`、`test/AbstractCommandTest.cc`
+   - 行为：`createHttpsServiceBindingDiscoveryPhases()` 自身也检查 `PREF_ASYNC_DNS`，所以 `--async-dns=false --enable-https-rr=true` 不会生成 HTTPS/SVCB TYPE65 discovery phase。
+   - 测试：新增 `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns`；旧 positive phase tests 显式设置 `PREF_ASYNC_DNS=true`。
+   - 外审：Volta 只读复审无阻断。
+   - CI：GitHub Actions run `27251874742` 已通过。
+
+3. HTTPS RR/SVCB cache 消费也绑定 `async-dns=true`：`c175661a Disable cached HTTPS RR when async DNS is off`
+   - 落点：`src/AbstractCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`test/AbstractCommandTest.cc`、`test/HttpInitiateConnectionCommandTest.cc`
+   - 行为：`async-dns=false` 时不仅不会发起新的 TYPE65 查询，也不会消费已有 HTTPS RR/SVCB cache 改写 connect target/port 或追加 address hints。
+   - 测试：覆盖 `async-dns=false + enable-https-rr=true + 已有 cache` 仍使用 origin；覆盖 `async-dns=false + enable-https-rr=true + doh 空 server` phases 为空且不触发 secure DNS 配置校验。
+   - 外审：Volta 第一轮抓到旧 hints 测试未显式开关会失败；修复后第二轮复审无阻断。
+   - CI：GitHub Actions run `27252444409` 已通过。
+
+4. 47 条需求评审结论
+   - Euclid 只读评审结论：需求方向合理，但 fallback 判定、multi secure/plain 边界、双栈快失败策略、兼容矩阵和日志字段契约仍是阶段性阻断；不能宣称 47 条已完成。
+   - Lagrange 只读探索结论：`async-dns=false` 主解析路径已经回到同步 `getaddrinfo`，但 HTTPS RR cache 消费点原本只看 `enable-https-rr`，本轮已按该 finding 修补。
+
 ## 本轮已实现
 
 1. `async-dns=false` 时跳过 secure DNS resolver 配置。
@@ -62,6 +88,7 @@
     - 落点：`src/OptionHandlerFactory.cc`、`src/AbstractCommand.cc`、`src/Context.cc`
     - 行为：新增 `--enable-https-rr[=true|false]`，默认 `false`；未显式开启时，即使启用 HTTPS、async DNS、H2 或 H3 capability gate，也不会额外发起 HTTPS RR/TYPE65 查询，也不会消费已有 SVCB cache 改 TCP connect target/port 或追加 address hints。
     - 行为：显式 `--enable-https-rr=true` 后，直连 HTTPS origin 才启动后台 HTTPS/SVCB discovery，并允许 cached selected endpoint 参与 connect target/port 选择；无 async DNS 构建会在参数解析阶段拒绝该能力，不进入运行期崩溃。
+    - 行为：`--async-dns=false` 时，即使显式 `--enable-https-rr=true` 且 engine 中已有 HTTPS RR/SVCB cache，也不会生成 discovery phase、不会消费 cached endpoint 改 connect target/port、不会追加 SVCB address hints。该边界由 `1697ce06` 和 `c175661a` 补齐。
     - 日志：启动日志打印 `enable-https-rr` 的最终值和来源，便于确认“默认不多查 HTTPS RR”的配置边界。
 
 12. `max-connection-per-server` server 维度改为 URL `protocol + hostname`。
@@ -89,7 +116,10 @@
    - 既有 DoT/DoH/multi 配置校验测试显式设置 `async-dns=true`，避免新早退让测试空跑。
 
 2. `test/AbstractCommandTest.cc`
+   - `testGetUsableHttpsServiceBindingAddressHintsHonorsAsyncDns`：覆盖 `async-dns=false` 时即使 `enable-https-rr=true` 也不返回 HTTPS RR address hints。
    - `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault`：覆盖默认未启用 `--enable-https-rr` 时不会创建 HTTPS RR discovery phase。
+   - `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns`：覆盖 `async-dns=false` 时不会创建 HTTPS RR discovery phase。
+   - `testCreateHttpsServiceBindingDiscoveryPhasesIgnoresSecureConfigWhenAsyncDnsOff`：覆盖 `async-dns=false + enable-https-rr=true + doh 空 server` 时 phases 为空，且不触发 secure DNS 配置校验。
    - `testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem` / `testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit`：覆盖 HTTPS RR discovery 在 c-ares 模式下的系统 DNS 和显式 c-ares -> 系统 c-ares 阶段。
    - `testCreateHttpsServiceBindingDiscoveryPhasesDot` / `testCreateHttpsServiceBindingDiscoveryPhasesDoh`：覆盖纯 DoT/DoH 的 secure -> 系统 c-ares 阶段。
    - `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly`：覆盖 `multi` 下 secure-first、secure-only、plain-only 和空 server 的 HTTPS RR discovery 阶段顺序。
@@ -103,12 +133,17 @@
 
 5. `test/HttpInitiateConnectionCommandTest.cc`
     - `testSelectConnectionAuthorityIgnoresCachedSvcbByDefault`：覆盖默认未启用 `--enable-https-rr` 时即使已有 SVCB cache，也不改 connect target/port、不写 selected endpoint address hints。
-    - 既有 cached SVCB endpoint、failed endpoint、proxy 和 connect failure 测试显式设置 `--enable-https-rr=true`，确保 opt-in 后仍可消费 SVCB cache。
+    - `testSelectConnectionAuthorityIgnoresCachedSvcbWhenAsyncDnsOff`：覆盖 `async-dns=false + enable-https-rr=true + 已有 SVCB cache` 时仍使用 origin，不设置 endpoint info，不缓存 svc address hint。
+    - 既有 cached SVCB endpoint、failed endpoint、proxy 和 connect failure 测试显式设置 `async-dns=true` 与 `--enable-https-rr=true`，确保 opt-in 后仍可消费 SVCB cache。
 
 6. `test/FileEntryTest.cc`
    - `testGetRequest`：覆盖同 host 不同 protocol 可分别获得请求，验证 `http://localhost` 不再误挡 `ftp://localhost`。
    - `testGetRequest_limitsSameProtocolHost`：覆盖同 protocol+host 仍受 `max-connection-per-server` 限制，提升到 `2` 后只允许第二条同 server 请求。
    - `testFindFasterRequestUsesProtocolHostLimit`：覆盖 faster-server 替换路径也按 protocol+host 计数，HTTP 同 host 占满时不会挑同 HTTP 候选，但允许 FTP 同 host 候选。
+
+7. `test/NameResolveCommandTest.cc`
+   - `testUDPTrackerIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 UDP tracker 入口在 `async-dns=false + doh 空 server` 时构造阶段不触发 secure DNS 配置校验。
+   - `testDHTEntryPointIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 DHT entry point 入口在 `async-dns=false + doh 空 server` 时构造阶段不触发 secure DNS 配置校验。
 
 ## 当前验证
 
@@ -121,6 +156,7 @@
    - `max-connection-per-server` protocol+host 切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27245665096`。
    - DNS query plan 日志第二阶段切片已通过 `git diff --check -- src/AsyncNameResolverMan.cc src/AsyncNameResolverMan.h test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`；新增单元日志断言；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
    - `4c0af2e3 Log async DNS query plans` 首次 CI 失败后，经外部 review 定位到 `formatDohServerList()` 中 `auto entry = "https://";` 被 C++11 推导成 `const char*`，后续 `+= std::string` 在 MinGW 编译期失败；`f354ff58 Fix DoH server list string construction` 改成显式 `std::string` 后通过 GitHub Actions。
+   - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`；本机仍缺少 C++ 构建工具，编译验证依赖 GitHub Actions。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -143,6 +179,12 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27247443220
    - 报告更新已提交为 `0a13f069 Update async DNS progress report`，GitHub Actions build 已通过，run id `27248076745`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27248076745
+   - 配置发现顺序补强已提交为 `0ab1da12 Test config discovery candidate order`，GitHub Actions build 已通过，run id `27251537049`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27251537049
+   - HTTPS RR discovery async DNS 门控已提交为 `1697ce06 Gate HTTPS RR discovery on async DNS`，GitHub Actions build 已通过，run id `27251874742`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27251874742
+   - HTTPS RR/SVCB cache async DNS 门控已提交为 `c175661a Disable cached HTTPS RR when async DNS is off`，GitHub Actions build 已通过，run id `27252444409`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27252444409
 
 3. artifact：
    - `0e483039` artifacts：

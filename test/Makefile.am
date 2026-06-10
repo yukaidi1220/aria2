@@ -244,6 +244,9 @@ aria2c_SOURCES += BtAllowedFastMessageTest.cc\
 	ValueBaseBencodeParserTest.cc\
 	ExtensionMessageRegistryTest.cc\
 	UDPTrackerClientTest.cc
+if ENABLE_ASYNC_DNS
+aria2c_SOURCES += NameResolveCommandTest.cc
+endif # ENABLE_ASYNC_DNS
 endif # ENABLE_BITTORRENT
 
 if ENABLE_METALINK
