@@ -275,6 +275,7 @@
    - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27254138777`。
    - HTTPS established / Response received remote IP 日志补强和 DoH H2 transport 门控测试已通过 `git diff --check -- src/HttpRequestCommand.cc src/HttpConnection.cc test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、Volta/Euclid 外审和 GitHub Actions，run id `27255420287`。
    - 当前复查补强切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27263937493`；本机仍缺少 C++ 构建工具，编译验证依赖 CI。
+   - v4/v6 并发 request family 选择测试切片已通过 `git diff --check`、外部 review 和 GitHub Actions，run id `27265459302`；本机仍缺少 C++ 构建工具，编译验证依赖 CI。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -311,6 +312,8 @@
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27255420287
    - DoH/DoT endpoint failure 和 bad-address family 日志补强已提交为 `be6aba92 Cover DNS endpoint failure logs`，GitHub Actions build 已通过，run id `27263937493`。
    - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27263937493
+   - v4/v6 并发 request family 选择测试已提交为 `62e6b3b4 Cover dual-stack request family selection`，GitHub Actions build 已通过，run id `27265459302`。
+   - run 链接：https://github.com/yukaidi1220/aria2/actions/runs/27265459302
 
 3. artifact：
    - `0e483039` artifacts：
@@ -352,6 +355,10 @@
       - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7530790021/zip
       - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7530731051/zip
       - artifact 过期时间：`2026-09-08T08:36:21Z`。
+   - `62e6b3b4` artifacts：
+      - `aria2-x86_64-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7531411982/zip
+      - `aria2-i686-w64-mingw32`：https://api.github.com/repos/yukaidi1220/aria2/actions/artifacts/7531374753/zip
+      - artifact 过期时间：`2026-09-08T09:03:34Z`。
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
