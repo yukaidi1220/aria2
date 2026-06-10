@@ -9,6 +9,7 @@
 #include "PiecedSegment.h"
 #include "Piece.h"
 #include "Request.h"
+#include "HttpLog.h"
 #include "HttpHeader.h"
 #include "HttpRequest.h"
 #include "Exception.h"
@@ -49,6 +50,7 @@ class HttpResponseTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testValidateResponse_bad_range);
   CPPUNIT_TEST(testValidateResponse_chunked);
   CPPUNIT_TEST(testValidateResponse_withIfModifiedSince);
+  CPPUNIT_TEST(testResponseLogsIncludeRemoteEndpoint);
   CPPUNIT_TEST(testProcessRedirect);
   CPPUNIT_TEST(testRetrieveCookie);
   CPPUNIT_TEST(testSupportsPersistentConnection);
@@ -81,6 +83,7 @@ public:
   void testValidateResponse_bad_range();
   void testValidateResponse_chunked();
   void testValidateResponse_withIfModifiedSince();
+  void testResponseLogsIncludeRemoteEndpoint();
   void testProcessRedirect();
   void testRetrieveCookie();
   void testSupportsPersistentConnection();
@@ -477,6 +480,23 @@ void HttpResponseTest::testValidateResponse_withIfModifiedSince()
   httpRequest->setIfModifiedSinceHeader("Fri, 16 Jul 2010 12:56:59 GMT");
   httpResponse.setHttpRequest(std::move(httpRequest));
   httpResponse.validateResponse();
+}
+
+void HttpResponseTest::testResponseLogsIncludeRemoteEndpoint()
+{
+  const std::string header = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n";
+
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("CUID#9 - Response received from 192.0.2.9:443:\n") +
+          header,
+      formatHttpResponseReceivedLog(9, "192.0.2.9:443", header));
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("HTTP: CUID#9 - Response status: 200 remote=192.0.2.9:443"),
+      formatHttpResponseStatusLog(9, 200, "192.0.2.9:443"));
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("HTTP: CUID#10 - Response status: 206 "
+                  "remote=[2001:db8::9]:443"),
+      formatHttpResponseStatusLog(10, 206, "[2001:db8::9]:443"));
 }
 
 void HttpResponseTest::testProcessRedirect()

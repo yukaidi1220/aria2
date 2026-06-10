@@ -44,7 +44,6 @@
 #include <numeric>
 #include <vector>
 #include <iostream>
-#include <cstring>
 
 #include "LogFactory.h"
 #include "Logger.h"
@@ -58,6 +57,7 @@
 #include "Option.h"
 #include "OptionHandler.h"
 #include "OptionParser.h"
+#include "StartupOptionLog.h"
 #include "a2algo.h"
 #include "a2io.h"
 #include "a2time.h"
@@ -89,42 +89,10 @@ namespace aria2 {
 
 namespace {
 
-const char* optionSourceName(size_t depth, bool confPrecedence)
-{
-  if (depth == 0) {
-    return confPrecedence ? "conf" : "command";
-  }
-  if (depth == 1) {
-    return confPrecedence ? "command" : "conf";
-  }
-  return "default";
-}
-
-std::string getOptionSource(const Option* option, PrefPtr pref,
-                            const OptionParser* parser)
-{
-  auto confPrecedence = option->get(PREF_CONF_PRECEDENCE) == "conf";
-  for (size_t depth = 0; option; ++depth, option = option->getParent().get()) {
-    if (!option->definedLocal(pref)) {
-      continue;
-    }
-    auto source = optionSourceName(depth, confPrecedence);
-    auto handler = parser->find(pref);
-    if (strcmp(source, "default") == 0 && handler &&
-        option->get(pref) != handler->getDefaultValue()) {
-      return "runtime";
-    }
-    return source;
-  }
-  return "unset";
-}
-
 void logStartupOption(const Option* option, PrefPtr pref,
                       const OptionParser* parser)
 {
-  A2_LOG_INFO(fmt("Option: %s=%s (source=%s)", pref->k,
-                  option->get(pref).c_str(),
-                  getOptionSource(option, pref, parser).c_str()));
+  A2_LOG_INFO(formatStartupOptionLog(option, pref, parser));
 }
 
 void logStartupOptions(const Option* option)

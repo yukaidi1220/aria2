@@ -14,11 +14,15 @@
 #include "AsyncDnsServerConfig.h"
 #include "DnsMessage.h"
 #include "EventPoll.h"
+#include "File.h"
 #ifdef HAVE_LIBNGHTTP2
 #  include "Http2TestUtil.h"
 #  include "HttpProtocol.h"
 #  include <nghttp2/nghttp2.h>
 #endif // HAVE_LIBNGHTTP2
+#include "LogFactory.h"
+#include "Logger.h"
+#include "TestUtil.h"
 #include "a2functional.h"
 #include "util.h"
 
@@ -37,6 +41,7 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testHostHeaderUsesBracketedIPv6DefaultPort);
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1);
+  CPPUNIT_TEST(testHttp2SelectionLogsTransport);
   CPPUNIT_TEST(testResolveAResponseOverHttp2);
   CPPUNIT_TEST(testResolveHttpsServiceBindingResponseOverHttp2);
   CPPUNIT_TEST(testRetryNextServerOnHttp2RstBeforeHeaders);
@@ -74,6 +79,7 @@ public:
   void testHostHeaderUsesBracketedIPv6DefaultPort();
 #ifdef HAVE_LIBNGHTTP2
   void testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1();
+  void testHttp2SelectionLogsTransport();
   void testResolveAResponseOverHttp2();
   void testResolveHttpsServiceBindingResponseOverHttp2();
   void testRetryNextServerOnHttp2RstBeforeHeaders();
@@ -550,6 +556,34 @@ public:
   std::vector<int> families;
 };
 
+class ScopedNetworkLog {
+public:
+  explicit ScopedNetworkLog(std::string path) : path_(std::move(path))
+  {
+    File(path_).remove();
+    LogFactory::setLogFile(path_);
+    LogFactory::setLogLevel(V_NETWORK);
+    LogFactory::reconfigure();
+  }
+
+  ~ScopedNetworkLog()
+  {
+    LogFactory::setLogFile("");
+    LogFactory::setLogLevel(Logger::A2_DEBUG);
+    LogFactory::reconfigure();
+  }
+
+  std::string closeAndRead() const
+  {
+    LogFactory::setLogFile("");
+    LogFactory::reconfigure();
+    return readFile(path_);
+  }
+
+private:
+  std::string path_;
+};
+
 AsyncDohTransportFactory makeTransportFactory(FakeDohTransportFactory& factory)
 {
   return [&factory](const AsyncDohServerConfig& server) {
@@ -836,6 +870,26 @@ void AsyncDohNameResolverTest::testHttp2EnabledAdvertisesAlpnAndFallsBackToHttp1
                        transport->tlsParams.alpnProtocols[1]);
   CPPUNIT_ASSERT(
       util::startsWith(transport->written, "POST /dns-query HTTP/1.1\r\n"));
+}
+
+void AsyncDohNameResolverTest::testHttp2SelectionLogsTransport()
+{
+  auto logPath =
+      std::string(A2_TEST_OUT_DIR) +
+      "/aria2_AsyncDohNameResolverTest_testHttp2SelectionLogsTransport.log";
+  ScopedNetworkLog log(logPath);
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"1.1.1.1", 443, "", "/dns-query"}},
+      makeTransportFactory(factory), true);
+
+  resolver.resolve("www.example.com");
+  auto transport = factory.transports.back();
+  transport->selectedAlpnProtocol = HTTP_ALPN_H2;
+  driveUntilWriteRequestDone(resolver, factory);
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DNS: DoH using HTTP/2") != std::string::npos);
 }
 
 void AsyncDohNameResolverTest::testResolveAResponseOverHttp2()

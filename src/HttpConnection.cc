@@ -50,6 +50,7 @@
 #include "HttpHeader.h"
 #include "Logger.h"
 #include "SocketCore.h"
+#include "HttpLog.h"
 #include "Option.h"
 #include "CookieStorage.h"
 #include "AuthConfigFactory.h"
@@ -62,16 +63,6 @@
 namespace aria2 {
 
 namespace {
-
-std::string formatEndpointForLog(const Endpoint& endpoint)
-{
-  if (endpoint.family == AF_INET6) {
-    return fmt("[%s]:%u", endpoint.addr.c_str(),
-               static_cast<unsigned int>(endpoint.port));
-  }
-  return fmt("%s:%u", endpoint.addr.c_str(),
-             static_cast<unsigned int>(endpoint.port));
-}
 
 std::string getRemoteEndpointForLog(const std::shared_ptr<SocketCore>& socket)
 {
@@ -203,13 +194,11 @@ std::unique_ptr<HttpResponse> HttpConnection::receiveResponse()
   if (proc->parse(socketRecvBuffer_->getBuffer(),
                   socketRecvBuffer_->getBufferLength())) {
     auto remoteEndpoint = getRemoteEndpointForLog(socket_);
-    A2_LOG_INFO(fmt("CUID#%" PRId64 " - Response received from %s:\n%s",
-                    cuid_, remoteEndpoint.c_str(),
-                    eraseConfidentialInfo(proc->getHeaderString()).c_str()));
+    A2_LOG_INFO(formatHttpResponseReceivedLog(
+        cuid_, remoteEndpoint, eraseConfidentialInfo(proc->getHeaderString())));
     auto result = proc->getResult();
-    A2_LOG_NETWORK(
-        fmt("HTTP: CUID#%" PRId64 " - Response status: %d remote=%s",
-            cuid_, result->getStatusCode(), remoteEndpoint.c_str()));
+    A2_LOG_NETWORK(formatHttpResponseStatusLog(cuid_, result->getStatusCode(),
+                                               remoteEndpoint));
     if (result->getStatusCode() / 100 == 1) {
       socketRecvBuffer_->drain(proc->getLastBytesProcessed());
       outstandingHttpRequests_.front()->resetHttpHeaderProcessor();

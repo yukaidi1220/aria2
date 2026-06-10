@@ -48,6 +48,7 @@
 #  include "Http2SocketCoreTransport.h"
 #endif // HAVE_LIBNGHTTP2
 #include "HttpConnection.h"
+#include "HttpLog.h"
 #include "HttpRequest.h"
 #include "HttpRequestFactory.h"
 #include "SegmentMan.h"
@@ -74,7 +75,6 @@
 #include "InitiateConnectionCommandFactory.h"
 #include "RecoverableException.h"
 #include "DlAbortEx.h"
-#include "a2netcompat.h"
 
 namespace aria2 {
 
@@ -99,20 +99,6 @@ HttpRequestCommand::~HttpRequestCommand() = default;
 #ifdef ENABLE_SSL
 namespace {
 constexpr uint32_t HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL = 60;
-
-std::string formatRequestRemoteEndpointForLog(const Request* req)
-{
-  const auto& connectedAddr = req->getConnectedAddr();
-  if (connectedAddr.empty()) {
-    return "unavailable";
-  }
-  if (getNumericAddressFamily(connectedAddr) == AF_INET6) {
-    return fmt("[%s]:%u", connectedAddr.c_str(),
-               static_cast<unsigned int>(req->getConnectedPort()));
-  }
-  return fmt("%s:%u", connectedAddr.c_str(),
-             static_cast<unsigned int>(req->getConnectedPort()));
-}
 
 bool isTLSHandshakeFailure(const RecoverableException& e)
 {
@@ -223,11 +209,9 @@ bool HttpRequestCommand::executeInternal()
       httpProtocol = decideHttpProtocolFromSelectedAlpn(
           getSocket()->getSelectedAlpnProtocol(),
           getOption()->getAsBool(PREF_ENABLE_HTTP2));
-      A2_LOG_NETWORK(
-          fmt("CUID#%" PRId64
-              " - HTTPS connection to %s established remote=%s",
-              getCuid(), getRequest()->getHost().c_str(),
-              formatRequestRemoteEndpointForLog(getRequest().get()).c_str()));
+      A2_LOG_NETWORK(formatHttpsConnectionEstablishedLog(
+          getCuid(), getRequest()->getHost(),
+          formatRequestRemoteEndpointForLog(getRequest().get())));
     }
 #endif // ENABLE_SSL
 #ifdef HAVE_LIBNGHTTP2

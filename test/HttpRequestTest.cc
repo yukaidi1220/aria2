@@ -4,6 +4,7 @@
 
 #include <cppunit/extensions/HelperMacros.h>
 
+#include "HttpLog.h"
 #include "prefs.h"
 #include "AuthConfigFactory.h"
 #include "PiecedSegment.h"
@@ -29,6 +30,7 @@ class HttpRequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateRequest_ftp);
   CPPUNIT_TEST(testCreateRequest_with_cookie);
   CPPUNIT_TEST(testCreateRequest_with_tls_sni_host);
+  CPPUNIT_TEST(testHttpsConnectionLogIncludesRemoteEndpoint);
   CPPUNIT_TEST(testCreateRequest_with_hosts_mapping);
   CPPUNIT_TEST(testCreateRequest_query);
   CPPUNIT_TEST(testCreateRequest_head);
@@ -63,6 +65,7 @@ public:
   void testCreateRequest_ftp();
   void testCreateRequest_with_cookie();
   void testCreateRequest_with_tls_sni_host();
+  void testHttpsConnectionLogIncludesRemoteEndpoint();
   void testCreateRequest_with_hosts_mapping();
   void testCreateRequest_query();
   void testCreateRequest_head();
@@ -537,6 +540,31 @@ void HttpRequestTest::testCreateRequest_with_tls_sni_host()
                              "\r\n";
 
   CPPUNIT_ASSERT_EQUAL(expectedText, httpRequest.createRequest());
+}
+
+void HttpRequestTest::testHttpsConnectionLogIncludesRemoteEndpoint()
+{
+  Request req;
+  CPPUNIT_ASSERT(req.setUri("https://example.org/file"));
+  req.setConnectedAddrInfo("example.org", "192.0.2.9", 443);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.9:443"),
+                       formatRequestRemoteEndpointForLog(&req));
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("CUID#7 - HTTPS connection to example.org established "
+                  "remote=192.0.2.9:443"),
+      formatHttpsConnectionEstablishedLog(
+          7, req.getHost(), formatRequestRemoteEndpointForLog(&req)));
+
+  req.setConnectedAddrInfo("example.org", "2001:db8::9", 443);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("[2001:db8::9]:443"),
+                       formatRequestRemoteEndpointForLog(&req));
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("CUID#8 - HTTPS connection to example.org established "
+                  "remote=[2001:db8::9]:443"),
+      formatHttpsConnectionEstablishedLog(
+          8, req.getHost(), formatRequestRemoteEndpointForLog(&req)));
 }
 
 void HttpRequestTest::testCreateRequest_with_hosts_mapping()

@@ -122,6 +122,7 @@ SRCS =  \
 	help_tags.cc help_tags.h\
 	HostMapping.cc HostMapping.h\
 	HttpConnection.cc HttpConnection.h\
+	HttpLog.cc HttpLog.h\
 	HttpDownloadCommand.cc HttpDownloadCommand.h\
 	HttpHeader.cc HttpHeader.h\
 	HttpHeaderProcessor.cc HttpHeaderProcessor.h\
@@ -240,6 +241,7 @@ SRCS =  \
 	SocketBuffer.cc SocketBuffer.h\
 	SocketCore.cc SocketCore.h\
 	SocketRecvBuffer.cc SocketRecvBuffer.h\
+	StartupOptionLog.cc StartupOptionLog.h\
 	SpeedCalc.cc SpeedCalc.h\
 	StatCalc.h\
 	StreamCheckIntegrityEntry.cc StreamCheckIntegrityEntry.h\

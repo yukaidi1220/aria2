@@ -44,6 +44,8 @@ class AbstractCommandTest : public CppUnit::TestFixture {
 #ifdef ENABLE_ASYNC_DNS
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns);
+  CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesDisabledByHttp3Only);
+  CPPUNIT_TEST(testShouldStartHttpsServiceBindingDiscoveryGatesQueries);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem);
   CPPUNIT_TEST(testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit);
 #ifdef ENABLE_SSL
@@ -91,6 +93,8 @@ public:
 #ifdef ENABLE_ASYNC_DNS
   void testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault();
   void testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns();
+  void testCreateHttpsServiceBindingDiscoveryPhasesDisabledByHttp3Only();
+  void testShouldStartHttpsServiceBindingDiscoveryGatesQueries();
   void testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem();
   void testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit();
 #ifdef ENABLE_SSL
@@ -684,6 +688,46 @@ void AbstractCommandTest::
 
   assertHttpsServiceBindingDiscoveryPhases(
       std::vector<HttpsServiceBindingDiscoveryPhase>{}, option);
+}
+
+void AbstractCommandTest::
+    testCreateHttpsServiceBindingDiscoveryPhasesDisabledByHttp3Only()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTP3, A2_V_TRUE);
+  option.put(PREF_ASYNC_DNS_MODE, V_CARES);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+
+  assertHttpsServiceBindingDiscoveryPhases(
+      std::vector<HttpsServiceBindingDiscoveryPhase>{}, option);
+  CPPUNIT_ASSERT(!shouldStartHttpsServiceBindingDiscovery(&option, false,
+                                                          false));
+}
+
+void AbstractCommandTest::testShouldStartHttpsServiceBindingDiscoveryGatesQueries()
+{
+  Option option;
+  option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+  option.put(PREF_ASYNC_DNS_MODE, V_CARES);
+  option.put(PREF_ASYNC_DNS_SERVER, "");
+
+  CPPUNIT_ASSERT(!shouldStartHttpsServiceBindingDiscovery(&option, false,
+                                                          false));
+
+  option.put(PREF_ENABLE_HTTPS_RR, A2_V_TRUE);
+
+  CPPUNIT_ASSERT(shouldStartHttpsServiceBindingDiscovery(&option, false,
+                                                        false));
+  CPPUNIT_ASSERT(!shouldStartHttpsServiceBindingDiscovery(&option, true,
+                                                         false));
+  CPPUNIT_ASSERT(!shouldStartHttpsServiceBindingDiscovery(&option, false,
+                                                         true));
+
+  option.put(PREF_ASYNC_DNS, A2_V_FALSE);
+
+  CPPUNIT_ASSERT(!shouldStartHttpsServiceBindingDiscovery(&option, false,
+                                                         false));
 }
 
 void AbstractCommandTest::testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem()

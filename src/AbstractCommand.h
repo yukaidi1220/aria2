@@ -289,6 +289,8 @@ std::vector<dns::ServiceBindingEndpoint> getHttpsServiceBindingEndpoints(
 #ifdef ENABLE_ASYNC_DNS
 std::vector<HttpsServiceBindingDiscoveryPhase>
 createHttpsServiceBindingDiscoveryPhases(const Option* option);
+bool shouldStartHttpsServiceBindingDiscovery(
+    const Option* option, bool hasCachedRecords, bool isResolving);
 #endif // ENABLE_ASYNC_DNS
 
 } // namespace aria2

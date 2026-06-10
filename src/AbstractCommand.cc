@@ -854,11 +854,10 @@ void maybeStartHttpsServiceBindingDiscovery(DownloadEngine* e,
                                             const std::string& hostname,
                                             uint16_t port, a2_gid_t gid)
 {
-  if (!e || !e->getOption() ||
-      !e->getOption()->getAsBool(PREF_ASYNC_DNS) ||
-      !e->getOption()->getAsBool(PREF_ENABLE_HTTPS_RR) ||
-      e->findCachedHttpsServiceBindingRecords(hostname, port) ||
-      e->isHttpsServiceBindingResolving(hostname, port)) {
+  if (!e || !shouldStartHttpsServiceBindingDiscovery(
+                e->getOption().get(),
+                e->findCachedHttpsServiceBindingRecords(hostname, port),
+                e->isHttpsServiceBindingResolving(hostname, port))) {
     return;
   }
 
@@ -990,6 +989,15 @@ createHttpsServiceBindingDiscoveryPhases(const Option* option)
 #endif // ENABLE_SSL
 
   return phases;
+}
+
+bool shouldStartHttpsServiceBindingDiscovery(
+    const Option* option, bool hasCachedRecords, bool isResolving)
+{
+  return option && option->getAsBool(PREF_ASYNC_DNS) &&
+         option->getAsBool(PREF_ENABLE_HTTPS_RR) && !hasCachedRecords &&
+         !isResolving &&
+         !createHttpsServiceBindingDiscoveryPhases(option).empty();
 }
 #endif // ENABLE_ASYNC_DNS
 

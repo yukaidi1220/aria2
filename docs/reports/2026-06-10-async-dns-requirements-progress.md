@@ -32,6 +32,34 @@
    - 行为：info 级 `Response received` 由 `CUID#... - Response received:` 改为 `CUID#... - Response received from <ip:port>:`；原 network 级 `HTTP: ... Response status ... remote=...` 继续保留，并复用同一个 remote endpoint 字符串。
    - 目的：用户常看的 `Response received` 日志本身即可关联实际 remote IP，不必再额外找相邻 network 日志。
 
+## 复查补强（当前未提交）
+
+复查发现源码行为已补，但部分关键日志和 gate 没被回归测试钉死。本节只补稳定单元测试和可解释报告，不继续扩展新功能。
+
+1. HTTP/HTTPS remote endpoint 日志格式测试。
+   - 落点：`src/HttpLog.cc`、`src/HttpLog.h`、`src/HttpRequestCommand.cc`、`src/HttpConnection.cc`、`test/HttpRequestTest.cc`、`test/HttpResponseTest.cc`
+   - 行为：把 HTTPS 建连成功、`Response received`、`Response status` 三类日志格式集中到 `HttpLog` helper；生产代码和单测使用同一格式入口。
+   - 测试：`testHttpsConnectionLogIncludesRemoteEndpoint()` 断言 IPv4/IPv6 remote endpoint 和 `HTTPS connection ... established remote=...`；`testResponseLogsIncludeRemoteEndpoint()` 断言 `Response received from ...` 和 `Response status ... remote=...`。
+
+2. DoH 实际 HTTP/2 协商日志测试。
+   - 落点：`test/AsyncDohNameResolverTest.cc`
+   - 行为：基于 fake DoH transport 模拟 ALPN 选择 `h2`，走到 DoH 写请求路径后抓 network log，断言存在 `DNS: DoH using HTTP/2`。
+   - 边界：测试仅在 `HAVE_LIBNGHTTP2` 下启用，不影响无 nghttp2 构建。
+
+3. 启动参数来源日志测试。
+   - 落点：`src/StartupOptionLog.cc`、`src/StartupOptionLog.h`、`src/Context.cc`、`test/OptionProcessingTest.cc`
+   - 行为：把 startup option source 判定和 `Option: key=value (source=...)` 格式拆成可测 helper；生产启动日志仍走同一逻辑。
+   - 测试：`testStartupOptionLogSources()` 覆盖 command/default/conf/runtime 来源和 `--conf-precedence=conf` 下 command/conf source 名称反转。
+
+4. HTTPS RR / H3 默认不多查测试。
+   - 落点：`src/AbstractCommand.cc`、`src/AbstractCommand.h`、`test/AbstractCommandTest.cc`
+   - 行为：把 `maybeStartHttpsServiceBindingDiscovery()` 的前置 gate 拆成 `shouldStartHttpsServiceBindingDiscovery()`，测试能直接断言默认关闭、cache 已存在、正在解析、`async-dns=false` 时不会启动 TYPE65 discovery。
+   - 测试：`testCreateHttpsServiceBindingDiscoveryPhasesDisabledByHttp3Only()` 断言仅开启 `enable-http3=true` 但未显式开启 `enable-https-rr=true` 时仍不创建 HTTPS RR discovery phase，也不会启动 discovery。
+
+5. v4/v6 端到端验收边界。
+   - 只读复查结论：现有单测能证明 A/AAAA 并发返回、双栈地址选择、非 global IPv6 backup 避让、地址族失败惩罚和同 hostname 连接数限制；但测试入口默认 `SocketCore::setProtocolFamily(AF_INET)`，不能稳定证明“同一下载真实同时跑 v4/v6 请求”或“公网 IPv6 不通后端到端快速切 v4”。
+   - 后续验收建议：需要新增 fake resolver + fake socket/connection factory 注入点，模拟 IPv6 立即失败、IPv4 成功，再断言 family penalty、下一连接目标、hostname 维度连接数和 remote IP 日志；不建议依赖 CI/本机真实 IPv6 环境。
+
 ## 最新增量（03:40-04:06）
 
 1. 配置发现顺序补强：`0ab1da12 Test config discovery candidate order`
@@ -142,33 +170,47 @@
    - `testStartAsyncMultiLogsQueryPlans`：覆盖 `multi` 主阶段 DoT/DoH query plan、显式 plain fallback query plan 和系统 c-ares fallback query plan 的 network 日志字段。
    - 既有 DoT/DoH/multi 配置校验测试显式设置 `async-dns=true`，避免新早退让测试空跑。
 
-2. `test/AbstractCommandTest.cc`
+2. `test/AsyncDohNameResolverTest.cc`
+   - `testHttp2SelectionLogsTransport`：覆盖 fake DoH transport 协商到 ALPN `h2` 后，network log 打出 `DNS: DoH using HTTP/2`。
+
+3. `test/AbstractCommandTest.cc`
    - `testGetUsableHttpsServiceBindingAddressHintsHonorsAsyncDns`：覆盖 `async-dns=false` 时即使 `enable-https-rr=true` 也不返回 HTTPS RR address hints。
    - `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByDefault`：覆盖默认未启用 `--enable-https-rr` 时不会创建 HTTPS RR discovery phase。
    - `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByAsyncDns`：覆盖 `async-dns=false` 时不会创建 HTTPS RR discovery phase。
+   - `testCreateHttpsServiceBindingDiscoveryPhasesDisabledByHttp3Only`：覆盖仅开启 `enable-http3=true` 但未显式开启 `enable-https-rr=true` 时不会创建 HTTPS RR discovery phase。
+   - `testShouldStartHttpsServiceBindingDiscoveryGatesQueries`：覆盖默认关闭、已有 cache、正在解析和 `async-dns=false` 时不会启动 HTTPS RR discovery。
    - `testCreateHttpsServiceBindingDiscoveryPhasesIgnoresSecureConfigWhenAsyncDnsOff`：覆盖 `async-dns=false + enable-https-rr=true + doh 空 server` 时 phases 为空，且不触发 secure DNS 配置校验。
    - `testCreateHttpsServiceBindingDiscoveryPhasesCaresSystem` / `testCreateHttpsServiceBindingDiscoveryPhasesCaresExplicit`：覆盖 HTTPS RR discovery 在 c-ares 模式下的系统 DNS 和显式 c-ares -> 系统 c-ares 阶段。
    - `testCreateHttpsServiceBindingDiscoveryPhasesDot` / `testCreateHttpsServiceBindingDiscoveryPhasesDoh`：覆盖纯 DoT/DoH 的 secure -> 系统 c-ares 阶段。
    - `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureFirst` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSecureOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiPlainOnly` / `testCreateHttpsServiceBindingDiscoveryPhasesMultiSystemOnly`：覆盖 `multi` 下 secure-first、secure-only、plain-only 和空 server 的 HTTPS RR discovery 阶段顺序。
 
-3. `test/OptionHandlerTest.cc`
+4. `test/HttpRequestTest.cc`
+   - `testHttpsConnectionLogIncludesRemoteEndpoint`：覆盖 HTTPS 建连成功日志必须包含 IPv4/IPv6 remote endpoint。
+
+5. `test/HttpResponseTest.cc`
+   - `testResponseLogsIncludeRemoteEndpoint`：覆盖 `Response received from <ip:port>` 和 `Response status ... remote=<ip:port>`。
+
+6. `test/OptionProcessingTest.cc`
+   - `testStartupOptionLogSources`：覆盖启动关键参数日志的 `default/conf/command/runtime` 来源判定和 `conf-precedence=conf` 映射。
+
+7. `test/OptionHandlerTest.cc`
    - `testFactoryMaxConnectionPerServerLimit`：覆盖 `-x 64` 成功、`-x 65` 失败。
    - `testUnsupportedFeatureOptionParser`：覆盖 `--enable-https-rr` 默认 `false`、显式 `false` 可解析、有 async DNS 构建时 `true` 可解析、无 async DNS 构建时 `true` 启动期拒绝。
 
-4. `test/InitiateConnectionCommandTest.cc`
+8. `test/InitiateConnectionCommandTest.cc`
    - `testSelectBackupIPAddressSkipsScopedIPv6Backup`：覆盖 IPv4 主连接时不会把 ULA/link-local IPv6 选作 backup 连接地址。
 
-5. `test/HttpInitiateConnectionCommandTest.cc`
+9. `test/HttpInitiateConnectionCommandTest.cc`
     - `testSelectConnectionAuthorityIgnoresCachedSvcbByDefault`：覆盖默认未启用 `--enable-https-rr` 时即使已有 SVCB cache，也不改 connect target/port、不写 selected endpoint address hints。
     - `testSelectConnectionAuthorityIgnoresCachedSvcbWhenAsyncDnsOff`：覆盖 `async-dns=false + enable-https-rr=true + 已有 SVCB cache` 时仍使用 origin，不设置 endpoint info，不缓存 svc address hint。
     - 既有 cached SVCB endpoint、failed endpoint、proxy 和 connect failure 测试显式设置 `async-dns=true` 与 `--enable-https-rr=true`，确保 opt-in 后仍可消费 SVCB cache。
 
-6. `test/FileEntryTest.cc`
+10. `test/FileEntryTest.cc`
    - `testGetRequest`：覆盖同 host 不同 protocol 可分别获得请求，验证 `http://localhost` 不再误挡 `ftp://localhost`。
    - `testGetRequest_limitsSameProtocolHost`：覆盖同 protocol+host 仍受 `max-connection-per-server` 限制，提升到 `2` 后只允许第二条同 server 请求。
    - `testFindFasterRequestUsesProtocolHostLimit`：覆盖 faster-server 替换路径也按 protocol+host 计数，HTTP 同 host 占满时不会挑同 HTTP 候选，但允许 FTP 同 host 候选。
 
-7. `test/NameResolveCommandTest.cc`
+11. `test/NameResolveCommandTest.cc`
    - `testUDPTrackerIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 UDP tracker 入口在 `async-dns=false + doh 空 server` 时构造阶段不触发 secure DNS 配置校验。
    - `testDHTEntryPointIgnoresSecureDnsConfigWhenAsyncDnsDisabled`：覆盖 DHT entry point 入口在 `async-dns=false + doh 空 server` 时构造阶段不触发 secure DNS 配置校验。
 
@@ -186,6 +228,7 @@
    - `NameResolveCommandTest.cc` 入口级防回归切片已通过 `git diff --check -- test/NameResolveCommandTest.cc test/Makefile.am docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27253605059`。
    - `AsyncNameResolverTest.cc` disabled secure DNS 配置扩展切片已通过 `git diff --check -- test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、外部 review 和 GitHub Actions，run id `27254138777`。
    - HTTPS established / Response received remote IP 日志补强和 DoH H2 transport 门控测试已通过 `git diff --check -- src/HttpRequestCommand.cc src/HttpConnection.cc test/AsyncNameResolverTest.cc docs/reports/2026-06-10-async-dns-requirements-progress.md`、Volta/Euclid 外审和 GitHub Actions，run id `27255420287`。
+   - 当前复查补强切片已通过 `git diff --check`；本机仍缺少 C++ 构建工具，编译验证需依赖 GitHub Actions。代码在推送前仍需外部 review。
 
 2. CI：
    - 前置提交 `2997acde Align async DNS bootstrap and connection limits` 的 GitHub Actions build 已通过，run id `27233170820`。
@@ -286,13 +329,19 @@
 
 部分完成。第 21 条已实现：32-bit MinGW 不再默认 `disable-ipv6=true`。第 23 条先补了 backup 连接避让：IPv4 主连时不会把非公网 IPv6 地址选作 backup，减少内网 IPv6 存在但公网不可达时的额外拖慢。第 25 条的硬限制已改为按 URL `protocol + hostname` 计数，不按解析 IP 计数；同 hostname 多个 IPv4/IPv6 地址不能绕过 `-x` 上限。第 22、24、25 条仍需继续做运行期地址能力、坏 IPv6 快速避让、v4/v6 混合并发下载和端到端验证。现有双栈 first-success 与后台 DNS cache fill 是基础，但不能宣称完整覆盖 RFC 8305 行为。
 
+复查补充：当前单测入口默认固定 `SocketCore::setProtocolFamily(AF_INET)`，所以不能把现有单测解释为真实 v4/v6 同时下载验收。后续需要 fake resolver + fake socket/connection factory 级测试，或在功能测试报告中明确依赖真实 IPv6 环境。
+
 ### HTTPS RR / H2 / H3（26-30）
 
 部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server，并且 `multi` 下已改为 secure-first 阶段式 fallback；该 discovery 仍是后台任务，不阻塞首连。本轮新增 `--enable-https-rr=false` 默认门控，未显式开启时不会额外查询 HTTPS RR/TYPE65，也不会消费 SVCB cache 改 connect target/port，满足“未启用 H3、也没有明确需要 SVCB/HTTPS RR 的能力时，不应额外查 HTTPS RR”的第一阶段边界。DoH H2 已有 network 日志 `DNS: DoH using HTTP/2`；还需要继续补真实网络/fake server 验收。
 
+复查补充：已补 `enable-http3=true` 但未显式 `enable-https-rr=true` 不启动 HTTPS RR discovery 的单元测试；DoH 实际协商到 HTTP/2 后的 `DNS: DoH using HTTP/2` 也已补 fake transport 日志断言。
+
 ### 日志可观测性（31-35）
 
 部分完成。第一阶段已补 DNS 最终选中日志、HTTP response status 的 network remote IP:port 和 TLS remote/SNI/verify/version/ALPN 日志，能把下载请求的 CUID、hostname、候选地址、最终选中 IP、TLS 建连端点和响应端点串起来。测试暴露后，本轮继续补强用户直接看到的两条日志：`HTTPS connection to ... established` 追加 `remote=<ip:port>`，info 级 `Response received` 改为 `Response received from <ip:port>`。第二阶段已补 async DNS query plan 日志代码路径，并用单元日志断言覆盖 `multi` 主阶段、显式 plain fallback 和系统 c-ares fallback 的 mode、phase、backend、transport、server、bootstrap 来源和 fallback 来源。尚未完整覆盖真实 artifact 运行日志、每个 DNS server 的运行期成败、DoT/DoH endpoint fail、HTTPS RR resolver 内部 server 明细、失败 IP、临时避让 IP、抓包级 v4/v6 对账断言；这些仍需继续在 resolver 内部和连接失败路径补细日志与测试。
+
+复查补充：已补 HTTPS 建连成功日志、`Response received from` 和 `Response status ... remote=` 的格式级回归测试，防止后续把 remote endpoint 从用户可见日志里删掉。
 
 ### 下载连接参数（36-39）
 

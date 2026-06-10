@@ -5,6 +5,7 @@
 #endif // __MINGW32__
 #include <unistd.h>
 
+#include <memory>
 #include <vector>
 
 #include <cppunit/extensions/HelperMacros.h>
@@ -14,6 +15,7 @@
 #include "File.h"
 #include "Option.h"
 #include "OptionParser.h"
+#include "StartupOptionLog.h"
 #include "prefs.h"
 #include "util.h"
 #include "error_code.h"
@@ -80,6 +82,7 @@ class OptionProcessingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCommandLineOverridesConfByDefault);
   CPPUNIT_TEST(testConfCanOverrideCommandLine);
   CPPUNIT_TEST(testNoConfSkipsExplicitConfPath);
+  CPPUNIT_TEST(testStartupOptionLogSources);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -96,6 +99,7 @@ public:
   void testCommandLineOverridesConfByDefault();
   void testConfCanOverrideCommandLine();
   void testNoConfSkipsExplicitConfPath();
+  void testStartupOptionLogSources();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(OptionProcessingTest);
@@ -261,6 +265,58 @@ void OptionProcessingTest::testNoConfSkipsExplicitConfPath()
   CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
   CPPUNIT_ASSERT_EQUAL(std::string("16"), option.get(PREF_SPLIT));
   File(confPath).remove();
+}
+
+void OptionProcessingTest::testStartupOptionLogSources()
+{
+  auto& parser = OptionParser::getInstance();
+  auto defaults = std::make_shared<Option>();
+  defaults->put(PREF_SPLIT, "16");
+  defaults->put(PREF_CONF_PRECEDENCE, "command");
+  Option conf;
+  conf.setParent(defaults);
+  conf.put(PREF_MIN_SPLIT_SIZE, "2M");
+  auto command = std::make_shared<Option>();
+  command->setParent(std::make_shared<Option>(conf));
+  command->put(PREF_ASYNC_DNS, A2_V_TRUE);
+  command->put(PREF_CONF_PRECEDENCE, "command");
+
+  Option commandWins;
+  commandWins.setParent(std::make_shared<Option>(conf));
+  commandWins.merge(*command);
+
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("Option: async-dns=true (source=command)"),
+      formatStartupOptionLog(&commandWins, PREF_ASYNC_DNS, parser.get()));
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("Option: min-split-size=2M (source=conf)"),
+      formatStartupOptionLog(&commandWins, PREF_MIN_SPLIT_SIZE, parser.get()));
+  CPPUNIT_ASSERT_EQUAL(std::string("default"),
+                       getStartupOptionSource(&commandWins, PREF_SPLIT,
+                                              parser.get()));
+
+  defaults->put(PREF_SPLIT, "32");
+  CPPUNIT_ASSERT_EQUAL(std::string("runtime"),
+                       getStartupOptionSource(&commandWins, PREF_SPLIT,
+                                              parser.get()));
+
+  auto commandParent = std::make_shared<Option>();
+  commandParent->setParent(defaults);
+  commandParent->put(PREF_ASYNC_DNS, A2_V_TRUE);
+  conf.put(PREF_CONF_PRECEDENCE, "conf");
+  Option confWins;
+  confWins.setParent(commandParent);
+  confWins.merge(conf);
+
+  CPPUNIT_ASSERT_EQUAL(std::string("command"),
+                       getStartupOptionSource(&confWins, PREF_ASYNC_DNS,
+                                              parser.get()));
+  CPPUNIT_ASSERT_EQUAL(std::string("conf"),
+                       getStartupOptionSource(&confWins, PREF_MIN_SPLIT_SIZE,
+                                              parser.get()));
+  CPPUNIT_ASSERT_EQUAL(
+      std::string("Option: min-split-size=2M (source=conf)"),
+      formatStartupOptionLog(&confWins, PREF_MIN_SPLIT_SIZE, parser.get()));
 }
 
 } // namespace aria2
