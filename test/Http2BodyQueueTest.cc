@@ -3,6 +3,7 @@
 #ifdef HAVE_LIBNGHTTP2
 
 #  include "Http2BodyQueue.h"
+#  include "a2functional.h"
 
 #  include <string>
 
@@ -18,6 +19,7 @@ class Http2BodyQueueTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDrainAll);
   CPPUNIT_TEST(testClear);
   CPPUNIT_TEST(testCloseStoresErrorCode);
+  CPPUNIT_TEST(testDefaultCapacityMatchesHttp2ReceiveWindow);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -27,6 +29,7 @@ public:
   void testDrainAll();
   void testClear();
   void testCloseStoresErrorCode();
+  void testDefaultCapacityMatchesHttp2ReceiveWindow();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(Http2BodyQueueTest);
@@ -99,6 +102,13 @@ void Http2BodyQueueTest::testCloseStoresErrorCode()
 
   CPPUNIT_ASSERT(queue.closed());
   CPPUNIT_ASSERT_EQUAL((uint32_t)123, queue.errorCode());
+}
+
+void Http2BodyQueueTest::testDefaultCapacityMatchesHttp2ReceiveWindow()
+{
+  Http2BodyQueue queue;
+
+  CPPUNIT_ASSERT(queue.capacity() >= (size_t)8_m);
 }
 
 } // namespace aria2

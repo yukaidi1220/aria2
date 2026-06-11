@@ -55,6 +55,7 @@ namespace aria2 {
 class HttpRequest;
 class HttpResponse;
 class Http2Transport;
+class DownloadEngine;
 
 class Http2MultiplexExchange {
 private:
@@ -63,6 +64,7 @@ private:
   Http2Connection connection_;
   Http2TransactionPump pump_;
   std::set<int32_t> activeStreams_;
+  std::set<Command*> commands_;
 
 public:
   explicit Http2MultiplexExchange(Http2Transport& transport);
@@ -85,6 +87,9 @@ public:
   bool wantRead() const;
   bool wantWrite() const;
   bool hasBufferedInboundData() const;
+  void registerCommand(Command* command);
+  void unregisterCommand(Command* command);
+  void activateCommands(DownloadEngine* e);
 
   bool hasActiveStreams() const;
   bool hasActiveStream(int32_t streamId) const;

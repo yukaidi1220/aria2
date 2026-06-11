@@ -63,11 +63,9 @@ namespace aria2 {
 namespace {
 const size_t BODY_CHUNK_SIZE = 1_m;
 
-void scheduleHttp2Now(Command* command, DownloadEngine* e)
+void scheduleHttp2Now(Http2MultiplexExchange* exchange, DownloadEngine* e)
 {
-  command->setStatus(Command::STATUS_ONESHOT_REALTIME);
-  e->setNoWait(true);
-  e->setRefreshInterval(std::chrono::milliseconds(0));
+  exchange->activateCommands(e);
 }
 } // namespace
 
@@ -100,9 +98,13 @@ Http2DownloadCommand::Http2DownloadCommand(
   installStreamFilter(std::move(streamFilter));
   getRequestGroup()->getURISelector()->tuneDownloadCommand(
       getFileEntry()->getRemainingUris(), this);
+  exchange_->registerCommand(this);
 }
 
-Http2DownloadCommand::~Http2DownloadCommand() = default;
+Http2DownloadCommand::~Http2DownloadCommand()
+{
+  exchange_->unregisterCommand(this);
+}
 
 void Http2DownloadCommand::poolIdleConnection()
 {
@@ -124,7 +126,7 @@ bool Http2DownloadCommand::executeInternal()
 
   const bool progressed = exchange_->pump();
   if (progressed) {
-    scheduleHttp2Now(this, getDownloadEngine());
+    scheduleHttp2Now(exchange_.get(), getDownloadEngine());
   }
 
   auto state = exchange_->getState(streamId_);
@@ -224,7 +226,7 @@ bool Http2DownloadCommand::executeInternal()
   state = exchange_->getState(streamId_);
   if (!pendingBody_.empty() || state.bodyLength > 0 || state.streamClosed ||
       state.errorCode != 0 || exchange_->hasBufferedInboundData()) {
-    scheduleHttp2Now(this, getDownloadEngine());
+    scheduleHttp2Now(exchange_.get(), getDownloadEngine());
   }
   requeueSelf();
   return false;

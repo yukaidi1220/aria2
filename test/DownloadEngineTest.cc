@@ -38,6 +38,8 @@ class DownloadEngineTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testMarkBadIPAddressLogsAddressFamily);
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_TEST(testFindActiveHttp2ConnectionHonorsRemoteStreamLimit);
+  CPPUNIT_TEST(testFindActiveHttp2ConnectionHonorsConfiguredStreamLimit);
+  CPPUNIT_TEST(testFindActiveHttp2ConnectionCapsConfiguredStreamLimit);
   CPPUNIT_TEST(testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit);
   CPPUNIT_TEST(testFindActiveHttp2ConnectionCoalescesOrigin);
   CPPUNIT_TEST(testFindActiveHttp2ConnectionSkipsProxiedCoalescing);
@@ -56,6 +58,8 @@ public:
   void testMarkBadIPAddressLogsAddressFamily();
 #ifdef HAVE_LIBNGHTTP2
   void testFindActiveHttp2ConnectionHonorsRemoteStreamLimit();
+  void testFindActiveHttp2ConnectionHonorsConfiguredStreamLimit();
+  void testFindActiveHttp2ConnectionCapsConfiguredStreamLimit();
   void testFindActiveHttp2ConnectionReusesUntilRemoteStreamLimit();
   void testFindActiveHttp2ConnectionCoalescesOrigin();
   void testFindActiveHttp2ConnectionSkipsProxiedCoalescing();
@@ -244,6 +248,20 @@ std::shared_ptr<Http2MultiplexExchange> createHttp2Exchange()
       make_unique<http2test::MemoryHttp2Transport>());
 }
 
+std::shared_ptr<Http2MultiplexExchange>
+createHttp2ExchangeWithRemoteMaxConcurrentStreams(uint32_t maxStreams)
+{
+  auto transport = make_unique<http2test::MemoryHttp2Transport>();
+  auto rawTransport = transport.get();
+  auto exchange =
+      std::make_shared<Http2MultiplexExchange>(std::move(transport));
+  http2test::FakeHttp2ServerSession server;
+  server.submitMaxConcurrentStreams(maxStreams);
+  rawTransport->appendInboundData(server.drainOutboundData());
+  CPPUNIT_ASSERT(exchange->readInboundData());
+  return exchange;
+}
+
 void DownloadEngineTest::testFindActiveHttp2ConnectionHonorsRemoteStreamLimit()
 {
   DownloadEngine e(make_unique<SelectEventPoll>());
@@ -262,6 +280,62 @@ void DownloadEngineTest::testFindActiveHttp2ConnectionHonorsRemoteStreamLimit()
   rawTransport->appendInboundData(server.drainOutboundData());
   CPPUNIT_ASSERT(exchange->readInboundData());
   exchange->submitRequest(http2test::createRequestHeaders());
+
+  auto context = std::make_shared<Http2ConnectionContext>(
+      requestGroup, exchange, sockets.first);
+  e.registerActiveHttp2Connection(request.get(), context);
+
+  auto active = e.findActiveHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+
+  CPPUNIT_ASSERT(!active.isActive());
+}
+
+void DownloadEngineTest::testFindActiveHttp2ConnectionHonorsConfiguredStreamLimit()
+{
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  auto sockets = createSocketPair();
+  auto peer = sockets.first->getPeerInfo();
+  auto option = std::make_shared<Option>();
+  option->put(PREF_MAX_CONNECTION_PER_SERVER, "2");
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = createHttp2Request(peer.addr, peer.port);
+  auto exchange = createHttp2ExchangeWithRemoteMaxConcurrentStreams(100);
+  exchange->submitRequest(http2test::createRequestHeaders());
+
+  auto context = std::make_shared<Http2ConnectionContext>(
+      requestGroup, exchange, sockets.first);
+  e.registerActiveHttp2Connection(request.get(), context);
+
+  auto active = e.findActiveHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+
+  CPPUNIT_ASSERT(active.isActive());
+
+  active.exchange->submitRequest(http2test::createRequestHeaders());
+
+  active = e.findActiveHttp2Connection(
+      requestGroup.get(), request.get(), "example.org", peer.addr, peer.port,
+      std::function<bool(const std::shared_ptr<SocketCore>&)>());
+
+  CPPUNIT_ASSERT(!active.isActive());
+}
+
+void DownloadEngineTest::testFindActiveHttp2ConnectionCapsConfiguredStreamLimit()
+{
+  DownloadEngine e(make_unique<SelectEventPoll>());
+  auto sockets = createSocketPair();
+  auto peer = sockets.first->getPeerInfo();
+  auto option = std::make_shared<Option>();
+  option->put(PREF_MAX_CONNECTION_PER_SERVER, "128");
+  auto requestGroup = std::make_shared<RequestGroup>(GroupId::create(), option);
+  auto request = createHttp2Request(peer.addr, peer.port);
+  auto exchange = createHttp2ExchangeWithRemoteMaxConcurrentStreams(128);
+  for (size_t i = 0; i < 64; ++i) {
+    exchange->submitRequest(http2test::createRequestHeaders());
+  }
 
   auto context = std::make_shared<Http2ConnectionContext>(
       requestGroup, exchange, sockets.first);

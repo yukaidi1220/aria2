@@ -38,6 +38,7 @@
 
 #  include "Http2HeaderBlock.h"
 #  include "Http2Transport.h"
+#  include "DownloadEngine.h"
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
 #  include "HttpLog.h"
@@ -119,6 +120,28 @@ bool Http2MultiplexExchange::wantWrite() const { return pump_.wantWrite(); }
 bool Http2MultiplexExchange::hasBufferedInboundData() const
 {
   return pump_.hasBufferedInboundData();
+}
+
+void Http2MultiplexExchange::registerCommand(Command* command)
+{
+  if (command) {
+    commands_.insert(command);
+  }
+}
+
+void Http2MultiplexExchange::unregisterCommand(Command* command)
+{
+  commands_.erase(command);
+}
+
+void Http2MultiplexExchange::activateCommands(DownloadEngine* e)
+{
+  for (auto command : commands_) {
+    command->setStatusActive();
+  }
+  if (e) {
+    e->setNoWait(true);
+  }
 }
 
 bool Http2MultiplexExchange::hasActiveStreams() const

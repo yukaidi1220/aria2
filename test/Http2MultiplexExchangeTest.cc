@@ -27,6 +27,7 @@ class Http2MultiplexExchangeTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSubmitRequestAndFlushWritesImmediately);
   CPPUNIT_TEST(testReadInboundDataMakesExchangeWantWrite);
   CPPUNIT_TEST(testReadInboundDataUpdatesRemoteMaxConcurrentStreams);
+  CPPUNIT_TEST(testActivateCommandsWakesRegisteredCommands);
   CPPUNIT_TEST(testPopResponseEventKeepsOtherStreamsActive);
   CPPUNIT_TEST(testCreateHttpResponseWaitsPerStream);
   CPPUNIT_TEST(testUnknownStreamIsIgnored);
@@ -39,6 +40,7 @@ public:
   void testSubmitRequestAndFlushWritesImmediately();
   void testReadInboundDataMakesExchangeWantWrite();
   void testReadInboundDataUpdatesRemoteMaxConcurrentStreams();
+  void testActivateCommandsWakesRegisteredCommands();
   void testPopResponseEventKeepsOtherStreamsActive();
   void testCreateHttpResponseWaitsPerStream();
   void testUnknownStreamIsIgnored();
@@ -75,6 +77,13 @@ void pumpUntilDrained(Http2MultiplexExchange& exchange,
     CPPUNIT_ASSERT(exchange.pump());
   }
 }
+
+class NoopCommand : public Command {
+public:
+  explicit NoopCommand(cuid_t cuid) : Command(cuid) {}
+
+  virtual bool execute() CXX11_OVERRIDE { return false; }
+};
 } // namespace
 
 void Http2MultiplexExchangeTest::
@@ -196,6 +205,29 @@ void Http2MultiplexExchangeTest::
   CPPUNIT_ASSERT(exchange.readInboundData());
 
   CPPUNIT_ASSERT_EQUAL((size_t)2, exchange.getRemoteMaxConcurrentStreams());
+}
+
+void Http2MultiplexExchangeTest::testActivateCommandsWakesRegisteredCommands()
+{
+  http2test::MemoryHttp2Transport transport;
+  Http2MultiplexExchange exchange(transport);
+  NoopCommand command1(1);
+  NoopCommand command2(2);
+
+  exchange.registerCommand(&command1);
+  exchange.registerCommand(&command2);
+  exchange.activateCommands(nullptr);
+
+  CPPUNIT_ASSERT(command1.statusMatch(Command::STATUS_ACTIVE));
+  CPPUNIT_ASSERT(command2.statusMatch(Command::STATUS_ACTIVE));
+
+  command1.setStatusInactive();
+  command2.setStatusInactive();
+  exchange.unregisterCommand(&command1);
+  exchange.activateCommands(nullptr);
+
+  CPPUNIT_ASSERT(!command1.statusMatch(Command::STATUS_ACTIVE));
+  CPPUNIT_ASSERT(command2.statusMatch(Command::STATUS_ACTIVE));
 }
 
 void Http2MultiplexExchangeTest::

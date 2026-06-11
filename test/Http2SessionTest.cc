@@ -154,9 +154,9 @@ void Http2SessionTest::testSubmitRequestAdvertisesLargeReceiveWindow()
 
   CPPUNIT_ASSERT(findSettingsValue(data, NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
                                    initialWindowSize));
-  CPPUNIT_ASSERT(initialWindowSize >= static_cast<uint32_t>(1_m));
+  CPPUNIT_ASSERT(initialWindowSize >= static_cast<uint32_t>(8_m));
   CPPUNIT_ASSERT(findConnectionWindowUpdate(data, connectionWindowUpdate));
-  CPPUNIT_ASSERT(connectionWindowUpdate >= static_cast<uint32_t>(15_m));
+  CPPUNIT_ASSERT(connectionWindowUpdate >= static_cast<uint32_t>(63_m));
 }
 
 void Http2SessionTest::testSubmitRequestWithBodyProducesDataFrame()

@@ -374,7 +374,29 @@ void DownloadEngine::evictSocketPool()
 
 namespace {
 #ifdef HAVE_LIBNGHTTP2
-const size_t MAX_ACTIVE_HTTP2_STREAMS = 8;
+const size_t MAX_LOCAL_ACTIVE_HTTP2_STREAMS = 64;
+
+size_t getLocalActiveHttp2StreamLimit(RequestGroup* requestGroup)
+{
+  size_t limit = MAX_LOCAL_ACTIVE_HTTP2_STREAMS;
+  if (requestGroup && requestGroup->getOption() &&
+      requestGroup->getOption()->defined(PREF_MAX_CONNECTION_PER_SERVER)) {
+    auto configured =
+        requestGroup->getOption()->getAsInt(PREF_MAX_CONNECTION_PER_SERVER);
+    if (configured > 0) {
+      limit = std::min(limit, static_cast<size_t>(configured));
+    }
+  }
+  return limit;
+}
+
+size_t getMaxActiveHttp2Streams(
+    RequestGroup* requestGroup,
+    const std::shared_ptr<Http2MultiplexExchange>& exchange)
+{
+  return std::min(getLocalActiveHttp2StreamLimit(requestGroup),
+                  exchange->getRemoteMaxConcurrentStreams());
+}
 
 std::string createActiveHttp2PoolKey(const Request* request,
                                      const std::string& connectedHostname,
@@ -496,8 +518,7 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
       ++i;
       continue;
     }
-    auto maxActiveStreams = std::min(
-        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    auto maxActiveStreams = getMaxActiveHttp2Streams(requestGroup, exchange);
     if (exchange->countActiveStreams() >= maxActiveStreams ||
         (predicate && !predicate(socket))) {
       ++i;
@@ -532,8 +553,7 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::findActiveHttp2Connection(
       ++i;
       continue;
     }
-    auto maxActiveStreams = std::min(
-        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    auto maxActiveStreams = getMaxActiveHttp2Streams(requestGroup, exchange);
     if (exchange->countActiveStreams() >= maxActiveStreams ||
         !coalescingPredicate(socket)) {
       ++i;
@@ -610,8 +630,7 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::popIdleHttp2Connection(
       ++i;
       continue;
     }
-    auto maxActiveStreams = std::min(
-        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    auto maxActiveStreams = getMaxActiveHttp2Streams(requestGroup, exchange);
     if (maxActiveStreams == 0) {
       i = idleHttp2Pool_.erase(i);
       continue;
@@ -648,8 +667,7 @@ DownloadEngine::ActiveHttp2Connection DownloadEngine::popIdleHttp2Connection(
       ++i;
       continue;
     }
-    auto maxActiveStreams = std::min(
-        MAX_ACTIVE_HTTP2_STREAMS, exchange->getRemoteMaxConcurrentStreams());
+    auto maxActiveStreams = getMaxActiveHttp2Streams(requestGroup, exchange);
     if (maxActiveStreams == 0) {
       i = idleHttp2Pool_.erase(i);
       continue;

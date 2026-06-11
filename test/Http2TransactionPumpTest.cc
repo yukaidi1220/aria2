@@ -209,8 +209,8 @@ void Http2TransactionPumpTest::testPumpPausesBeforeBodyQueueOverflow()
   http2test::FakeHttp2ServerSession server;
   auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
   auto headers = http2test::createResponseHeaders();
-  headers.emplace_back("content-length", "2621440");
-  std::string chunk(16_k, 'x');
+  headers.emplace_back("content-length", "10485760");
+  std::string chunk(64_k, 'x');
 
   CPPUNIT_ASSERT(pump.flushOutboundData());
   server.feedInboundData(transport.drainOutboundData());
@@ -228,7 +228,7 @@ void Http2TransactionPumpTest::testPumpPausesBeforeBodyQueueOverflow()
 
   auto state = transaction.getState();
   CPPUNIT_ASSERT(state.bodyLength > 0);
-  CPPUNIT_ASSERT(state.bodyLength <= 2_m);
+  CPPUNIT_ASSERT(state.bodyLength <= 8_m);
   CPPUNIT_ASSERT(transport.getRecvBufferedLength() > 0);
   CPPUNIT_ASSERT(!pump.wantRead());
   CPPUNIT_ASSERT(!pump.hasBufferedInboundData());

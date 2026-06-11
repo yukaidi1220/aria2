@@ -50,7 +50,6 @@
 #  include "StreamFilter.h"
 #  include "a2functional.h"
 
-#  include <chrono>
 #  include <utility>
 
 namespace aria2 {
@@ -58,11 +57,9 @@ namespace aria2 {
 namespace {
 const size_t SKIP_BODY_CHUNK_SIZE = 1_m;
 
-void scheduleHttp2Now(Command* command, DownloadEngine* e)
+void scheduleHttp2Now(Http2MultiplexExchange* exchange, DownloadEngine* e)
 {
-  command->setStatus(Command::STATUS_ONESHOT_REALTIME);
-  e->setNoWait(true);
-  e->setRefreshInterval(std::chrono::milliseconds(0));
+  exchange->activateCommands(e);
 }
 } // namespace
 
@@ -84,12 +81,15 @@ Http2ResponseCommand::Http2ResponseCommand(
       expectedSkipBodyLengthKnown_(false),
       incNumConnection_(incNumConnection)
 {
-  setStatus(Command::STATUS_ONESHOT_REALTIME);
+  exchange_->registerCommand(this);
+  setStatusActive();
   e->setNoWait(true);
-  e->setRefreshInterval(std::chrono::milliseconds(0));
 }
 
-Http2ResponseCommand::~Http2ResponseCommand() = default;
+Http2ResponseCommand::~Http2ResponseCommand()
+{
+  exchange_->unregisterCommand(this);
+}
 
 bool Http2ResponseCommand::executeInternal()
 {
@@ -99,7 +99,7 @@ bool Http2ResponseCommand::executeInternal()
 
   const bool progressed = exchange_->pump();
   if (progressed) {
-    scheduleHttp2Now(this, getDownloadEngine());
+    scheduleHttp2Now(exchange_.get(), getDownloadEngine());
   }
 
   auto state = exchange_->getState(streamId_);
@@ -146,7 +146,7 @@ std::unique_ptr<Command> Http2ResponseCommand::createHttpDownloadCommand(
       streamId_, std::move(httpResponse), std::move(streamFilter),
       getDownloadEngine(), getSocket(), incNumConnection_,
       connectionContext_);
-  command->setStatus(Command::STATUS_ONESHOT_REALTIME);
+  command->setStatusActive();
   return std::move(command);
 }
 
@@ -192,7 +192,7 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
 {
   const bool progressed = exchange_->pump();
   if (progressed) {
-    scheduleHttp2Now(this, getDownloadEngine());
+    scheduleHttp2Now(exchange_.get(), getDownloadEngine());
   }
 
   auto state = exchange_->getState(streamId_);
@@ -236,7 +236,7 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   auto stateAfterPump = exchange_->getState(streamId_);
   if (stateAfterPump.bodyLength > 0 || stateAfterPump.streamClosed ||
       stateAfterPump.errorCode != 0 || exchange_->hasBufferedInboundData()) {
-    scheduleHttp2Now(this, getDownloadEngine());
+    scheduleHttp2Now(exchange_.get(), getDownloadEngine());
   }
   requeueSelf();
   return false;
