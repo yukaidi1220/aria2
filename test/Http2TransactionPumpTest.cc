@@ -10,6 +10,7 @@
 #  include <nghttp2/nghttp2.h>
 
 #  include "DlAbortEx.h"
+#  include "a2functional.h"
 #  include "Http2TestUtil.h"
 #  include "Http2Transaction.h"
 #  include "Http2Transport.h"
@@ -24,6 +25,7 @@ class Http2TransactionPumpTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPumpFeedsInboundResponse);
   CPPUNIT_TEST(testPumpHandlesPartialRead);
   CPPUNIT_TEST(testPumpDrainsBufferedReads);
+  CPPUNIT_TEST(testPumpReadsLargeResponseInBatches);
   CPPUNIT_TEST(testWriteFailureThrows);
   CPPUNIT_TEST(testReadFailureThrows);
   CPPUNIT_TEST(testClosedReadThrows);
@@ -35,6 +37,7 @@ public:
   void testPumpFeedsInboundResponse();
   void testPumpHandlesPartialRead();
   void testPumpDrainsBufferedReads();
+  void testPumpReadsLargeResponseInBatches();
   void testWriteFailureThrows();
   void testReadFailureThrows();
   void testClosedReadThrows();
@@ -164,6 +167,34 @@ void Http2TransactionPumpTest::testPumpDrainsBufferedReads()
   auto event = transaction.popResponseEvent();
   CPPUNIT_ASSERT(event);
   CPPUNIT_ASSERT_EQUAL(std::string("chunked-body"), event->body.drainAll());
+  CPPUNIT_ASSERT(event->body.closed());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
+}
+
+void Http2TransactionPumpTest::testPumpReadsLargeResponseInBatches()
+{
+  Http2Transaction transaction;
+  http2test::MemoryHttp2Transport transport;
+  Http2TransactionPump pump(transaction, transport);
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+  auto headers = http2test::createResponseHeaders();
+  std::string body(256_k, 'x');
+  headers.emplace_back("content-length", "262144");
+
+  CPPUNIT_ASSERT(pump.flushOutboundData());
+  server.feedInboundData(transport.drainOutboundData());
+  server.submitResponse(streamId, headers, body);
+  transport.appendInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT(transport.getRecvBufferedLength() > 16_k);
+  CPPUNIT_ASSERT(pump.pump());
+  CPPUNIT_ASSERT_EQUAL((size_t)0, transport.getRecvBufferedLength());
+  CPPUNIT_ASSERT(transport.getReadCount() <= 8);
+
+  auto event = transaction.popResponseEvent();
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT_EQUAL(body.size(), event->body.drainAll().size());
   CPPUNIT_ASSERT(event->body.closed());
   CPPUNIT_ASSERT(!transaction.hasActiveStream());
 }

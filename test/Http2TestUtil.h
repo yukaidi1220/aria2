@@ -100,6 +100,7 @@ private:
   bool closed_;
   bool wantRead_;
   bool wantWrite_;
+  size_t readCount_;
 
 public:
   MemoryHttp2Transport()
@@ -111,7 +112,8 @@ public:
         failRead_(false),
         closed_(false),
         wantRead_(false),
-        wantWrite_(false)
+        wantWrite_(false),
+        readCount_(0)
   {
   }
 
@@ -141,6 +143,7 @@ public:
 
   virtual ssize_t readData(void* data, size_t len) CXX11_OVERRIDE
   {
+    ++readCount_;
     wantRead_ = false;
     wantWrite_ = false;
     if (failRead_) {
@@ -168,6 +171,8 @@ public:
   virtual bool wantRead() const CXX11_OVERRIDE { return wantRead_; }
 
   virtual bool wantWrite() const CXX11_OVERRIDE { return wantWrite_; }
+
+  size_t getReadCount() const { return readCount_; }
 
   void appendInboundData(const std::string& data) { inbound_.append(data); }
 

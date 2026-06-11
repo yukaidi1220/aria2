@@ -61,7 +61,7 @@
 namespace aria2 {
 
 namespace {
-const size_t BODY_CHUNK_SIZE = 16_k;
+const size_t BODY_CHUNK_SIZE = 1_m;
 
 void scheduleHttp2Now(Command* command, DownloadEngine* e)
 {

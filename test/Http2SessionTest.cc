@@ -11,11 +11,14 @@
 #  include <cppunit/extensions/HelperMacros.h>
 #  include <nghttp2/nghttp2.h>
 
+#  include "a2functional.h"
+
 namespace aria2 {
 
 class Http2SessionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(Http2SessionTest);
   CPPUNIT_TEST(testSubmitRequestHeadersProducesClientBytes);
+  CPPUNIT_TEST(testSubmitRequestAdvertisesLargeReceiveWindow);
   CPPUNIT_TEST(testSubmitRequestWithBodyProducesDataFrame);
   CPPUNIT_TEST(testDrainOutboundDataClearsBuffer);
   CPPUNIT_TEST(testFeedInboundDataFlushesSettingsAck);
@@ -29,6 +32,7 @@ class Http2SessionTest : public CppUnit::TestFixture {
 
 public:
   void testSubmitRequestHeadersProducesClientBytes();
+  void testSubmitRequestAdvertisesLargeReceiveWindow();
   void testSubmitRequestWithBodyProducesDataFrame();
   void testDrainOutboundDataClearsBuffer();
   void testFeedInboundDataFlushesSettingsAck();
@@ -79,6 +83,50 @@ bool findFramePayload(const std::string& data, unsigned char frameType,
   }
   return false;
 }
+
+bool findSettingsValue(const std::string& data, uint16_t id, uint32_t& value)
+{
+  std::string payload;
+  uint8_t flags = 0;
+  if (!findFramePayload(data, NGHTTP2_SETTINGS, 0, payload, flags) ||
+      (flags & NGHTTP2_FLAG_ACK)) {
+    return false;
+  }
+  for (size_t i = 0; i + 6 <= payload.size(); i += 6) {
+    auto entryId =
+        (static_cast<uint16_t>(static_cast<unsigned char>(payload[i])) << 8) |
+        static_cast<uint16_t>(static_cast<unsigned char>(payload[i + 1]));
+    if (entryId == id) {
+      value =
+          (static_cast<uint32_t>(
+               static_cast<unsigned char>(payload[i + 2])) << 24) |
+          (static_cast<uint32_t>(
+               static_cast<unsigned char>(payload[i + 3])) << 16) |
+          (static_cast<uint32_t>(
+               static_cast<unsigned char>(payload[i + 4])) << 8) |
+          static_cast<uint32_t>(static_cast<unsigned char>(payload[i + 5]));
+      return true;
+    }
+  }
+  return false;
+}
+
+bool findConnectionWindowUpdate(const std::string& data, uint32_t& increment)
+{
+  std::string payload;
+  uint8_t flags = 0;
+  if (!findFramePayload(data, NGHTTP2_WINDOW_UPDATE, 0, payload, flags) ||
+      payload.size() != 4) {
+    return false;
+  }
+  increment =
+      ((static_cast<uint32_t>(static_cast<unsigned char>(payload[0])) << 24) |
+       (static_cast<uint32_t>(static_cast<unsigned char>(payload[1])) << 16) |
+       (static_cast<uint32_t>(static_cast<unsigned char>(payload[2])) << 8) |
+       static_cast<uint32_t>(static_cast<unsigned char>(payload[3]))) &
+      0x7fffffffu;
+  return true;
+}
 } // namespace
 
 void Http2SessionTest::testSubmitRequestHeadersProducesClientBytes()
@@ -94,6 +142,21 @@ void Http2SessionTest::testSubmitRequestHeadersProducesClientBytes()
   CPPUNIT_ASSERT_EQUAL(std::string("PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"),
                        data.substr(0, 24));
   CPPUNIT_ASSERT(http2test::containsFrameType(data, NGHTTP2_SETTINGS));
+}
+
+void Http2SessionTest::testSubmitRequestAdvertisesLargeReceiveWindow()
+{
+  Http2Session session;
+  session.submitRequestHeaders(http2test::createRequestHeaders());
+  auto data = session.drainOutboundData();
+  uint32_t initialWindowSize = 0;
+  uint32_t connectionWindowUpdate = 0;
+
+  CPPUNIT_ASSERT(findSettingsValue(data, NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
+                                   initialWindowSize));
+  CPPUNIT_ASSERT(initialWindowSize >= static_cast<uint32_t>(1_m));
+  CPPUNIT_ASSERT(findConnectionWindowUpdate(data, connectionWindowUpdate));
+  CPPUNIT_ASSERT(connectionWindowUpdate >= static_cast<uint32_t>(15_m));
 }
 
 void Http2SessionTest::testSubmitRequestWithBodyProducesDataFrame()

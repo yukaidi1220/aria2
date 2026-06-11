@@ -54,7 +54,7 @@ private:
   uint32_t errorCode_;
 
 public:
-  explicit Http2BodyQueue(size_t capacity = 256 * 1024);
+  explicit Http2BodyQueue(size_t capacity = 2 * 1024 * 1024);
   ~Http2BodyQueue();
 
   Http2BodyQueue(const Http2BodyQueue&) = default;

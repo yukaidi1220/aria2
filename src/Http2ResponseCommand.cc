@@ -48,6 +48,7 @@
 #  include "Request.h"
 #  include "SocketCore.h"
 #  include "StreamFilter.h"
+#  include "a2functional.h"
 
 #  include <chrono>
 #  include <utility>
@@ -55,7 +56,7 @@
 namespace aria2 {
 
 namespace {
-const size_t SKIP_BODY_CHUNK_SIZE = 16_k;
+const size_t SKIP_BODY_CHUNK_SIZE = 1_m;
 
 void scheduleHttp2Now(Command* command, DownloadEngine* e)
 {

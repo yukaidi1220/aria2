@@ -47,8 +47,8 @@
 namespace aria2 {
 
 namespace {
-const size_t MAX_HTTP2_TRANSPORT_READ_SIZE = 16_k;
-const size_t MAX_HTTP2_TRANSPORT_READ_ITERATIONS = 64;
+const size_t MAX_HTTP2_TRANSPORT_READ_SIZE = 64_k;
+const size_t MAX_HTTP2_TRANSPORT_READ_ITERATIONS = 16;
 } // namespace
 
 Http2TransactionPump::Http2TransactionPump(Http2Transaction& transaction,

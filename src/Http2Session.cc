@@ -55,6 +55,9 @@
 namespace aria2 {
 
 namespace {
+const int32_t HTTP2_LOCAL_STREAM_WINDOW_SIZE = static_cast<int32_t>(1_m);
+const int32_t HTTP2_LOCAL_CONNECTION_WINDOW_SIZE = static_cast<int32_t>(16_m);
+
 nghttp2_nv makeNV(const Http2Header& header)
 {
   nghttp2_nv nv;
@@ -115,9 +118,19 @@ struct Http2Session::Impl {
     nghttp2_session_callbacks_del(callbacks);
     checkNghttp2Result(rv, "nghttp2_session_client_new");
 
+    nghttp2_settings_entry settings[] = {
+        {NGHTTP2_SETTINGS_INITIAL_WINDOW_SIZE,
+         static_cast<uint32_t>(HTTP2_LOCAL_STREAM_WINDOW_SIZE)}};
     checkNghttp2Result(
-        nghttp2_submit_settings(session, NGHTTP2_FLAG_NONE, nullptr, 0),
+        nghttp2_submit_settings(
+            session, NGHTTP2_FLAG_NONE, settings,
+            sizeof(settings) / sizeof(settings[0])),
         "nghttp2_submit_settings");
+    checkNghttp2Result(
+        nghttp2_session_set_local_window_size(
+            session, NGHTTP2_FLAG_NONE, 0,
+            HTTP2_LOCAL_CONNECTION_WINDOW_SIZE),
+        "nghttp2_session_set_local_window_size");
   }
 
   ~Impl() { nghttp2_session_del(session); }
