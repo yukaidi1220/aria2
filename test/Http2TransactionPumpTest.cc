@@ -25,6 +25,7 @@ class Http2TransactionPumpTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPumpFeedsInboundResponse);
   CPPUNIT_TEST(testPumpHandlesPartialRead);
   CPPUNIT_TEST(testPumpDrainsBufferedReads);
+  CPPUNIT_TEST(testPumpDrainsSocketUntilWouldBlockWithoutBufferedHint);
   CPPUNIT_TEST(testPumpReadsLargeResponseInBatches);
   CPPUNIT_TEST(testPumpPausesBeforeBodyQueueOverflow);
   CPPUNIT_TEST(testWriteFailureThrows);
@@ -38,6 +39,7 @@ public:
   void testPumpFeedsInboundResponse();
   void testPumpHandlesPartialRead();
   void testPumpDrainsBufferedReads();
+  void testPumpDrainsSocketUntilWouldBlockWithoutBufferedHint();
   void testPumpReadsLargeResponseInBatches();
   void testPumpPausesBeforeBodyQueueOverflow();
   void testWriteFailureThrows();
@@ -169,6 +171,38 @@ void Http2TransactionPumpTest::testPumpDrainsBufferedReads()
   auto event = transaction.popResponseEvent();
   CPPUNIT_ASSERT(event);
   CPPUNIT_ASSERT_EQUAL(std::string("chunked-body"), event->body.drainAll());
+  CPPUNIT_ASSERT(event->body.closed());
+  CPPUNIT_ASSERT(!transaction.hasActiveStream());
+}
+
+void Http2TransactionPumpTest::
+    testPumpDrainsSocketUntilWouldBlockWithoutBufferedHint()
+{
+  Http2Transaction transaction;
+  http2test::MemoryHttp2Transport transport;
+  Http2TransactionPump pump(transaction, transport);
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+  auto headers = http2test::createResponseHeaders();
+  std::string body(256_k, 'x');
+  headers.emplace_back("content-length", "262144");
+
+  transport.setReportBufferedLength(false);
+  CPPUNIT_ASSERT(pump.flushOutboundData());
+  server.feedInboundData(transport.drainOutboundData());
+  server.submitResponse(streamId, headers, body);
+  transport.appendInboundData(server.drainOutboundData());
+
+  CPPUNIT_ASSERT_EQUAL((size_t)0, transport.getRecvBufferedLength());
+  CPPUNIT_ASSERT(pump.pump());
+
+  auto state = transaction.getState();
+  CPPUNIT_ASSERT_EQUAL(body.size(), state.bodyLength);
+  CPPUNIT_ASSERT(transport.getReadCount() > 1);
+
+  auto event = transaction.popResponseEvent();
+  CPPUNIT_ASSERT(event);
+  CPPUNIT_ASSERT_EQUAL(body.size(), event->body.drainAll().size());
   CPPUNIT_ASSERT(event->body.closed());
   CPPUNIT_ASSERT(!transaction.hasActiveStream());
 }

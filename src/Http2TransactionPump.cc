@@ -160,10 +160,8 @@ bool Http2TransactionPump::pump()
     progressed = true;
     progressed |= flushOutboundData();
   }
-  for (size_t i = 1; i < MAX_HTTP2_TRANSPORT_READ_ITERATIONS &&
-                     transport_.getRecvBufferedLength() > 0 &&
-                     canReadInboundData();
-       ++i) {
+  for (size_t i = 1;
+       i < MAX_HTTP2_TRANSPORT_READ_ITERATIONS && canReadInboundData(); ++i) {
     if (!readInboundData()) {
       break;
     }

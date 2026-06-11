@@ -100,6 +100,7 @@ private:
   bool closed_;
   bool wantRead_;
   bool wantWrite_;
+  bool reportBufferedLength_;
   size_t readCount_;
 
 public:
@@ -113,6 +114,7 @@ public:
         closed_(false),
         wantRead_(false),
         wantWrite_(false),
+        reportBufferedLength_(true),
         readCount_(0)
   {
   }
@@ -165,6 +167,9 @@ public:
 
   virtual size_t getRecvBufferedLength() const CXX11_OVERRIDE
   {
+    if (!reportBufferedLength_) {
+      return 0;
+    }
     return inbound_.size();
   }
 
@@ -192,6 +197,8 @@ public:
   void setFailWrite(bool f) { failWrite_ = f; }
 
   void setFailRead(bool f) { failRead_ = f; }
+
+  void setReportBufferedLength(bool f) { reportBufferedLength_ = f; }
 
   void close() { closed_ = true; }
 };
