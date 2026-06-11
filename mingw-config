@@ -81,7 +81,7 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --with-cppunit-prefix=$PREFIX \
     ARIA2_STATIC=yes \
     CPPFLAGS="-I$PREFIX/include -DCARES_STATICLIB -DWINVER=0x0501 -D_WIN32_WINNT=0x0501" \
-    LDFLAGS="-L$PREFIX/lib" \
+    LDFLAGS="-L$PREFIX/lib -Wl,--major-subsystem-version,5 -Wl,--minor-subsystem-version,1" \
     ZLIB_CFLAGS="-I$PREFIX/include" \
     ZLIB_LIBS="-L$PREFIX/lib -lz" \
     EXPAT_CFLAGS="-I$PREFIX/include" \
