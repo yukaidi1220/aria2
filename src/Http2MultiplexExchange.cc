@@ -40,6 +40,8 @@
 #  include "Http2Transport.h"
 #  include "HttpRequest.h"
 #  include "HttpResponse.h"
+#  include "HttpLog.h"
+#  include "LogFactory.h"
 
 #  include <utility>
 
@@ -62,12 +64,30 @@ Http2MultiplexExchange::~Http2MultiplexExchange() = default;
 
 int32_t Http2MultiplexExchange::submitRequest(HttpRequest& request)
 {
-  return submitRequest(createHttp2HeaderBlockFromHttpRequest(request));
+  auto http1Request = request.createRequest();
+  return submitRequest(createHttp2HeaderBlockFromHttp1Request(
+      http1Request, request.getProtocol()));
+}
+
+int32_t Http2MultiplexExchange::submitRequest(HttpRequest& request, cuid_t cuid)
+{
+  auto http1Request = request.createRequest();
+  A2_LOG_NETWORK(formatHttpRequestHeaderLog(cuid, "HTTP/2", http1Request));
+  return submitRequest(createHttp2HeaderBlockFromHttp1Request(
+      http1Request, request.getProtocol()));
 }
 
 int32_t Http2MultiplexExchange::submitRequestAndFlush(HttpRequest& request)
 {
   auto streamId = submitRequest(request);
+  flushOutboundData();
+  return streamId;
+}
+
+int32_t Http2MultiplexExchange::submitRequestAndFlush(HttpRequest& request,
+                                                      cuid_t cuid)
+{
+  auto streamId = submitRequest(request, cuid);
   flushOutboundData();
   return streamId;
 }

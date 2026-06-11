@@ -56,6 +56,9 @@ std::string formatTlsConnectedLog(const std::string& remote,
                                   const std::string& verify,
                                   const std::string& version,
                                   const std::string& alpn);
+std::string eraseHttpHeaderConfidentialInfo(const std::string& request);
+std::string formatHttpRequestHeaderLog(cuid_t cuid, const std::string& protocol,
+                                       const std::string& request);
 std::string formatHttpResponseReceivedLog(cuid_t cuid,
                                           const std::string& remote,
                                           const std::string& header);

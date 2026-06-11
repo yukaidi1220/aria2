@@ -248,7 +248,7 @@ bool HttpRequestCommand::executeInternal()
       }
       auto connectionContext = std::make_shared<Http2ConnectionContext>(
           requestGroup, exchange, getSocket(), proxyRequest_ != nullptr);
-      auto streamId = exchange->submitRequest(*httpRequest);
+      auto streamId = exchange->submitRequest(*httpRequest, getCuid());
       getDownloadEngine()->registerActiveHttp2Connection(getRequest().get(),
                                                           connectionContext);
       exchange->flushOutboundData();

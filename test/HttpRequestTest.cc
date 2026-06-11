@@ -31,6 +31,7 @@ class HttpRequestTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testCreateRequest_with_cookie);
   CPPUNIT_TEST(testCreateRequest_with_tls_sni_host);
   CPPUNIT_TEST(testHttpsConnectionLogIncludesRemoteEndpoint);
+  CPPUNIT_TEST(testHttpRequestHeaderLogIncludesRangeAndSnipsSecrets);
   CPPUNIT_TEST(testCreateRequest_with_hosts_mapping);
   CPPUNIT_TEST(testCreateRequest_query);
   CPPUNIT_TEST(testCreateRequest_head);
@@ -66,6 +67,7 @@ public:
   void testCreateRequest_with_cookie();
   void testCreateRequest_with_tls_sni_host();
   void testHttpsConnectionLogIncludesRemoteEndpoint();
+  void testHttpRequestHeaderLogIncludesRangeAndSnipsSecrets();
   void testCreateRequest_with_hosts_mapping();
   void testCreateRequest_query();
   void testCreateRequest_head();
@@ -580,6 +582,49 @@ void HttpRequestTest::testHttpsConnectionLogIncludesRemoteEndpoint()
                   "verify=none version=TLSv1.2 alpn=none"),
       formatTlsConnectedLog(formatEndpointForLog(endpoint), "", "",
                             "TLSv1.2", ""));
+}
+
+void HttpRequestTest::testHttpRequestHeaderLogIncludesRangeAndSnipsSecrets()
+{
+  auto request = std::make_shared<Request>();
+  request->supportsPersistentConnection(true);
+  request->setPipeliningHint(false);
+  CPPUNIT_ASSERT(request->setUri("https://example.org/file"));
+
+  auto fileEntry = std::make_shared<FileEntry>("file", 4_m, 0);
+  auto piece = std::make_shared<Piece>(1, 1_m);
+  auto segment = std::make_shared<PiecedSegment>(1_m, piece);
+
+  HttpRequest httpRequest;
+  httpRequest.setRequest(request);
+  httpRequest.setFileEntry(fileEntry);
+  httpRequest.setSegment(segment);
+  httpRequest.setAuthConfigFactory(authConfigFactory_.get());
+  httpRequest.setOption(option_.get());
+  httpRequest.setNoWantDigest(true);
+  httpRequest.setEndOffsetOverride(2_m);
+  httpRequest.addHeader("Authorization:Basic secret\r\n"
+                        "Proxy-Authorization:\tBasic proxy-secret\r\n"
+                        "cookie: SID=secret\r\n"
+                        "Set-Cookie:SID=set-secret\r\n");
+
+  auto log = formatHttpRequestHeaderLog(42, "HTTP/2",
+                                        httpRequest.createRequest());
+
+  CPPUNIT_ASSERT(log.find("HTTP: CUID#42 - Request headers via HTTP/2") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(log.find("GET /file HTTP/1.1") != std::string::npos);
+  CPPUNIT_ASSERT(log.find("Range: bytes=1048576-2097151") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(log.find("Authorization: <snip>") != std::string::npos);
+  CPPUNIT_ASSERT(log.find("Proxy-Authorization: <snip>") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(log.find("Cookie: <snip>") != std::string::npos);
+  CPPUNIT_ASSERT(log.find("Set-Cookie: <snip>") != std::string::npos);
+  CPPUNIT_ASSERT(log.find("Basic secret") == std::string::npos);
+  CPPUNIT_ASSERT(log.find("proxy-secret") == std::string::npos);
+  CPPUNIT_ASSERT(log.find("SID=secret") == std::string::npos);
+  CPPUNIT_ASSERT(log.find("set-secret") == std::string::npos);
 }
 
 void HttpRequestTest::testCreateRequest_with_hosts_mapping()

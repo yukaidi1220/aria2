@@ -34,11 +34,27 @@
 /* copyright --> */
 #include "HttpLog.h"
 
+#include <cstring>
+#include <sstream>
+
 #include "Request.h"
 #include "SocketCore.h"
 #include "fmt.h"
+#include "util.h"
 
 namespace aria2 {
+
+namespace {
+
+bool isConfidentialHttpHeader(const std::string& line, const char* name)
+{
+  auto colon = line.find(':');
+  return colon != std::string::npos &&
+         util::istartsWith(line.begin(), line.begin() + colon, name) &&
+         strlen(name) == colon;
+}
+
+} // namespace
 
 std::string formatEndpointForLog(const ::Endpoint& endpoint)
 {
@@ -82,6 +98,39 @@ std::string formatTlsConnectedLog(const std::string& remote,
              remote.c_str(), sni.empty() ? "none" : sni.c_str(),
              verify.empty() ? "none" : verify.c_str(), version.c_str(),
              alpn.empty() ? "none" : alpn.c_str());
+}
+
+std::string eraseHttpHeaderConfidentialInfo(const std::string& request)
+{
+  std::istringstream istr(request);
+  std::string result;
+  std::string line;
+  while (getline(istr, line)) {
+    if (isConfidentialHttpHeader(line, "Authorization")) {
+      result += "Authorization: <snip>\n";
+    }
+    else if (isConfidentialHttpHeader(line, "Proxy-Authorization")) {
+      result += "Proxy-Authorization: <snip>\n";
+    }
+    else if (isConfidentialHttpHeader(line, "Cookie")) {
+      result += "Cookie: <snip>\n";
+    }
+    else if (isConfidentialHttpHeader(line, "Set-Cookie")) {
+      result += "Set-Cookie: <snip>\n";
+    }
+    else {
+      result += line;
+      result += "\n";
+    }
+  }
+  return result;
+}
+
+std::string formatHttpRequestHeaderLog(cuid_t cuid, const std::string& protocol,
+                                       const std::string& request)
+{
+  return fmt("HTTP: CUID#%" PRId64 " - Request headers via %s:\n%s", cuid,
+             protocol.c_str(), eraseHttpHeaderConfidentialInfo(request).c_str());
 }
 
 std::string formatHttpResponseReceivedLog(cuid_t cuid,

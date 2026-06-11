@@ -34,9 +34,6 @@
 /* copyright --> */
 #include "HttpConnection.h"
 
-#include <sstream>
-
-#include "util.h"
 #include "message.h"
 #include "prefs.h"
 #include "LogFactory.h"
@@ -115,49 +112,13 @@ HttpConnection::HttpConnection(
 
 HttpConnection::~HttpConnection() = default;
 
-std::string HttpConnection::eraseConfidentialInfo(const std::string& request)
-{
-  std::istringstream istr(request);
-  std::string result;
-  std::string line;
-  while (getline(istr, line)) {
-    if (util::istartsWith(line, "Authorization: ")) {
-      result += "Authorization: <snip>\n";
-    }
-    else if (util::istartsWith(line, "Proxy-Authorization: ")) {
-      result += "Proxy-Authorization: <snip>\n";
-    }
-    else if (util::istartsWith(line, "Cookie: ")) {
-      result += "Cookie: <snip>\n";
-    }
-    else if (util::istartsWith(line, "Set-Cookie: ")) {
-      result += "Set-Cookie: <snip>\n";
-    }
-    else {
-      result += line;
-      result += "\n";
-    }
-  }
-  return result;
-}
-
 void HttpConnection::sendRequest(std::unique_ptr<HttpRequest> httpRequest,
                                  std::string request)
 {
   A2_LOG_INFO(
-      fmt(MSG_SENDING_REQUEST, cuid_, eraseConfidentialInfo(request).c_str()));
-  if (A2_LOG_NETWORK_ENABLED) {
-    // Extract first line (method + URI) for network log on demand.
-    auto nlpos = request.find('\n');
-    if (nlpos != std::string::npos) {
-      auto firstLine = request.substr(0, nlpos);
-      if (!firstLine.empty() && firstLine.back() == '\r') {
-        firstLine.pop_back();
-      }
-      A2_LOG_NETWORK(
-          fmt("HTTP: CUID#%" PRId64 " - %s", cuid_, firstLine.c_str()));
-    }
-  }
+      fmt(MSG_SENDING_REQUEST, cuid_,
+          eraseHttpHeaderConfidentialInfo(request).c_str()));
+  A2_LOG_NETWORK(formatHttpRequestHeaderLog(cuid_, "HTTP/1.1", request));
   socketBuffer_.pushStr(std::move(request));
   socketBuffer_.send();
   outstandingHttpRequests_.push_back(
@@ -195,7 +156,8 @@ std::unique_ptr<HttpResponse> HttpConnection::receiveResponse()
                   socketRecvBuffer_->getBufferLength())) {
     auto remoteEndpoint = getRemoteEndpointForLog(socket_);
     A2_LOG_INFO(formatHttpResponseReceivedLog(
-        cuid_, remoteEndpoint, eraseConfidentialInfo(proc->getHeaderString())));
+        cuid_, remoteEndpoint,
+        eraseHttpHeaderConfidentialInfo(proc->getHeaderString())));
     auto result = proc->getResult();
     A2_LOG_NETWORK(formatHttpResponseStatusLog(cuid_, result->getStatusCode(),
                                                remoteEndpoint));
