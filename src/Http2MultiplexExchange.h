@@ -84,6 +84,7 @@ public:
 
   bool wantRead() const;
   bool wantWrite() const;
+  bool hasBufferedInboundData() const;
 
   bool hasActiveStreams() const;
   bool hasActiveStream(int32_t streamId) const;

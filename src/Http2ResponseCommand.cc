@@ -235,7 +235,7 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
   auto stateAfterPump = exchange_->getState(streamId_);
   if (stateAfterPump.bodyLength > 0 || stateAfterPump.streamClosed ||
-      stateAfterPump.errorCode != 0) {
+      stateAfterPump.errorCode != 0 || exchange_->hasBufferedInboundData()) {
     scheduleHttp2Now(this, getDownloadEngine());
   }
   requeueSelf();

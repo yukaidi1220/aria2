@@ -389,6 +389,17 @@ size_t Http2Session::getRemoteMaxConcurrentStreams() const
       impl_->session, NGHTTP2_SETTINGS_MAX_CONCURRENT_STREAMS);
 }
 
+bool Http2Session::hasResponseBodySpace(size_t len) const
+{
+  for (const auto& entry : impl_->responses) {
+    const auto& body = entry.second.body;
+    if (!body.closed() && body.available() < len) {
+      return false;
+    }
+  }
+  return true;
+}
+
 bool Http2Session::hasResponseEvent(int32_t streamId) const
 {
   return impl_->responses.find(streamId) != impl_->responses.end();

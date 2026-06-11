@@ -76,6 +76,11 @@ size_t Http2Connection::getRemoteMaxConcurrentStreams() const
   return session_.getRemoteMaxConcurrentStreams();
 }
 
+bool Http2Connection::hasResponseBodySpace(size_t len) const
+{
+  return session_.hasResponseBodySpace(len);
+}
+
 bool Http2Connection::hasResponseEvent(int32_t streamId) const
 {
   return session_.hasResponseEvent(streamId);

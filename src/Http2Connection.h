@@ -68,6 +68,7 @@ public:
   void feedInboundData(const std::string& data);
   void resetStream(int32_t streamId);
   size_t getRemoteMaxConcurrentStreams() const;
+  bool hasResponseBodySpace(size_t len) const;
 
   bool hasResponseEvent(int32_t streamId) const;
   const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;

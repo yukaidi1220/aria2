@@ -26,6 +26,7 @@ class Http2TransactionPumpTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testPumpHandlesPartialRead);
   CPPUNIT_TEST(testPumpDrainsBufferedReads);
   CPPUNIT_TEST(testPumpReadsLargeResponseInBatches);
+  CPPUNIT_TEST(testPumpPausesBeforeBodyQueueOverflow);
   CPPUNIT_TEST(testWriteFailureThrows);
   CPPUNIT_TEST(testReadFailureThrows);
   CPPUNIT_TEST(testClosedReadThrows);
@@ -38,6 +39,7 @@ public:
   void testPumpHandlesPartialRead();
   void testPumpDrainsBufferedReads();
   void testPumpReadsLargeResponseInBatches();
+  void testPumpPausesBeforeBodyQueueOverflow();
   void testWriteFailureThrows();
   void testReadFailureThrows();
   void testClosedReadThrows();
@@ -197,6 +199,48 @@ void Http2TransactionPumpTest::testPumpReadsLargeResponseInBatches()
   CPPUNIT_ASSERT_EQUAL(body.size(), event->body.drainAll().size());
   CPPUNIT_ASSERT(event->body.closed());
   CPPUNIT_ASSERT(!transaction.hasActiveStream());
+}
+
+void Http2TransactionPumpTest::testPumpPausesBeforeBodyQueueOverflow()
+{
+  Http2Transaction transaction;
+  http2test::MemoryHttp2Transport transport;
+  Http2TransactionPump pump(transaction, transport);
+  http2test::FakeHttp2ServerSession server;
+  auto streamId = transaction.submitRequest(http2test::createRequestHeaders());
+  auto headers = http2test::createResponseHeaders();
+  headers.emplace_back("content-length", "2621440");
+  std::string chunk(16_k, 'x');
+
+  CPPUNIT_ASSERT(pump.flushOutboundData());
+  server.feedInboundData(transport.drainOutboundData());
+  server.submitResponseHeaders(streamId, headers);
+  for (size_t i = 0; i < 160; ++i) {
+    server.submitResponseDataNoEndStream(streamId, chunk);
+  }
+  transport.appendInboundData(server.drainOutboundData());
+
+  size_t iterations = 0;
+  while (pump.wantRead() && transport.getRecvBufferedLength() > 0) {
+    CPPUNIT_ASSERT(iterations++ < 100);
+    pump.pump();
+  }
+
+  auto state = transaction.getState();
+  CPPUNIT_ASSERT(state.bodyLength > 0);
+  CPPUNIT_ASSERT(state.bodyLength <= 2_m);
+  CPPUNIT_ASSERT(transport.getRecvBufferedLength() > 0);
+  CPPUNIT_ASSERT(!pump.wantRead());
+  CPPUNIT_ASSERT(!pump.hasBufferedInboundData());
+
+  auto body = transaction.popResponseBody(1_m);
+  CPPUNIT_ASSERT_EQUAL((size_t)1_m, body.size());
+  CPPUNIT_ASSERT(pump.wantRead());
+  CPPUNIT_ASSERT(pump.hasBufferedInboundData());
+  CPPUNIT_ASSERT(pump.pump());
+
+  auto stateAfterResume = transaction.getState();
+  CPPUNIT_ASSERT(stateAfterResume.bodyLength > state.bodyLength - body.size());
 }
 
 void Http2TransactionPumpTest::testWriteFailureThrows()

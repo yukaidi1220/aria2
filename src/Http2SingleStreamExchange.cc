@@ -93,6 +93,11 @@ bool Http2SingleStreamExchange::wantRead() const { return pump_.wantRead(); }
 
 bool Http2SingleStreamExchange::wantWrite() const { return pump_.wantWrite(); }
 
+bool Http2SingleStreamExchange::hasBufferedInboundData() const
+{
+  return pump_.hasBufferedInboundData();
+}
+
 bool Http2SingleStreamExchange::hasActiveStream() const
 {
   return transaction_.hasActiveStream();

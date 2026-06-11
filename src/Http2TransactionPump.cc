@@ -85,6 +85,11 @@ void Http2TransactionPump::clearSentOutboundData()
   }
 }
 
+bool Http2TransactionPump::canReadInboundData() const
+{
+  return connection_.hasResponseBodySpace(MAX_HTTP2_TRANSPORT_READ_SIZE);
+}
+
 bool Http2TransactionPump::flushOutboundData()
 {
   appendOutboundData();
@@ -116,6 +121,10 @@ bool Http2TransactionPump::flushOutboundData()
 
 bool Http2TransactionPump::readInboundData()
 {
+  if (!canReadInboundData()) {
+    return false;
+  }
+
   unsigned char buf[MAX_HTTP2_TRANSPORT_READ_SIZE];
   auto nread = transport_.readData(buf, sizeof(buf));
   if (nread < 0) {
@@ -152,7 +161,8 @@ bool Http2TransactionPump::pump()
     progressed |= flushOutboundData();
   }
   for (size_t i = 1; i < MAX_HTTP2_TRANSPORT_READ_ITERATIONS &&
-                     transport_.getRecvBufferedLength() > 0;
+                     transport_.getRecvBufferedLength() > 0 &&
+                     canReadInboundData();
        ++i) {
     if (!readInboundData()) {
       break;
@@ -168,9 +178,14 @@ bool Http2TransactionPump::hasPendingOutboundData() const
   return writeOffset_ < writeBuffer_.size();
 }
 
+bool Http2TransactionPump::hasBufferedInboundData() const
+{
+  return transport_.getRecvBufferedLength() > 0 && canReadInboundData();
+}
+
 bool Http2TransactionPump::wantRead() const
 {
-  return transport_.wantRead() || transport_.getRecvBufferedLength() > 0;
+  return canReadInboundData();
 }
 
 bool Http2TransactionPump::wantWrite() const

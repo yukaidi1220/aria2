@@ -223,7 +223,7 @@ bool Http2DownloadCommand::executeInternal()
   }
   state = exchange_->getState(streamId_);
   if (!pendingBody_.empty() || state.bodyLength > 0 || state.streamClosed ||
-      state.errorCode != 0) {
+      state.errorCode != 0 || exchange_->hasBufferedInboundData()) {
     scheduleHttp2Now(this, getDownloadEngine());
   }
   requeueSelf();
@@ -234,7 +234,8 @@ bool Http2DownloadCommand::noCheck() const
 {
   auto state = exchange_->getState(streamId_);
   return DownloadCommand::noCheck() || !pendingBody_.empty() ||
-         state.bodyLength > 0 || state.streamClosed || state.errorCode != 0;
+         state.bodyLength > 0 || state.streamClosed || state.errorCode != 0 ||
+         exchange_->hasBufferedInboundData();
 }
 
 int64_t Http2DownloadCommand::getRequestEndOffset() const

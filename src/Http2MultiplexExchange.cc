@@ -116,6 +116,11 @@ bool Http2MultiplexExchange::wantRead() const { return pump_.wantRead(); }
 
 bool Http2MultiplexExchange::wantWrite() const { return pump_.wantWrite(); }
 
+bool Http2MultiplexExchange::hasBufferedInboundData() const
+{
+  return pump_.hasBufferedInboundData();
+}
+
 bool Http2MultiplexExchange::hasActiveStreams() const
 {
   return !activeStreams_.empty();

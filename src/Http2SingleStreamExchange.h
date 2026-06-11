@@ -78,6 +78,7 @@ public:
 
   bool wantRead() const;
   bool wantWrite() const;
+  bool hasBufferedInboundData() const;
   bool hasActiveStream() const;
   int32_t getStreamId() const;
   Http2TransactionState getState() const;

@@ -57,6 +57,7 @@ private:
 
   void appendOutboundData();
   void clearSentOutboundData();
+  bool canReadInboundData() const;
 
 public:
   Http2TransactionPump(Http2Connection& connection, Http2Transport& transport);
@@ -73,6 +74,7 @@ public:
   bool pump();
 
   bool hasPendingOutboundData() const;
+  bool hasBufferedInboundData() const;
   bool wantRead() const;
   bool wantWrite() const;
 };
