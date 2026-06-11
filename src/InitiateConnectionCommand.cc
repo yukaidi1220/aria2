@@ -54,6 +54,7 @@
 #include "HostMapping.h"
 #include "BackupIPv4ConnectCommand.h"
 #include "ConnectCommand.h"
+#include "SimpleRandomizer.h"
 
 namespace aria2 {
 
@@ -177,19 +178,37 @@ void InitiateConnectionCommand::setConnectedAddrInfo(
 std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
                                   const std::string& ipaddr)
 {
+  return selectBackupIPAddress(addrs, ipaddr, nullptr);
+}
+
+std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
+                                  const std::string& ipaddr,
+                                  Randomizer* randomizer)
+{
   int backupFamily = getBackupAddressFamily(ipaddr);
   if (backupFamily == 0) {
     return std::string();
   }
+  std::vector<std::string> candidates;
   for (auto i = addrs.begin(), eoi = addrs.end(); i != eoi; ++i) {
     if (isNumericAddressFamily(*i, backupFamily)) {
       if (backupFamily == AF_INET6 && !isIPv6GlobalUnicastAddress(*i)) {
         continue;
       }
-      return *i;
+      candidates.push_back(*i);
     }
   }
-  return std::string();
+  if (candidates.empty()) {
+    return std::string();
+  }
+  if (candidates.size() == 1) {
+    return candidates.front();
+  }
+  auto selectedRandomizer =
+      randomizer ? randomizer : SimpleRandomizer::getInstance().get();
+  return candidates[static_cast<size_t>(
+      selectedRandomizer->getRandomNumber(
+          static_cast<long int>(candidates.size())))];
 }
 
 std::chrono::milliseconds getBackupConnectionDelay(const Option* option)

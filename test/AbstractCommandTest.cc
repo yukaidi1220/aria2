@@ -10,15 +10,28 @@
 #include "FileEntry.h"
 #include "InorderURISelector.h"
 #include "DnsMessage.h"
+#include "FixedNumberRandomizer.h"
 
 namespace aria2 {
+
+namespace {
+class FailingRandomizer : public Randomizer {
+public:
+  virtual long int getRandomNumber(long int) CXX11_OVERRIDE
+  {
+    CPPUNIT_FAIL("randomizer must not be used");
+    return 0;
+  }
+};
+} // namespace
 
 class AbstractCommandTest : public CppUnit::TestFixture {
 
   CPPUNIT_TEST_SUITE(AbstractCommandTest);
   CPPUNIT_TEST(testGetProxyUri);
   CPPUNIT_TEST(testSelectIPAddressReturnsEmptyForEmptyList);
-  CPPUNIT_TEST(testSelectIPAddressKeepsSingleFamilyOrder);
+  CPPUNIT_TEST(testSelectIPAddressSkipsRandomizerForSingleCandidate);
+  CPPUNIT_TEST(testSelectIPAddressRandomizesSingleFamilyCandidates);
   CPPUNIT_TEST(testSelectIPAddressAlternatesDualStackByCuid);
   CPPUNIT_TEST(testSelectIPAddressPrefersIPv4OverScopedIPv6);
   CPPUNIT_TEST(testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6);
@@ -68,7 +81,8 @@ public:
 
   void testGetProxyUri();
   void testSelectIPAddressReturnsEmptyForEmptyList();
-  void testSelectIPAddressKeepsSingleFamilyOrder();
+  void testSelectIPAddressSkipsRandomizerForSingleCandidate();
+  void testSelectIPAddressRandomizesSingleFamilyCandidates();
   void testSelectIPAddressAlternatesDualStackByCuid();
   void testSelectIPAddressPrefersIPv4OverScopedIPv6();
   void testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6();
@@ -161,30 +175,62 @@ void AbstractCommandTest::testSelectIPAddressReturnsEmptyForEmptyList()
   CPPUNIT_ASSERT_EQUAL(std::string(), selectIPAddress(addrs, 1));
 }
 
-void AbstractCommandTest::testSelectIPAddressKeepsSingleFamilyOrder()
+void AbstractCommandTest::testSelectIPAddressSkipsRandomizerForSingleCandidate()
 {
+  FailingRandomizer randomizer;
+
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 1, 0, &randomizer));
+}
+
+void AbstractCommandTest::testSelectIPAddressRandomizesSingleFamilyCandidates()
+{
+  FixedNumberRandomizer randomizer;
+
   std::vector<std::string> ipv4Addrs;
   ipv4Addrs.push_back("192.0.2.1");
   ipv4Addrs.push_back("192.0.2.2");
+  randomizer.setFixedNumber(0);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
-                       selectIPAddress(ipv4Addrs, 2));
+                       selectIPAddress(ipv4Addrs, 1, 0, &randomizer));
+  randomizer.setFixedNumber(1);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"),
+                       selectIPAddress(ipv4Addrs, 1, 0, &randomizer));
 
   std::vector<std::string> ipv6Addrs;
   ipv6Addrs.push_back("2001:db8::1");
   ipv6Addrs.push_back("2001:db8::2");
+  randomizer.setFixedNumber(0);
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
-                       selectIPAddress(ipv6Addrs, 2));
+                       selectIPAddress(ipv6Addrs, 1, 0, &randomizer));
+  randomizer.setFixedNumber(1);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"),
+                       selectIPAddress(ipv6Addrs, 1, 0, &randomizer));
 }
 
 void AbstractCommandTest::testSelectIPAddressAlternatesDualStackByCuid()
 {
+  FixedNumberRandomizer randomizer;
+
   std::vector<std::string> addrs;
   addrs.push_back("2001:db8::1");
+  addrs.push_back("2001:db8::2");
   addrs.push_back("192.0.2.1");
+  addrs.push_back("192.0.2.2");
 
+  randomizer.setFixedNumber(0);
   CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
-                       selectIPAddress(addrs, 1));
-  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"), selectIPAddress(addrs, 2));
+                       selectIPAddress(addrs, 1, 0, &randomizer));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       selectIPAddress(addrs, 2, 0, &randomizer));
+  randomizer.setFixedNumber(1);
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"),
+                       selectIPAddress(addrs, 2, 0, &randomizer));
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"),
+                       selectIPAddress(addrs, 1, 0, &randomizer));
 }
 
 void AbstractCommandTest::testSelectIPAddressPrefersIPv4OverScopedIPv6()
@@ -207,33 +253,47 @@ void AbstractCommandTest::testSelectIPAddressPrefersGlobalIPv6OverScopedIPv6()
   std::vector<std::string> addrs;
   addrs.push_back("fd00::1");
   addrs.push_back("2001:db8::1");
+  addrs.push_back("2001:db8::2");
   addrs.push_back("192.0.2.1");
 
-  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), selectIPAddress(addrs, 1));
+  FixedNumberRandomizer randomizer;
+  randomizer.setFixedNumber(0);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectIPAddress(addrs, 1, AF_INET6, &randomizer));
+  randomizer.setFixedNumber(1);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"),
+                       selectIPAddress(addrs, 2, AF_INET6, &randomizer));
 }
 
 void AbstractCommandTest::testSelectIPAddressRotatesDualStackByFileEntry()
 {
+  FixedNumberRandomizer randomizer;
+
   std::vector<std::string> addrs;
   addrs.push_back("192.0.2.1");
+  addrs.push_back("192.0.2.2");
   addrs.push_back("2001:db8::1");
+  addrs.push_back("2001:db8::2");
   auto fileEntry = std::make_shared<FileEntry>();
 
+  randomizer.setFixedNumber(0);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 1, fileEntry, "example.org",
-                                       443));
-  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                                       443, &randomizer));
+  randomizer.setFixedNumber(1);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"),
                        selectIPAddress(addrs, 2, fileEntry, "example.org",
-                                       443));
-  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                                       443, &randomizer));
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.2"),
                        selectIPAddress(addrs, 3, fileEntry, "example.org",
-                                       443));
+                                       443, &randomizer));
+  randomizer.setFixedNumber(0);
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 4, fileEntry, "example.org",
-                                       8443));
+                                       8443, &randomizer));
   CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 5, fileEntry, "mirror.example",
-                                       443));
+                                       443, &randomizer));
 }
 
 void AbstractCommandTest::testSelectIPAddressUsesBothFamiliesForConcurrentRequests()

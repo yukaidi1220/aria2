@@ -46,6 +46,7 @@ namespace aria2 {
 
 struct BackupConnectInfo;
 class ConnectCommand;
+class Randomizer;
 
 struct ConnectionAuthority {
   std::string hostname;
@@ -55,6 +56,9 @@ struct ConnectionAuthority {
 
 std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
                                   const std::string& ipaddr);
+std::string selectBackupIPAddress(const std::vector<std::string>& addrs,
+                                  const std::string& ipaddr,
+                                  Randomizer* randomizer);
 std::chrono::milliseconds getBackupConnectionDelay(const Option* option);
 
 class InitiateConnectionCommand : public AbstractCommand {

@@ -58,6 +58,7 @@ class DownloadEngine;
 class Segment;
 class SocketCore;
 class Option;
+class Randomizer;
 class SocketRecvBuffer;
 #ifdef ENABLE_ASYNC_DNS
 class AsyncNameResolver;
@@ -261,8 +262,14 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
 std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             int preferredFamily);
 std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
+                            int preferredFamily, Randomizer* randomizer);
+std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             const std::shared_ptr<FileEntry>& fileEntry,
                             const std::string& hostname, uint16_t port);
+std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
+                            const std::shared_ptr<FileEntry>& fileEntry,
+                            const std::string& hostname, uint16_t port,
+                            Randomizer* randomizer);
 
 // Moves ipaddr to the front while preserving the order of other addresses.
 void prioritizeIPAddress(std::vector<std::string>& addrs,

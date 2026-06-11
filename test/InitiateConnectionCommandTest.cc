@@ -8,8 +8,20 @@
 #include "A2STR.h"
 #include "Option.h"
 #include "prefs.h"
+#include "FixedNumberRandomizer.h"
 
 namespace aria2 {
+
+namespace {
+class FailingRandomizer : public Randomizer {
+public:
+  virtual long int getRandomNumber(long int) CXX11_OVERRIDE
+  {
+    CPPUNIT_FAIL("randomizer must not be used");
+    return 0;
+  }
+};
+} // namespace
 
 class InitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST_SUITE(InitiateConnectionCommandTest);
@@ -17,7 +29,8 @@ class InitiateConnectionCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectBackupIPAddressChoosesIPv4ForIPv6Main);
   CPPUNIT_TEST(testSelectBackupIPAddressReturnsEmptyWithoutOppositeFamily);
   CPPUNIT_TEST(testSelectBackupIPAddressReturnsEmptyForHostname);
-  CPPUNIT_TEST(testSelectBackupIPAddressUsesResolvedOrder);
+  CPPUNIT_TEST(testSelectBackupIPAddressRandomizesResolvedCandidates);
+  CPPUNIT_TEST(testSelectBackupIPAddressSkipsRandomizerForSingleCandidate);
   CPPUNIT_TEST(testSelectBackupIPAddressPrefersGlobalIPv6);
   CPPUNIT_TEST(testSelectBackupIPAddressSkipsScopedIPv6Backup);
 #ifdef ENABLE_ASYNC_DNS
@@ -32,7 +45,8 @@ public:
   void testSelectBackupIPAddressChoosesIPv4ForIPv6Main();
   void testSelectBackupIPAddressReturnsEmptyWithoutOppositeFamily();
   void testSelectBackupIPAddressReturnsEmptyForHostname();
-  void testSelectBackupIPAddressUsesResolvedOrder();
+  void testSelectBackupIPAddressRandomizesResolvedCandidates();
+  void testSelectBackupIPAddressSkipsRandomizerForSingleCandidate();
   void testSelectBackupIPAddressPrefersGlobalIPv6();
   void testSelectBackupIPAddressSkipsScopedIPv6Backup();
 #ifdef ENABLE_ASYNC_DNS
@@ -90,15 +104,34 @@ void InitiateConnectionCommandTest::
                        selectBackupIPAddress(addrs, "example.org"));
 }
 
-void InitiateConnectionCommandTest::testSelectBackupIPAddressUsesResolvedOrder()
+void InitiateConnectionCommandTest::
+    testSelectBackupIPAddressRandomizesResolvedCandidates()
 {
+  FixedNumberRandomizer randomizer;
+  randomizer.setFixedNumber(1);
+
   std::vector<std::string> addrs;
   addrs.push_back("2001:db8::2");
   addrs.push_back("192.0.2.1");
   addrs.push_back("2001:db8::1");
 
-  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::2"),
-                       selectBackupIPAddress(addrs, "192.0.2.10"));
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectBackupIPAddress(addrs, "192.0.2.10",
+                                             &randomizer));
+}
+
+void InitiateConnectionCommandTest::
+    testSelectBackupIPAddressSkipsRandomizerForSingleCandidate()
+{
+  FailingRandomizer randomizer;
+
+  std::vector<std::string> addrs;
+  addrs.push_back("192.0.2.1");
+  addrs.push_back("2001:db8::1");
+
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+                       selectBackupIPAddress(addrs, "192.0.2.10",
+                                             &randomizer));
 }
 
 void InitiateConnectionCommandTest::testSelectBackupIPAddressPrefersGlobalIPv6()

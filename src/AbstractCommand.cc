@@ -74,6 +74,7 @@
 #include "error_code.h"
 #include "SocketRecvBuffer.h"
 #include "ChecksumCheckIntegrityEntry.h"
+#include "SimpleRandomizer.h"
 #ifdef ENABLE_ASYNC_DNS
 #  include "AsyncNameResolver.h"
 #  include "AsyncNameResolverMan.h"
@@ -227,24 +228,38 @@ getSelectableAddressFamilies(const std::vector<std::string>& addrs)
   return families;
 }
 
-std::vector<std::string>::const_iterator
-findPreferredAddressFamily(std::vector<std::string>::const_iterator first,
-                           std::vector<std::string>::const_iterator last,
-                           int family)
+std::vector<std::string> getAddressFamilyCandidates(
+    const std::vector<std::string>& addrs, int family)
 {
+  std::vector<std::string> candidates;
   if (family == AF_INET6) {
-    auto globalIPv6 = std::find_if(
-        first, last, [](const std::string& addr) {
-          return getNumericAddressFamily(addr) == AF_INET6 &&
-                 isIPv6GlobalUnicastAddress(addr);
-        });
-    if (globalIPv6 != last) {
-      return globalIPv6;
+    for (const auto& addr : addrs) {
+      if (getNumericAddressFamily(addr) == AF_INET6 &&
+          isIPv6GlobalUnicastAddress(addr)) {
+        candidates.push_back(addr);
+      }
+    }
+    if (!candidates.empty()) {
+      return candidates;
     }
   }
-  return std::find_if(first, last, [family](const std::string& addr) {
-    return getNumericAddressFamily(addr) == family;
-  });
+
+  for (const auto& addr : addrs) {
+    if (getNumericAddressFamily(addr) == family) {
+      candidates.push_back(addr);
+    }
+  }
+  return candidates;
+}
+
+size_t getRandomAddressCandidateOffset(Randomizer* randomizer, size_t size)
+{
+  if (size == 0) {
+    return 0;
+  }
+
+  return static_cast<size_t>(
+      randomizer->getRandomNumber(static_cast<long int>(size)));
 }
 
 int getOppositeAddressFamily(int family)
@@ -1676,13 +1691,36 @@ std::string getProxyUri(const std::string& protocol, const Option* option)
 std::string selectIPAddress(const std::vector<std::string>& addrs,
                             cuid_t cuid, int preferredFamily)
 {
+  return selectIPAddress(addrs, cuid, preferredFamily, nullptr);
+}
+
+std::string selectIPAddress(const std::vector<std::string>& addrs,
+                            cuid_t cuid, int preferredFamily,
+                            Randomizer* randomizer)
+{
   if (addrs.empty()) {
     return A2STR::NIL;
   }
+  auto selectByFamily = [&addrs, &randomizer](int family) -> std::string {
+    auto candidates = getAddressFamilyCandidates(addrs, family);
+    if (candidates.empty()) {
+      return addrs.front();
+    }
+    if (candidates.size() == 1) {
+      return candidates.front();
+    }
+    auto selectedRandomizer =
+        randomizer ? randomizer : SimpleRandomizer::getInstance().get();
+
+    return candidates[getRandomAddressCandidateOffset(selectedRandomizer,
+                                                      candidates.size())];
+  };
 
   if (!hasNumericAddressFamily(addrs, AF_INET) ||
       !hasNumericAddressFamily(addrs, AF_INET6)) {
-    return addrs.front();
+    auto family = getFirstSelectableAddressFamily(addrs);
+    return isSelectableAddressFamily(family) ? selectByFamily(family)
+                                             : addrs.front();
   }
 
   auto family = 0;
@@ -1695,9 +1733,7 @@ std::string selectIPAddress(const std::vector<std::string>& addrs,
   else {
     family = cuid % 2 == 0 ? AF_INET : AF_INET6;
   }
-  auto addr =
-      findPreferredAddressFamily(std::begin(addrs), std::end(addrs), family);
-  return addr == std::end(addrs) ? addrs.front() : *addr;
+  return selectByFamily(family);
 }
 
 std::string selectIPAddress(const std::vector<std::string>& addrs,
@@ -1821,6 +1857,14 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
                             const std::shared_ptr<FileEntry>& fileEntry,
                             const std::string& hostname, uint16_t port)
 {
+  return selectIPAddress(addrs, cuid, fileEntry, hostname, port, nullptr);
+}
+
+std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
+                            const std::shared_ptr<FileEntry>& fileEntry,
+                            const std::string& hostname, uint16_t port,
+                            Randomizer* randomizer)
+{
   auto preferIPv4 = shouldPreferIPv4OverScopedIPv6(addrs);
   auto family = 0;
   if (preferIPv4) {
@@ -1841,7 +1885,7 @@ std::string selectIPAddress(const std::vector<std::string>& addrs, cuid_t cuid,
     family = fileEntry->getNextAddressFamily(hostname, port, fallbackFamily);
   }
 
-  auto ipaddr = selectIPAddress(addrs, cuid, family);
+  auto ipaddr = selectIPAddress(addrs, cuid, family, randomizer);
   if (fileEntry && hasNumericAddressFamily(addrs, AF_INET) &&
       hasNumericAddressFamily(addrs, AF_INET6)) {
     auto selectedFamily = getNumericAddressFamily(ipaddr);
