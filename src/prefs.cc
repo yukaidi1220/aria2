@@ -418,6 +418,8 @@ PrefPtr PREF_ENABLE_HTTP_PIPELINING = makePref("enable-http-pipelining");
 // values: true | false
 PrefPtr PREF_ENABLE_HTTP2 = makePref("enable-http2");
 // values: true | false
+PrefPtr PREF_ENABLE_DOH_HTTP2 = makePref("enable-doh-http2");
+// values: true | false
 PrefPtr PREF_ENABLE_HTTP3 = makePref("enable-http3");
 // values: true | false
 PrefPtr PREF_ENABLE_HTTPS_RR = makePref("enable-https-rr");

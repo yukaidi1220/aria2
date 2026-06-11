@@ -522,6 +522,20 @@ HTTP Specific Options
 
   Default: ``false``
 
+.. option:: --enable-doh-http2 [true|false]
+
+  Enable HTTP/2 only for DNS over HTTPS when aria2 is built with libnghttp2.
+  This option lets DoH advertise ``h2`` and ``http/1.1`` with TLS ALPN without
+  enabling HTTP/2 downloads.  It is ignored when
+  :option:`--enable-http-pipelining` is enabled.  Builds without libnghttp2
+  reject ``true`` during option parsing.
+
+  :option:`--enable-http2=true` also enables DoH over HTTP/2 for backward
+  compatibility.  Use ``--enable-http2=false --enable-doh-http2=true`` when
+  only DoH should be allowed to use HTTP/2.
+
+  Default: ``false``
+
 .. option:: --enable-http3 [false]
 
   Enable the HTTP/3 over QUIC capability gate. This option is accepted only
@@ -1372,9 +1386,9 @@ Advanced Options
   then connects to the resolved IP address. DoT/DoH entries can append
   ``#TLS_HOST`` to use ``TLS_HOST`` as the TLS SNI,
   certificate verification hostname, and DoH HTTP ``Host`` header. The DoH
-  backend can use HTTP/2 when aria2 is built with nghttp2 and
-  :option:`--enable-http2=true` is enabled and
-  :option:`--enable-http-pipelining=false`; otherwise it uses HTTP/1.1.
+  backend can use HTTP/2 when aria2 is built with nghttp2, either
+  :option:`--enable-http2=true` or :option:`--enable-doh-http2=true` is enabled,
+  and :option:`--enable-http-pipelining=false`; otherwise it uses HTTP/1.1.
   When :option:`--enable-https-rr=true` is set, background HTTPS/SVCB TYPE65
   discovery runs separately from the A/AAAA download-name fallback flow. It can
   use c-ares for ``cares``, DoT for ``dot``, DoH for ``doh``, and staged

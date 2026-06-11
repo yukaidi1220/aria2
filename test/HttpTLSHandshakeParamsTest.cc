@@ -21,6 +21,7 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDefaultAlpnProtocolsEmpty);
   CPPUNIT_TEST(testHttp2AlpnProtocolsWhenEnabled);
   CPPUNIT_TEST(testHttp2AlpnProtocolsDisabledByPipelining);
+  CPPUNIT_TEST(testDohHttp2DoesNotEnableDownloadAlpn);
   CPPUNIT_TEST(testHttpsServiceBindingHttp11RestrictsAlpn);
   CPPUNIT_TEST(testHttpsServiceBindingH2RestrictsAlpn);
   CPPUNIT_TEST(testHttpsServiceBindingDefaultAlpnKeepsConfiguredAlpn);
@@ -39,6 +40,7 @@ public:
   void testDefaultAlpnProtocolsEmpty();
   void testHttp2AlpnProtocolsWhenEnabled();
   void testHttp2AlpnProtocolsDisabledByPipelining();
+  void testDohHttp2DoesNotEnableDownloadAlpn();
   void testHttpsServiceBindingHttp11RestrictsAlpn();
   void testHttpsServiceBindingH2RestrictsAlpn();
   void testHttpsServiceBindingDefaultAlpnKeepsConfiguredAlpn();
@@ -114,6 +116,18 @@ void HttpTLSHandshakeParamsTest::testHttp2AlpnProtocolsDisabledByPipelining()
   Option option;
   option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
   option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_TRUE);
+
+  auto protocols = createHttpAlpnProtocols(&option);
+
+  CPPUNIT_ASSERT(protocols.empty());
+}
+
+void HttpTLSHandshakeParamsTest::testDohHttp2DoesNotEnableDownloadAlpn()
+{
+  Option option;
+  option.put(PREF_ENABLE_HTTP2, A2_V_FALSE);
+  option.put(PREF_ENABLE_DOH_HTTP2, A2_V_TRUE);
+  option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_FALSE);
 
   auto protocols = createHttpAlpnProtocols(&option);
 

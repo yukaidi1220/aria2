@@ -1302,7 +1302,8 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
   asyncNameResolverMan->setResolverMode(resolverMode);
   asyncNameResolverMan->setServers(std::move(servers));
   asyncNameResolverMan->setDohHttp2(
-      option->getAsBool(PREF_ENABLE_HTTP2) &&
+      (option->getAsBool(PREF_ENABLE_HTTP2) ||
+       option->getAsBool(PREF_ENABLE_DOH_HTTP2)) &&
       !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING));
 }
 

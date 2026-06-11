@@ -711,8 +711,9 @@ void AsyncNameResolverTest::testConfigureDohHttp2AffectsLoggedTransport()
     option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
     option.put(PREF_ASYNC_DNS_MODE, V_DOH);
     option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
-    option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
-    option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_TRUE);
+    option.put(PREF_ENABLE_HTTP2, A2_V_FALSE);
+    option.put(PREF_ENABLE_DOH_HTTP2, A2_V_TRUE);
+    option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_FALSE);
     MockFallbackAsyncNameResolverMan resolverMan({1});
 
     configureAsyncNameResolverMan(&resolverMan, &option);
@@ -722,9 +723,32 @@ void AsyncNameResolverTest::testConfigureDohHttp2AffectsLoggedTransport()
     resolverMan.startAsync("example.org", nullptr, &command);
   }
 
+  {
+    Option option;
+    option.put(PREF_ASYNC_DNS, A2_V_TRUE);
+    option.put(PREF_DISABLE_IPV6, A2_V_TRUE);
+    option.put(PREF_ASYNC_DNS_MODE, V_DOH);
+    option.put(PREF_ASYNC_DNS_SERVER, "https://dns.example.org/dns-query");
+    option.put(PREF_ENABLE_HTTP2, A2_V_TRUE);
+    option.put(PREF_ENABLE_HTTP_PIPELINING, A2_V_TRUE);
+    MockFallbackAsyncNameResolverMan resolverMan({1});
+
+    configureAsyncNameResolverMan(&resolverMan, &option);
+    resolverMan.setIPv4(true);
+    resolverMan.setIPv6(false);
+    MockCommand command(103);
+    resolverMan.startAsync("example.org", nullptr, &command);
+  }
+
   auto logs = log.closeAndRead();
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT(logs.find("DNS: CUID#101 - query plan host=example.org "
+                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "transport=https-h1-or-h2 "
+                           "server=https://dns.example.org:443/dns-query "
+                           "bootstrap=system-cares fallback_from=none") !=
+                 std::string::npos);
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#102 - query plan host=example.org "
                            "qtype=A mode=doh phase=primary backend=DoH "
                            "transport=https-h1-or-h2 "
                            "server=https://dns.example.org:443/dns-query "
@@ -737,8 +761,14 @@ void AsyncNameResolverTest::testConfigureDohHttp2AffectsLoggedTransport()
                            "server=https://dns.example.org:443/dns-query "
                            "bootstrap=system-cares fallback_from=none") !=
                  std::string::npos);
-#endif // !HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT(logs.find("DNS: CUID#102 - query plan host=example.org "
+                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "transport=https-h1 "
+                           "server=https://dns.example.org:443/dns-query "
+                           "bootstrap=system-cares fallback_from=none") !=
+                 std::string::npos);
+#endif // !HAVE_LIBNGHTTP2
+  CPPUNIT_ASSERT(logs.find("DNS: CUID#103 - query plan host=example.org "
                            "qtype=A mode=doh phase=primary backend=DoH "
                            "transport=https-h1 "
                            "server=https://dns.example.org:443/dns-query "

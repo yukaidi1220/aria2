@@ -582,6 +582,12 @@
     "                              builds reject true. HTTP/2 uses ALPN, can\n" \
     "                              reuse active or idle connections, and is\n" \
     "                              disabled when HTTP pipelining is enabled.")
+#define TEXT_ENABLE_DOH_HTTP2                                           \
+  _(" --enable-doh-http2[=true|false]\n"                                \
+    "                              Enable HTTP/2 only for DNS over HTTPS when\n" \
+    "                              aria2 is built with nghttp2. This does not\n" \
+    "                              enable HTTP/2 downloads. Disabled when HTTP\n" \
+    "                              pipelining is enabled.")
 #define TEXT_ENABLE_HTTP3                                               \
   _(" --enable-http3[=false]\n"                                         \
     "                              Enable the HTTP/3 over QUIC capability gate\n" \

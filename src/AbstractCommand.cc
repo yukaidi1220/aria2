@@ -697,7 +697,8 @@ int getServiceBindingBootstrapFamily(const Option* option)
 
 bool isDohHttp2Enabled(const Option* option)
 {
-  return option->getAsBool(PREF_ENABLE_HTTP2) &&
+  return (option->getAsBool(PREF_ENABLE_HTTP2) ||
+          option->getAsBool(PREF_ENABLE_DOH_HTTP2)) &&
          !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING);
 }
 

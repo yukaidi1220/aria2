@@ -371,6 +371,8 @@ extern PrefPtr PREF_ENABLE_HTTP_PIPELINING;
 // values: true | false
 extern PrefPtr PREF_ENABLE_HTTP2;
 // values: true | false
+extern PrefPtr PREF_ENABLE_DOH_HTTP2;
+// values: true | false
 extern PrefPtr PREF_ENABLE_HTTP3;
 // values: true | false
 extern PrefPtr PREF_ENABLE_HTTPS_RR;

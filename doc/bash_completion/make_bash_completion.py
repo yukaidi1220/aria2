@@ -102,6 +102,7 @@ _aria2c()
                      '--async-dns-mode',
                      '--enable-ech',
                      '--enable-http2',
+                     '--enable-doh-http2',
                      '--enable-https-rr',
                      '--min-tls-version',
                      '--console-log-level']:

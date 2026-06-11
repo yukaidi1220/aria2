@@ -10,6 +10,14 @@
 
 本节只记录测试暴露后必须尽快修好的阶段性问题。47 条总需求里仍未闭环的项目继续保留在后文“47 条需求状态”和“下一阶段计划”，本轮不继续扩大战线。
 
+当前未提交增量：DoH 专用 HTTP/2 开关
+
+- 落点：`src/prefs.*`、`src/OptionHandlerFactory.cc`、`src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc`、`src/Context.cc`、`src/usage_text.h`、`test/AsyncNameResolverTest.cc`、`test/OptionHandlerTest.cc`、`test/HttpTLSHandshakeParamsTest.cc`、`doc/manual-src/en/aria2c.rst`、`docs/command-line-help.zh-CN.md`
+- 行为：新增 `--enable-doh-http2=false|true`。`--enable-http2=true` 继续兼容性启用 DoH over H2；也可用 `--enable-http2=false --enable-doh-http2=true --enable-http-pipelining=false` 只让 DoH resolver 尝试 HTTP/2。普通 HTTPS 下载的 ALPN 仍只由 `--enable-http2` 控制。
+- 测试：`testConfigureDohHttp2AffectsLoggedTransport()` 覆盖新开关让 DoH query plan 记录 `transport=https-h1-or-h2`；`testDohHttp2DoesNotEnableDownloadAlpn()` 断言新开关不会让普通下载 ALPN 出现 H2；`testUnsupportedFeatureOptionParser()` 覆盖无 nghttp2 构建拒绝 `--enable-doh-http2=true`。
+- 外审：Noether 只读复审无阻断；指出 bash completion 生成产物主 option-name 列表未补新开关，已补 `--enable-doh-http2` / `--enable-doh-http2=false` 并复核无阻断。
+- 边界：该增量只拆分 DoH 与普通下载的 H2 配置门控，不声称真实 DoH server 已协商到 H2，也不改变 HTTPS RR、H3、ECH 或下载 H2 复用语义。
+
 1. disabled async DNS 配置覆盖已补强：`2c192561 Expand disabled async DNS config coverage`
    - 落点：`test/AsyncNameResolverTest.cc`、`docs/reports/2026-06-10-async-dns-requirements-progress.md`
    - 行为：`testConfigureIgnoresSecureDnsConfigWhenAsyncDnsDisabled()` 从单一 DoH 空 server 扩展为三组本应在 `async-dns=true` 下失败的配置：DoT 空 server、DoH 空 server、`multi` 裸域名 plain server。`async-dns=false` 时这些配置不再触发 secure DNS 校验失败。
@@ -440,7 +448,7 @@
 
 4. 外部评审：
    - 47 条需求只读评审结论：当前分支已有配置加载、secure-first DNS fallback、HTTPS RR 门控、连接数限制和日志地基，但最终验收矩阵、resolver 运行期 per-server 细日志、真实 DoT/DoH/multi/fake DNS、双栈端到端、XP/Win7 退化验证仍未闭环。
-   - H2/H3/HTTPS RR 评审结论：H2 active/idle reuse 只能按当前实现口径说明为同 `RequestGroup` 内条件可用；DoH over H2 只在 `--enable-http2=true` 且 `--enable-http-pipelining=false`、ALPN 选中 h2 时发生；H3 仍是能力门，不能宣称完整 H3 下载。
+   - H2/H3/HTTPS RR 评审结论：H2 active/idle reuse 只能按当前实现口径说明为同 `RequestGroup` 内条件可用；DoH over H2 在 `--enable-http2=true` 或 `--enable-doh-http2=true`，且 `--enable-http-pipelining=false`、ALPN 选中 h2 时发生；`--enable-doh-http2=true` 不启用普通下载 H2；H3 仍是能力门，不能宣称完整 H3 下载。
    - 双栈评审结论：现有 `FileEntry` family penalty、`selectIPAddress()` 和 backup 连接已经能作为第一阶段基础，下一步应优先补“已缓存双栈地址时的混合并发”和 bad family 避让测试，不要重写调度器。
    - 中文帮助文档评审结论：`docs/command-line-help.zh-CN.md` 已覆盖新增网络选项和示例，但还需要补解析路径图、DNS mode/server 对照表、配置加载合并顺序、`split/-x/-k` 关系、`network` 日志语义，以及“HTTP/3 目前只是能力门”的醒目边界说明。
 
@@ -470,9 +478,9 @@
 
 ### HTTPS RR / H2 / H3（26-30）
 
-部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server，并且 `multi` 下已改为 secure-first 阶段式 fallback；该 discovery 仍是后台任务，不阻塞首连。本轮新增 `--enable-https-rr=false` 默认门控，未显式开启时不会额外查询 HTTPS RR/TYPE65，也不会消费 SVCB cache 改 connect target/port，满足“未启用 H3、也没有明确需要 SVCB/HTTPS RR 的能力时，不应额外查 HTTPS RR”的第一阶段边界。DoH H2 已有 network 日志 `DNS: DoH using HTTP/2`；还需要继续补真实网络/fake server 验收。
+部分完成。H2/H3 默认关闭已有基础；H3 仍只是能力门。SVCB endpoint ALPN 已接入 TLS ALPN 收窄。HTTPS RR/TYPE65 discovery 当前能按后端创建 resolver，DoT/DoH 域名 server 的 bootstrap 可复用显式 plain server，并且 `multi` 下已改为 secure-first 阶段式 fallback；该 discovery 仍是后台任务，不阻塞首连。本轮新增 `--enable-https-rr=false` 默认门控，未显式开启时不会额外查询 HTTPS RR/TYPE65，也不会消费 SVCB cache 改 connect target/port，满足“未启用 H3、也没有明确需要 SVCB/HTTPS RR 的能力时，不应额外查 HTTPS RR”的第一阶段边界。DoH H2 已有 network 日志 `DNS: DoH using HTTP/2`；当前未提交增量新增 `--enable-doh-http2`，用于只让 DoH 尝试 H2 而不启用普通下载 H2；还需要继续补真实网络/fake server 验收。
 
-复查补充：已补 `enable-http3=true` 但未显式 `enable-https-rr=true` 不启动 HTTPS RR discovery 的单元测试；DoH 实际协商到 HTTP/2 后的 `DNS: DoH using HTTP/2` 也已补 fake transport 日志断言；DoT/DoH HTTPS RR 成功日志已补 `qname/server/endpoint/transport` 的 fake transport 格式级断言。
+复查补充：已补 `enable-http3=true` 但未显式 `enable-https-rr=true` 不启动 HTTPS RR discovery 的单元测试；DoH 实际协商到 HTTP/2 后的 `DNS: DoH using HTTP/2` 也已补 fake transport 日志断言；DoT/DoH HTTPS RR 成功日志已补 `qname/server/endpoint/transport` 的 fake transport 格式级断言；当前未提交增量补 `enable-doh-http2=true + enable-http2=false` 的 DoH query plan 断言，以及普通下载 ALPN 不受 `enable-doh-http2` 影响的负断言。
 
 ### 日志可观测性（31-35）
 

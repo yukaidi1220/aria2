@@ -33,7 +33,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 启动日志来源：
 
 - `src/Context.cc::logStartupOptions()` 会在日志里打印关键选项最终值和来源，例如 `Option: async-dns=true (source=command)`。
-- 当前记录的是关键网络和下载参数：`no-conf`、`conf-path`、`conf-precedence`、`async-dns`、`async-dns-mode`、`async-dns-server`、`disable-ipv6`、`enable-http2`、`enable-http3`、`enable-https-rr`、`split`、`max-connection-per-server`、`min-split-size`。
+- 当前记录的是关键网络和下载参数：`no-conf`、`conf-path`、`conf-precedence`、`async-dns`、`async-dns-mode`、`async-dns-server`、`disable-ipv6`、`enable-http2`、`enable-doh-http2`、`enable-http3`、`enable-https-rr`、`split`、`max-connection-per-server`、`min-split-size`。
 - 来源含义是 `command`、`conf`、`default` 或 `runtime`。`runtime` 表示默认层里的值已经不同于 option handler 的编译期默认值，通常来自程序运行期或嵌入调用写入的 option。
 - 这不是全量 option provenance。要排查网络行为，先看这些关键项；RPC 运行期修改等更细粒度来源日志仍属于后续增强项。
 
@@ -53,7 +53,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
 | DoT / DoH / DNS multi fallback | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot|multi`；server 可写数值 IP 或域名，域名会先用 plain c-ares DNS bootstrap 成 IP 再连接；`multi` 有显式 `udp://`/`tcp://` plain server 时，DoT/DoH 域名 server 的 bootstrap 也使用这些 plain server；有 secure server 时，下载域名先由 DoT/DoH 并发解析，全部失败后才降级到显式 plain DNS，再降级到系统 c-ares；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncNameResolver.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
 | IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；已有两族地址时做 active family 均衡；如果 IPv4 存在且 IPv6 只有 ULA/link-local/site-local/loopback/multicast/unspecified/IPv4-mapped 这类非公网 scope，主选址优先 IPv4；连接失败/超时会给同一下载项的同 host/port/family 加短 TTL 软降权，连接成功清除；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand` 和 `selectIPAddress()`、`src/FileEntry.cc`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
-| DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http2=true`、`--enable-http-pipelining=false` 和 TLS ALPN；Windows MinGW CI artifact 已把静态 nghttp2 编入 OpenSSL 构建；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc`、`Dockerfile.mingw-ci`、`mingw-config` |
+| DoH over H2 | 条件可用 | 需要 `HAVE_LIBNGHTTP2`、`--enable-http-pipelining=false` 和 TLS ALPN；`--enable-http2=true` 继续兼容性启用 DoH over H2，`--enable-doh-http2=true` 可只让 DoH 尝试 H2 而不启用普通下载 H2；Windows MinGW CI artifact 已把静态 nghttp2 编入 OpenSSL 构建；ALPN 未选中 `h2` 时回落 HTTP/1.1；DNS query 作为 HTTP/2 POST DATA 发送 | `src/AsyncDohNameResolver.cc`、`src/Http2SingleStreamExchange.cc`、`src/Http2Session.cc`、`Dockerfile.mingw-ci`、`mingw-config` |
 | HTTP/2 / H2 | 实验性可用，Windows MinGW CI artifact 已编入静态 nghttp2 | 依赖 HTTPS 和 TLS ALPN；不是全局连接池；当前 active/idle H2 复用只在同一 `RequestGroup` 内；origin coalescing 条件很保守，421 只记录本下载组内的负缓存；普通下载路径只提交请求头，带请求体的 H2 发送路径主要用于 DoH | `src/HttpTLSHandshakeParams.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc`、`Dockerfile.mingw-ci`、`mingw-config` |
 | HTTP/3 / H3 / QUIC / Alt-Svc | 第一阶段能力门；Alt-Svc parser 已落地 | Windows XP 基线 artifact 不启用 H3 gate；默认构建仍拒绝 `--enable-http3=true`；只有构建时显式带 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 且使用 OpenSSL TLS 后端时才接受该开关；`Alt-Svc: h3=...` parser 只解析 header 值，未接缓存、下载路径、QUIC 传输、H3 command 或 `h3` ALPN 分发 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/usage_text.h`、`src/AltSvcParser.cc` |
 | ECH | 手动 ECHConfigList 第一阶段可用，但 XP OpenSSL 1.1.1w artifact 会按后端不支持失败 | `--ech-config-base64=BASE64` 或 `--enable-ech=true --ech-config-base64=BASE64` 对 HTTPS 启用 required ECH；HTTPS RR 后台发现已能缓存 `ech` 参数候选，但尚未接到 TLS ECH 自动配置、retry config 自动重试或 H3 discovery；不能与 `--tls-sni-host` override 混用；TLS 后端不支持或握手后未接受 ECH 会失败 | `configure.ac`、`src/OptionHandlerFactory.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h`、`src/LibsslTLSSession.cc`、`src/AsyncServiceBindingResolver.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/HttpsServiceBindingCache.cc` |
@@ -73,6 +73,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | `--async-dns-server=<SERVER>[,...]` | 仅 `ENABLE_ASYNC_DNS` 构建注册 | c-ares 直接传 server 列表；DoT/DoH 由 `AsyncDnsServerConfig.cc` 解析，域名 server 先 plain c-ares bootstrap，数值地址或域名都可加 `#TLS_HOST` 作为 TLS/HTTP 名称 hint；`multi` 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST[:PORT][#TLS_HOST]` 是 DoT，HTTPS URL 是 DoH | `multi` secure 全失败后先用显式 plain server fallback，没有显式 plain 或显式 plain 也失败时再用系统 c-ares fallback；plain server 只接受数值 IP，域名请写成 `dot://` 或 HTTPS DoH |
 | `--disable-ipv6[=true\|false]` | 默认 `false`，包括 32-bit MinGW | `configureAsyncNameResolverMan()` 用它关闭 AAAA 查询；连接层 `getBackupConnectionDelay()` 用它决定是否把 opposite-family 备份连接延迟降到 `0ms` | 这是 aria2 解析/连接选择开关，不是系统 IPv6 总开关；旧系统 IPv6 不稳时仍可显式设为 `true` |
 | `--enable-http2[=true\|false]` | 有 `HAVE_LIBNGHTTP2` 时为布尔项，否则 `UnsupportedFeatureOptionHandler` | `createHttpAlpnProtocols()` 写入 `h2,http/1.1`；TLS 后由 `HttpProtocol.cc` 判定 H2；请求交给 `Http2Session` / `Http2MultiplexExchange` | 仅 HTTPS；与 HTTP/1.1 pipelining 互斥；TLS 后端无 ALPN 时回 HTTP/1.1 |
+| `--enable-doh-http2[=true\|false]` | 有 `HAVE_LIBNGHTTP2` 时为布尔项，否则 `UnsupportedFeatureOptionHandler` | 只影响 DoH resolver 的 TLS ALPN；`AsyncNameResolverMan` 和 HTTPS RR discovery 中的 DoH 可在 `--enable-http2=false` 时仍尝试 `h2,http/1.1` | 不启用普通 HTTPS 下载 H2；仍受 `--enable-http-pipelining=false` 和 TLS ALPN 约束 |
 | `--enable-http3[=true\|false]` | 只有 `HAVE_HTTP3` 时接受 true，否则快速拒绝 | `configure.ac` 要同时有 ngtcp2、nghttp3、`libngtcp2_crypto_ossl` 和 OpenSSL TLS 后端；当前源码只有能力门和 Alt-Svc parser | 还没有 QUIC/H3 下载路径，不能把它当可用 H3 下载开关 |
 | `--enable-https-rr[=true\|false]` | `ENABLE_ASYNC_DNS` 构建为布尔项；无异步 DNS 构建为 unsupported | `maybeStartHttpsServiceBindingDiscovery()` 只在该开关为 true、`async-dns=true`、直连 HTTPS origin 且没有缓存/正在解析时启动后台 TYPE65 discovery；`createHttpsServiceBindingDiscoveryPhases()` 按当前 async DNS backend 生成 c-ares/secure/multi 阶段；SVCB address hints 和 cached endpoint connect target 消费也受同一开关约束 | 默认 false；不开时不额外查 HTTPS RR，也不消费 SVCB cache；开启后仍不阻塞首连，且不自动启用 ECH/H3 |
 | `--enable-ech[=true\|false]` | SSL 构建为布尔项；无 SSL 构建为 unsupported | `createHttpECHParams()` 将其解释为 required ECH；`SocketCore::tlsHandshake()` 设置 ECHConfigList 并要求握手后 accepted | 必须配 `--ech-config-base64`；不会自动消费 HTTPS RR cache 里的 `ech` 候选 |
@@ -275,7 +276,7 @@ DoH 规则：
 - URL 必须有 path，拒绝 userinfo、密码；query 允许作为 path 的一部分发送。fragment 被当作 TLS/HTTP 逻辑主机名，只允许合法 DNS 主机名，不能是 IP、`localhost` 或单标签名。
 - `AsyncDohNameResolver.cc::createDohRequest()` 是 HTTP/1.1 fallback 路径，发送 `POST`、`Accept: application/dns-message`、`Content-Type: application/dns-message`、`Connection: close`。
 - 写了 `#TLS_HOST` 时，DoH TLS SNI、证书校验主机和 HTTP `Host:` 头都使用该主机；TCP 连接目标仍是 URL host 对应的数值地址或 bootstrap 解析出的 IP，HTTP request target 不包含 fragment。
-- `AsyncNameResolverMan::configureAsyncNameResolverMan()` 会根据 `--enable-http2=true` 且 `--enable-http-pipelining=false` 设置 `dohHttp2_`；有 `HAVE_LIBNGHTTP2` 时，`AsyncDohNameResolver` 才会给 DoH TLS 请求配置 ALPN `h2,http/1.1`。服务端选中 `h2` 时使用 `Http2SingleStreamExchange`；未选中或 TLS 后端无 ALPN 时回落 HTTP/1.1。
+- `AsyncNameResolverMan::configureAsyncNameResolverMan()` 会根据 `--enable-http2=true` 或 `--enable-doh-http2=true`，且 `--enable-http-pipelining=false` 设置 `dohHttp2_`；有 `HAVE_LIBNGHTTP2` 时，`AsyncDohNameResolver` 才会给 DoH TLS 请求配置 ALPN `h2,http/1.1`。服务端选中 `h2` 时使用 `Http2SingleStreamExchange`；未选中或 TLS 后端无 ALPN 时回落 HTTP/1.1。
 - DoH over H2 的请求头由 `createDohHttp2Headers()` 生成：`:method=POST`、`:scheme=https`、`:authority`、`:path`、`accept: application/dns-message`、`content-type: application/dns-message`、`content-length`。DNS query body 通过 `Http2Session::submitRequest(headers, body)` 的 nghttp2 DATA provider 发送，并在 body 读完时置 `NGHTTP2_DATA_FLAG_EOF`。
 - HTTP/1.1 响应必须是 HTTP 200，必须有正数且不超过上限的 `Content-Length`，不支持 `Transfer-Encoding`。HTTP/2 响应要求 `:status=200`、stream 正常结束且 DNS message body 不超过上限。当前 DoH 不复用普通下载链路的 H2 连接，也不支持 DoH over H3。
 
@@ -429,7 +430,7 @@ DNS: CUID#7 - selected host=example.com port=443 source=async-dns addr_types=A,A
 TLS: connected remote=93.184.216.34:443 sni=example.com verify=example.com version=TLSv1.3 alpn=h2
 ```
 
-`async-dns=false` 时，期望看到 secure DNS 被忽略或没有 async resolver plan；下载域名解析会回到 hosts/cache 后的 `getaddrinfo` 路径。DoH over H2 成功协商时，会出现 `DNS: DoH using HTTP/2`；没有 nghttp2、未启用 `--enable-http2=true`、启用了 HTTP pipelining、TLS ALPN 未选中 `h2` 时，都不应出现这条日志。
+`async-dns=false` 时，期望看到 secure DNS 被忽略或没有 async resolver plan；下载域名解析会回到 hosts/cache 后的 `getaddrinfo` 路径。DoH over H2 成功协商时，会出现 `DNS: DoH using HTTP/2`；没有 nghttp2、既未启用 `--enable-http2=true` 也未启用 `--enable-doh-http2=true`、启用了 HTTP pipelining、TLS ALPN 未选中 `h2` 时，都不应出现这条日志。
 
 ### 2.7 ECH / `--enable-ech` / `--ech-config-base64`
 
@@ -506,7 +507,7 @@ Alt-Svc 源码状态：
 - HTTP/3/H3/QUIC：当前只有 capability gate 加 Alt-Svc parser。未构建完整 ngtcp2/nghttp3/QUIC TLS 依赖时，`--enable-http3=true` 会在参数解析阶段失败；即使构建时开了这个 gate，源码仍然没有 QUIC 传输层、HTTP/3 request/response command 或 H3 ALPN 分发。这个参数不表示下载链路已支持 H3，也不要把 `h3` 写进普通 HTTPS 下载的 TCP TLS ALPN 列表。
 - Alt-Svc：`src/AltSvcParser.cc` 能解析 `Alt-Svc` header 中正式 `h3` protocol id 的 authority、`ma`、`persist`，支持 `clear` 覆盖，并忽略非 H3/非法项；当前没有缓存表、过期策略接线、HTTP 响应头接线或下载路径改写，解析结果不会驱动 QUIC/H3 建连。
 - HTTPS/SVCB TYPE65：`src/DnsMessage.cc` 已经有 DNS wire 层的 `TYPE_HTTPS = 65` query/response parser，能读 `alpn`、`port`、`ipv4hint`、`ech`、`ipv6hint` 等 SvcParam，并会过滤未知 mandatory key 的记录；`--enable-https-rr=true` 时，`AsyncServiceBindingResolver`、`AsyncDotNameResolver`、`AsyncDohNameResolver` 能后台发起 HTTPS RR 查询并缓存 raw records，直连 HTTPS cache 命中后也可选择 SVCB endpoint 作为 TCP connect target/port。默认不开该选项时不发额外 TYPE65 查询，也不消费 SVCB cache。开启后 selected endpoint 的 address hints 会写入 connect target DNS cache，并且显式 endpoint ALPN 会收窄 TLS ALPN；但 Request origin、HTTP `Host`、TLS SNI/verify 保持不变，proxy 路径不消费 SVCB，ECH 自动配置、H3 选择和完整 fallback origin 策略仍未实现。
-- DoH over H2：这是条件可用能力，不是 H3/ECH 占位。`AsyncDohNameResolver` 会在 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 且 `--enable-http-pipelining=false` 时尝试 ALPN `h2,http/1.1`；TLS 未选中 `h2` 时仍按 HTTP/1.1 POST `application/dns-message` 工作。
+- DoH over H2：这是条件可用能力，不是 H3/ECH 占位。`AsyncDohNameResolver` 会在 `HAVE_LIBNGHTTP2`、`--enable-http2=true` 或 `--enable-doh-http2=true`，且 `--enable-http-pipelining=false` 时尝试 ALPN `h2,http/1.1`；TLS 未选中 `h2` 时仍按 HTTP/1.1 POST `application/dns-message` 工作。`--enable-doh-http2=true` 只影响 DoH，不会让普通 HTTPS 下载广告或选择 H2。
 - WinTLS/AppleTLS 上的 FakeSNI override：普通 SNI 可用，但 SNI 与证书校验 hostname 不同会被提前拒绝。
 - WinTLS/AppleTLS 当前代码里的 HTTP/2 ALPN：没有 ALPN 接口时会降级 HTTP/1.1；GnuTLS 只有在 configure 探测到 ALPN API 时才启用。
 
@@ -592,6 +593,7 @@ Alt-Svc 源码状态：
 | `--enable-ech [true\|false]` | `false` | 启用 required ECH；必须配 `--ech-config-base64`。 |
 | `--ech-config-base64=<BASE64>` | 无 | base64 编码的二进制 ECHConfigList；会隐式启用 required ECH。 |
 | `--enable-http2 [false]` | `false` | 实验性 HTTP/2；需要 libnghttp2、HTTPS、ALPN，详见 2.4。 |
+| `--enable-doh-http2 [false]` | `false` | 只为 DoH 启用 HTTP/2 ALPN；普通下载仍由 `--enable-http2` 控制。 |
 | `--enable-http3 [false]` | `false` | HTTP/3 over QUIC 能力门；Alt-Svc parser 已落地但未接下载路径，详见 2.5。 |
 | `--hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>` | 无 | hosts 映射，详见 2.2。 |
 
@@ -848,11 +850,12 @@ aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://dns.exam
 aria2c --async-dns=true --async-dns-mode=dot --async-dns-server=1.1.1.1#cloudflare-dns.com https://example.com/file
 aria2c --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com https://example.com/file
 aria2c --enable-http2=true --enable-http-pipelining=false --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com https://example.com/file
+aria2c --enable-http2=false --enable-doh-http2=true --enable-http-pipelining=false --async-dns=true --async-dns-mode=doh --async-dns-server=https://1.1.1.1/dns-query#cloudflare-dns.com https://example.com/file
 aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,tcp://1.0.0.1,dot://dns.example.org,https://dns.example.org/dns-query https://example.com/file
 ```
 
 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立开关，别在配置文件里写这两个名字。
-倒数第二条会让 DoH 先尝试 HTTP/2；构建缺少 nghttp2 时 `--enable-http2=true` 会在参数阶段被拒绝。构建支持 H2 但 TLS ALPN 或服务端未选中 `h2` 时，会正常回退到 HTTP/1.1 DoH。
+带 `--enable-http2=true` 的示例会让普通 HTTPS 下载和 DoH 都具备 H2 条件；带 `--enable-doh-http2=true --enable-http2=false` 的示例只让 DoH 先尝试 HTTP/2，普通下载仍走 HTTP/1.1。构建缺少 nghttp2 时这两个 H2 开关设为 true 都会在参数阶段被拒绝。构建支持 H2 但 TLS ALPN 或服务端未选中 `h2` 时，会正常回退到 HTTP/1.1 DoH。
 
 `multi` 示例在下载域名解析时会先发起 DoT/DoH secure resolver，任意 secure resolver 成功就用于当前连接，未完成 resolver 后台继续填 DNS cache。显式配置的 plain server 会用于 DoT/DoH 域名 server 的 bootstrap；这个 bootstrap 只走 plain resolver 子集，不递归启动 secure resolver。只有所有 secure resolver 都失败时，下载域名解析才进入显式 plain DNS fallback；显式 plain 也失败或未配置时，再进入系统 c-ares fallback。network 日志会打印从哪个阶段降级到哪个阶段。
 

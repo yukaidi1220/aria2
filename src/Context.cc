@@ -106,6 +106,7 @@ void logStartupOptions(const Option* option)
   logStartupOption(option, PREF_ASYNC_DNS_SERVER, parser.get());
   logStartupOption(option, PREF_DISABLE_IPV6, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTP2, parser.get());
+  logStartupOption(option, PREF_ENABLE_DOH_HTTP2, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTP_PIPELINING, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTP3, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTPS_RR, parser.get());
