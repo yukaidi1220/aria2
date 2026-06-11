@@ -85,6 +85,7 @@ public:
   bool hasActiveStreams() const;
   bool hasActiveStream(int32_t streamId) const;
   size_t countActiveStreams() const;
+  void cancelStream(int32_t streamId);
   size_t getRemoteMaxConcurrentStreams() const;
   Http2TransactionState getState(int32_t streamId) const;
   std::unique_ptr<HttpResponse> createHttpResponse(int32_t streamId) const;

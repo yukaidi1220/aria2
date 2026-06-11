@@ -111,6 +111,18 @@ size_t Http2MultiplexExchange::countActiveStreams() const
   return activeStreams_.size();
 }
 
+void Http2MultiplexExchange::cancelStream(int32_t streamId)
+{
+  if (!hasActiveStream(streamId)) {
+    return;
+  }
+  connection_.resetStream(streamId);
+  connection_.popResponseEvent(streamId);
+  activeStreams_.erase(streamId);
+  pump_.notifyPendingOutboundData();
+  flushOutboundData();
+}
+
 size_t Http2MultiplexExchange::getRemoteMaxConcurrentStreams() const
 {
   return connection_.getRemoteMaxConcurrentStreams();

@@ -66,6 +66,11 @@ void Http2Connection::feedInboundData(const std::string& data)
   session_.feedInboundData(data);
 }
 
+void Http2Connection::resetStream(int32_t streamId)
+{
+  session_.resetStream(streamId);
+}
+
 size_t Http2Connection::getRemoteMaxConcurrentStreams() const
 {
   return session_.getRemoteMaxConcurrentStreams();

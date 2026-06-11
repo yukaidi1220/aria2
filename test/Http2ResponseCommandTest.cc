@@ -28,6 +28,8 @@
 #  include "RequestGroup.h"
 #  include "RequestGroupMan.h"
 #  include "SelectEventPoll.h"
+#  include "Segment.h"
+#  include "SegmentMan.h"
 #  include "SocketCore.h"
 #  include "StreamFilter.h"
 #  include "TestUtil.h"
@@ -52,6 +54,7 @@ class Http2ResponseCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDownloadCommandSchedulesAfterBodyProgress);
   CPPUNIT_TEST(testDownloadCommandCompletesBodyAcrossSegments);
   CPPUNIT_TEST(testDownloadCommandWaitsForEndStreamAcrossSegments);
+  CPPUNIT_TEST(testDownloadCommandCancelsBufferedBodyAfterRetry);
   CPPUNIT_TEST(testDownloadCommandAbortsBodyLongerThanFile);
   CPPUNIT_TEST(testDownloadCommandAbortsClosedBeforeComplete);
   CPPUNIT_TEST(testSkipBodyRedirectsAfterEndStream);
@@ -82,6 +85,7 @@ public:
   void testDownloadCommandSchedulesAfterBodyProgress();
   void testDownloadCommandCompletesBodyAcrossSegments();
   void testDownloadCommandWaitsForEndStreamAcrossSegments();
+  void testDownloadCommandCancelsBufferedBodyAfterRetry();
   void testDownloadCommandAbortsBodyLongerThanFile();
   void testDownloadCommandAbortsClosedBeforeComplete();
   void testSkipBodyRedirectsAfterEndStream();
@@ -599,6 +603,25 @@ void Http2ResponseCommandTest::testDownloadCommandWaitsForEndStreamAcrossSegment
 
   CPPUNIT_ASSERT(command->execute());
   CPPUNIT_ASSERT(fixture.requestGroup->downloadFinished());
+}
+
+void Http2ResponseCommandTest::testDownloadCommandCancelsBufferedBodyAfterRetry()
+{
+  CommandFixture fixture(6, false, true, 3);
+  auto busySegment =
+      fixture.requestGroup->getSegmentMan()->getSegmentWithIndex(2, 1);
+  CPPUNIT_ASSERT(busySegment);
+  busySegment->updateWrittenLength(1);
+
+  auto httpResponse = fixture.receiveResponseHeaders(createHeaders(200, 6));
+  auto command = fixture.makeDownloadCommand(std::move(httpResponse));
+  fixture.server.submitResponseDataNoEndStream(fixture.streamId, "abcdef");
+  fixture.transport.appendInboundData(fixture.server.drainOutboundData());
+
+  CPPUNIT_ASSERT(command->execute());
+  CPPUNIT_ASSERT(!fixture.exchange->hasActiveStream(fixture.streamId));
+  auto outbound = fixture.transport.drainOutboundData();
+  CPPUNIT_ASSERT(http2test::containsFrameType(outbound, NGHTTP2_RST_STREAM));
 }
 
 void Http2ResponseCommandTest::testDownloadCommandAbortsBodyLongerThanFile()

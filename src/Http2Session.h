@@ -83,6 +83,7 @@ public:
                         const std::string& body);
   std::string drainOutboundData();
   void feedInboundData(const std::string& data);
+  void resetStream(int32_t streamId);
   size_t getRemoteMaxConcurrentStreams() const;
   bool hasResponseEvent(int32_t streamId) const;
   const Http2ResponseEvent* findResponseEvent(int32_t streamId) const;

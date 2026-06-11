@@ -163,7 +163,15 @@ bool Http2DownloadCommand::executeInternal()
     pendingBody_.erase(0, consumed);
     if (result == ProcessDataResult::DONE) {
       if (!pendingBody_.empty()) {
-        throw DL_ABORT_EX("HTTP/2 response body was not fully consumed");
+        pendingBody_.clear();
+        if (state.streamClosed) {
+          exchange_->popResponseEvent(streamId_);
+        }
+        else {
+          exchange_->cancelStream(streamId_);
+        }
+        poolIdleConnection();
+        return true;
       }
       if (state.streamClosed) {
         exchange_->popResponseEvent(streamId_);
