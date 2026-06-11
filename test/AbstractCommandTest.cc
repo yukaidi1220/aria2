@@ -1,6 +1,7 @@
 #include "AbstractCommand.h"
 
 #include <iostream>
+#include <memory>
 #include <cppunit/extensions/HelperMacros.h>
 
 #include "Option.h"
@@ -11,6 +12,14 @@
 #include "InorderURISelector.h"
 #include "DnsMessage.h"
 #include "FixedNumberRandomizer.h"
+#include "DownloadEngine.h"
+#include "SelectEventPoll.h"
+#include "RequestGroup.h"
+#include "Request.h"
+#include "DownloadContext.h"
+#include "GroupId.h"
+#include "SegmentMan.h"
+#include "DlRetryEx.h"
 
 namespace aria2 {
 
@@ -21,6 +30,29 @@ public:
   {
     CPPUNIT_FAIL("randomizer must not be used");
     return 0;
+  }
+};
+
+class RetryTestCommand : public AbstractCommand {
+private:
+  error_code::Value code_;
+
+public:
+  RetryTestCommand(cuid_t cuid, const std::shared_ptr<Request>& req,
+                   const std::shared_ptr<FileEntry>& fileEntry,
+                   RequestGroup* requestGroup, DownloadEngine* e,
+                   error_code::Value code)
+      : AbstractCommand(cuid, req, fileEntry, requestGroup, e,
+                        std::shared_ptr<SocketCore>(),
+                        std::shared_ptr<SocketRecvBuffer>(), false),
+        code_(code)
+  {
+  }
+
+private:
+  virtual bool executeInternal() CXX11_OVERRIDE
+  {
+    throw DL_RETRY_EX2("retry from test command", code_);
   }
 };
 } // namespace
@@ -45,6 +77,8 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressRotatesWhenActiveFamiliesBalanced);
   CPPUNIT_TEST(testSelectIPAddressCountsActiveFamilyOutsideCandidates);
   CPPUNIT_TEST(testSelectIPAddressIgnoresOtherActiveHostAndPort);
+  CPPUNIT_TEST(testTooSlowRetryFillsStreamConcurrency);
+  CPPUNIT_TEST(testOtherRetryDoesNotFillStreamConcurrency);
   CPPUNIT_TEST(testPrioritizeIPAddress);
   CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddress);
@@ -96,6 +130,8 @@ public:
   void testSelectIPAddressRotatesWhenActiveFamiliesBalanced();
   void testSelectIPAddressCountsActiveFamilyOutsideCandidates();
   void testSelectIPAddressIgnoresOtherActiveHostAndPort();
+  void testTooSlowRetryFillsStreamConcurrency();
+  void testOtherRetryDoesNotFillStreamConcurrency();
   void testPrioritizeIPAddress();
   void testPrioritizeIPAddressIgnoresUnknownAddress();
   void testPrioritizeAndInterleaveIPAddress();
@@ -166,6 +202,58 @@ void AbstractCommandTest::testGetProxyUri()
   op.put(PREF_HTTP_PROXY_USER, "");
   CPPUNIT_ASSERT_EQUAL(std::string("http://httpproxy/"),
                        getProxyUri("http", &op));
+}
+
+void AbstractCommandTest::testTooSlowRetryFillsStreamConcurrency()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_RETRY_WAIT, "0");
+  auto ctx = std::make_shared<DownloadContext>(1_k, 4_k, "/tmp/myfile");
+  RequestGroup group(GroupId::create(), option);
+  group.setDownloadContext(ctx);
+  group.setNumConcurrentCommand(4);
+  group.initPieceStorage();
+  DownloadEngine engine(make_unique<SelectEventPoll>());
+  engine.setOption(option.get());
+
+  auto req = std::make_shared<Request>();
+  CPPUNIT_ASSERT(req->setUri("http://example.org/myfile"));
+  {
+    RetryTestCommand command(1, req, ctx->getFirstFileEntry(), &group, &engine,
+                             error_code::TOO_SLOW_DOWNLOAD_SPEED);
+    auto segment = group.getSegmentMan()->getSegment(1, 1_k);
+    CPPUNIT_ASSERT(segment);
+    CPPUNIT_ASSERT(command.execute());
+  }
+
+  CPPUNIT_ASSERT_EQUAL(4, group.getNumStreamCommand());
+  CPPUNIT_ASSERT_EQUAL(4, group.getNumCommand());
+}
+
+void AbstractCommandTest::testOtherRetryDoesNotFillStreamConcurrency()
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_RETRY_WAIT, "0");
+  auto ctx = std::make_shared<DownloadContext>(1_k, 4_k, "/tmp/myfile");
+  RequestGroup group(GroupId::create(), option);
+  group.setDownloadContext(ctx);
+  group.setNumConcurrentCommand(4);
+  group.initPieceStorage();
+  DownloadEngine engine(make_unique<SelectEventPoll>());
+  engine.setOption(option.get());
+
+  auto req = std::make_shared<Request>();
+  CPPUNIT_ASSERT(req->setUri("http://example.org/myfile"));
+  {
+    RetryTestCommand command(1, req, ctx->getFirstFileEntry(), &group, &engine,
+                             error_code::TIME_OUT);
+    auto segment = group.getSegmentMan()->getSegment(1, 1_k);
+    CPPUNIT_ASSERT(segment);
+    CPPUNIT_ASSERT(command.execute());
+  }
+
+  CPPUNIT_ASSERT_EQUAL(1, group.getNumStreamCommand());
+  CPPUNIT_ASSERT_EQUAL(1, group.getNumCommand());
 }
 
 void AbstractCommandTest::testSelectIPAddressReturnsEmptyForEmptyList()

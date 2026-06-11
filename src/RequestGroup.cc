@@ -900,6 +900,23 @@ void RequestGroup::createNextCommandWithAdj(
   }
 }
 
+void RequestGroup::createNextCommandToFillStreamConcurrency(
+    std::vector<std::unique_ptr<Command>>& commands, DownloadEngine* e)
+{
+  if (getTotalLength() == 0) {
+    return;
+  }
+
+  size_t target = std::min(downloadContext_->getNumPieces(),
+                           static_cast<size_t>(numConcurrentCommand_));
+  if (target <= static_cast<size_t>(numStreamCommand_)) {
+    return;
+  }
+
+  createNextCommand(commands, e,
+                    static_cast<int>(target - numStreamCommand_));
+}
+
 void RequestGroup::createNextCommand(
     std::vector<std::unique_ptr<Command>>& commands, DownloadEngine* e)
 {

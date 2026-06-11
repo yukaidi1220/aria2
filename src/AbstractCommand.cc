@@ -1401,7 +1401,8 @@ bool AbstractCommand::execute()
       req_->setWakeTime(wakeTime);
     }
 
-    return prepareForRetry(0);
+    return prepareForRetry(
+        0, err.getErrorCode() == error_code::TOO_SLOW_DOWNLOAD_SPEED);
   }
   catch (DownloadFailureException& err) {
     requestGroup_->setLastErrorCode(err.getErrorCode(), err.what());
@@ -1445,6 +1446,11 @@ void AbstractCommand::tryReserved()
 
 bool AbstractCommand::prepareForRetry(time_t wait)
 {
+  return prepareForRetry(wait, false);
+}
+
+bool AbstractCommand::prepareForRetry(time_t wait, bool fillStreamConcurrency)
+{
   if (getPieceStorage()) {
     getSegmentMan()->cancelSegment(getCuid());
   }
@@ -1463,6 +1469,17 @@ bool AbstractCommand::prepareForRetry(time_t wait)
     }
   }
 
+  std::vector<std::unique_ptr<Command>> commands;
+  if (fillStreamConcurrency && wait == 0 && getPieceStorage()) {
+    requestGroup_->createNextCommandToFillStreamConcurrency(commands, e_);
+    if (!commands.empty()) {
+      A2_LOG_NETWORK(
+          fmt("CUID#%" PRId64
+              " - Slow download retry scheduled %lu supplemental request(s)",
+              getCuid(), static_cast<unsigned long>(commands.size())));
+    }
+  }
+
   auto command =
       make_unique<CreateRequestCommand>(getCuid(), requestGroup_, e_);
   if (wait == 0) {
@@ -1473,7 +1490,8 @@ bool AbstractCommand::prepareForRetry(time_t wait)
     // DownloadEngine::setRefreshInterval(std::chrono::milliseconds(0)).
     command->setStatus(Command::STATUS_INACTIVE);
   }
-  e_->addCommand(std::move(command));
+  commands.push_back(std::move(command));
+  e_->addCommand(std::move(commands));
   return true;
 }
 

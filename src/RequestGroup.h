@@ -254,6 +254,9 @@ public:
   void createNextCommandWithAdj(std::vector<std::unique_ptr<Command>>& commands,
                                 DownloadEngine* e, int numAdj);
 
+  void createNextCommandToFillStreamConcurrency(
+      std::vector<std::unique_ptr<Command>>& commands, DownloadEngine* e);
+
   void createNextCommand(std::vector<std::unique_ptr<Command>>& commands,
                          DownloadEngine* e, int numCommand);
 
@@ -322,6 +325,8 @@ public:
   void increaseStreamCommand();
 
   void decreaseStreamCommand();
+
+  int getNumStreamCommand() const { return numStreamCommand_; }
 
   void increaseStreamConnection();
 

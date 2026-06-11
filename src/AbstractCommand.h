@@ -227,6 +227,7 @@ protected:
   void refreshSegments();
 
   virtual bool prepareForRetry(time_t wait);
+  bool prepareForRetry(time_t wait, bool fillStreamConcurrency);
 
   virtual void onAbort();
 
