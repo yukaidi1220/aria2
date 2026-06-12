@@ -533,9 +533,10 @@ void SocketCoreTest::testTLSSessionAlpnSupportDefault()
   alpnProtocols.push_back("http/1.1");
 
   CPPUNIT_ASSERT(!session.supportsAlpnProtocols());
-  CPPUNIT_ASSERT_EQUAL(TLS_ERR_OK,
+  CPPUNIT_ASSERT_EQUAL(static_cast<int>(TLS_ERR_OK),
                        session.setAlpnProtocols(std::vector<std::string>()));
-  CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR, session.setAlpnProtocols(alpnProtocols));
+  CPPUNIT_ASSERT_EQUAL(static_cast<int>(TLS_ERR_ERROR),
+                       session.setAlpnProtocols(alpnProtocols));
 }
 
 void SocketCoreTest::testTLSSessionECHSupportDefault()
@@ -543,8 +544,9 @@ void SocketCoreTest::testTLSSessionECHSupportDefault()
   DefaultTLSSession session;
 
   CPPUNIT_ASSERT(!session.supportsECHConfigList());
-  CPPUNIT_ASSERT_EQUAL(TLS_ERR_OK, session.setECHConfigList(""));
-  CPPUNIT_ASSERT_EQUAL(TLS_ERR_ERROR,
+  CPPUNIT_ASSERT_EQUAL(static_cast<int>(TLS_ERR_OK),
+                       session.setECHConfigList(""));
+  CPPUNIT_ASSERT_EQUAL(static_cast<int>(TLS_ERR_ERROR),
                        session.setECHConfigList("ech-config"));
   CPPUNIT_ASSERT(TLS_ECH_STATUS_NOT_CONFIGURED == session.getECHStatus());
   CPPUNIT_ASSERT(session.getECHRetryConfigList().empty());
