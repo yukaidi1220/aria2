@@ -134,19 +134,21 @@ jobs:
               echo 'aria2c.exe was expected to include nghttp2 HTTP/2 support.'
               exit 1
             fi &&
-            pe_header=\$(${{ matrix.host }}-objdump -p src/aria2c.exe) &&
-            subsystem_major=\$(printf '%s\n' \"\$pe_header\" | awk '/MajorSubsystemVersion/ { print \$2; exit }') &&
-            subsystem_minor=\$(printf '%s\n' \"\$pe_header\" | awk '/MinorSubsystemVersion/ { print \$2; exit }') &&
-            if [ \"\$subsystem_major:\$subsystem_minor\" != '5:1' ]; then
-              echo \"aria2c.exe PE subsystem version is \$subsystem_major.\$subsystem_minor, expected 5.1 for Windows XP.\"
-              printf '%s\n' \"\$pe_header\" | grep -Ei 'MajorSubsystemVersion|MinorSubsystemVersion'
-              exit 1
-            fi &&
-            xp_import_denylist='ConvertInterfaceIndexToLuid|ConvertInterfaceLuidToNameA|if_indextoname|if_nametoindex|GetTickCount64|InitializeCriticalSectionEx|InitializeConditionVariable|SleepConditionVariableCS|SleepConditionVariableSRW|AcquireSRWLockExclusive|AcquireSRWLockShared|ReleaseSRWLockExclusive|ReleaseSRWLockShared|CancelIoEx|GetAddrInfoExA|GetAddrInfoExW|FreeAddrInfoEx|GetFileInformationByHandleEx|SetFileInformationByHandle|GetFinalPathNameByHandleA|GetFinalPathNameByHandleW|GetLocaleInfoEx|GetUserDefaultLocaleName|GetSystemTimePreciseAsFileTime|GetQueuedCompletionStatusEx|WSAPoll|InetPtonA|InetPtonW|InetNtopA|InetNtopW' &&
-            if printf '%s\n' \"\$pe_header\" | grep -Eiq \"\$xp_import_denylist\"; then
-              echo 'aria2c.exe imports a Windows Vista+ symbol unavailable on Windows XP.'
-              printf '%s\n' \"\$pe_header\" | grep -Ei \"\$xp_import_denylist\"
-              exit 1
+            if [ '${{ matrix.host }}' = 'i686-w64-mingw32' ]; then
+              pe_header=\$(${{ matrix.host }}-objdump -p src/aria2c.exe) &&
+              subsystem_major=\$(printf '%s\n' \"\$pe_header\" | awk '/MajorSubsystemVersion/ { print \$2; exit }') &&
+              subsystem_minor=\$(printf '%s\n' \"\$pe_header\" | awk '/MinorSubsystemVersion/ { print \$2; exit }') &&
+              if [ \"\$subsystem_major:\$subsystem_minor\" != '5:1' ]; then
+                echo \"aria2c.exe PE subsystem version is \$subsystem_major.\$subsystem_minor, expected 5.1 for Windows XP.\"
+                printf '%s\n' \"\$pe_header\" | grep -Ei 'MajorSubsystemVersion|MinorSubsystemVersion'
+                exit 1
+              fi &&
+              xp_import_denylist='ConvertInterfaceIndexToLuid|ConvertInterfaceLuidToNameA|if_indextoname|if_nametoindex|GetTickCount64|InitializeCriticalSectionEx|InitializeConditionVariable|SleepConditionVariableCS|SleepConditionVariableSRW|AcquireSRWLockExclusive|AcquireSRWLockShared|ReleaseSRWLockExclusive|ReleaseSRWLockShared|CancelIoEx|GetAddrInfoExA|GetAddrInfoExW|FreeAddrInfoEx|GetFileInformationByHandleEx|SetFileInformationByHandle|GetFinalPathNameByHandleA|GetFinalPathNameByHandleW|GetLocaleInfoEx|GetUserDefaultLocaleName|GetSystemTimePreciseAsFileTime|GetQueuedCompletionStatusEx|WSAPoll|InetPtonA|InetPtonW|InetNtopA|InetNtopW' &&
+              if printf '%s\n' \"\$pe_header\" | grep -Eiq \"\$xp_import_denylist\"; then
+                echo 'aria2c.exe imports a Windows Vista+ symbol unavailable on Windows XP.'
+                printf '%s\n' \"\$pe_header\" | grep -Ei \"\$xp_import_denylist\"
+                exit 1
+              fi
             fi &&
             ${{ matrix.host }}-strip src/aria2c.exe &&
             cp src/aria2c.exe /out/

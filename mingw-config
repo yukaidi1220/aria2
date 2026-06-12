@@ -59,6 +59,11 @@
 test -z "$HOST" && HOST=i686-w64-mingw32
 test -z "$PREFIX" && PREFIX=/usr/local/$HOST
 
+XP_LDFLAGS=
+if test "x$HOST" = "xi686-w64-mingw32"; then
+  XP_LDFLAGS="-Wl,--major-subsystem-version,5 -Wl,--minor-subsystem-version,1"
+fi
+
 ./configure \
     --host=$HOST \
     --prefix=$PREFIX \
@@ -81,7 +86,7 @@ test -z "$PREFIX" && PREFIX=/usr/local/$HOST
     --with-cppunit-prefix=$PREFIX \
     ARIA2_STATIC=yes \
     CPPFLAGS="-I$PREFIX/include -DCARES_STATICLIB -DWINVER=0x0501 -D_WIN32_WINNT=0x0501" \
-    LDFLAGS="-L$PREFIX/lib -Wl,--major-subsystem-version,5 -Wl,--minor-subsystem-version,1" \
+    LDFLAGS="-L$PREFIX/lib $XP_LDFLAGS" \
     ZLIB_CFLAGS="-I$PREFIX/include" \
     ZLIB_LIBS="-L$PREFIX/lib -lz" \
     EXPAT_CFLAGS="-I$PREFIX/include" \
