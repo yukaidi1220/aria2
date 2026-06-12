@@ -53,8 +53,8 @@ jobs:
     - name: Configure
       run: ./configure --without-gnutls --with-openssl
 
-    - name: Build
-      run: make -j"$(nproc)"
+    - name: Build and test
+      run: make -j"$(nproc)" check
 
     - name: Collect artifact
       run: |
