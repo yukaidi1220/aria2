@@ -54,7 +54,15 @@ jobs:
       run: ./configure --without-gnutls --with-openssl
 
     - name: Build and test
-      run: make -j"$(nproc)" check
+      run: |
+        set -o pipefail
+        make -j"$(nproc)" check || {
+          status=$?
+          echo 'make check failed; printing available test logs.'
+          find . -name test-suite.log -print -exec sed -n '1,240p' {} \;
+          find test -maxdepth 2 -name '*.log' -print -exec sed -n '1,200p' {} \;
+          exit "$status"
+        }
 
     - name: Collect artifact
       run: |
