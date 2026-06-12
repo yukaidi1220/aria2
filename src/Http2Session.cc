@@ -149,6 +149,18 @@ struct Http2Session::Impl {
            frame->headers.cat == NGHTTP2_HCAT_RESPONSE;
   }
 
+  static bool isInformationalResponse(const Http2ResponseEvent& response)
+  {
+    return response.status >= 100 && response.status < 200;
+  }
+
+  static void clearInformationalResponse(Http2ResponseEvent& response)
+  {
+    response.status = 0;
+    response.headers.clear();
+    response.headersComplete = false;
+  }
+
   Http2ResponseEvent& getResponse(int32_t streamId)
   {
     auto& response = responses[streamId];
@@ -219,6 +231,11 @@ struct Http2Session::Impl {
       if (isResponseHeaders(frame)) {
         auto& response = impl->getResponse(frame->hd.stream_id);
         if (frame->hd.flags & NGHTTP2_FLAG_END_HEADERS) {
+          if (!(frame->hd.flags & NGHTTP2_FLAG_END_STREAM) &&
+              isInformationalResponse(response)) {
+            clearInformationalResponse(response);
+            return 0;
+          }
           response.headersComplete = true;
         }
         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {

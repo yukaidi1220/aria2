@@ -24,6 +24,7 @@ class Http2SessionTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testFeedInboundDataFlushesSettingsAck);
   CPPUNIT_TEST(testFeedInboundDataUpdatesRemoteMaxConcurrentStreams);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseHeaders);
+  CPPUNIT_TEST(testFeedInboundDataIgnoresInformationalResponseHeaders);
   CPPUNIT_TEST(testFeedInboundDataCollectsResponseBodyAndClose);
   CPPUNIT_TEST(testFeedInboundDataAcceptsPartialFrames);
   CPPUNIT_TEST(testPopResponseBodyKeepsEvent);
@@ -38,6 +39,7 @@ public:
   void testFeedInboundDataFlushesSettingsAck();
   void testFeedInboundDataUpdatesRemoteMaxConcurrentStreams();
   void testFeedInboundDataCollectsResponseHeaders();
+  void testFeedInboundDataIgnoresInformationalResponseHeaders();
   void testFeedInboundDataCollectsResponseBodyAndClose();
   void testFeedInboundDataAcceptsPartialFrames();
   void testPopResponseBodyKeepsEvent();
@@ -234,6 +236,40 @@ void Http2SessionTest::testFeedInboundDataCollectsResponseHeaders()
                                              "content-type"));
   CPPUNIT_ASSERT_EQUAL(std::string("ok"),
                        http2test::findHeader(response->headers, "x-test"));
+  CPPUNIT_ASSERT(response->streamClosed);
+  CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
+}
+
+void Http2SessionTest::testFeedInboundDataIgnoresInformationalResponseHeaders()
+{
+  Http2Session client;
+  http2test::FakeHttp2ServerSession server;
+  auto streamId =
+      client.submitRequestHeaders(http2test::createRequestHeaders());
+
+  server.feedInboundData(client.drainOutboundData());
+
+  Http2HeaderBlock earlyHints;
+  earlyHints.emplace_back(":status", "103");
+  earlyHints.emplace_back("link", "</style.css>; rel=preload");
+  server.submitResponseHeaders(streamId, earlyHints);
+  client.feedInboundData(server.drainOutboundData());
+
+  auto earlyResponse = client.findResponseEvent(streamId);
+  if (earlyResponse) {
+    CPPUNIT_ASSERT(!earlyResponse->headersComplete);
+    CPPUNIT_ASSERT_EQUAL(0, earlyResponse->status);
+    CPPUNIT_ASSERT(earlyResponse->headers.empty());
+  }
+
+  server.submitResponse(streamId, http2test::createResponseHeaders(), "done");
+  client.feedInboundData(server.drainOutboundData());
+
+  auto response = client.popResponseEvent(streamId);
+  CPPUNIT_ASSERT(response);
+  CPPUNIT_ASSERT_EQUAL(200, response->status);
+  CPPUNIT_ASSERT(response->headersComplete);
+  CPPUNIT_ASSERT_EQUAL(std::string("done"), response->body.drainAll());
   CPPUNIT_ASSERT(response->streamClosed);
   CPPUNIT_ASSERT_EQUAL((uint32_t)NGHTTP2_NO_ERROR, response->errorCode);
 }
