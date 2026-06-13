@@ -1000,12 +1000,18 @@ bool SocketCore::tlsConnect(const std::string& hostname)
 
 bool SocketCore::tlsConnect(const TLSHandshakeParams& params)
 {
+  if (!clTlsContext_) {
+    throw DL_ABORT_EX("Client TLS context is not initialized");
+  }
   return tlsHandshake(clTlsContext_.get(), params);
 }
 
 bool SocketCore::tlsHandshake(TLSContext* tlsctx,
                               const TLSHandshakeParams& params)
 {
+  if (!tlsctx) {
+    throw DL_ABORT_EX("TLS context is not initialized");
+  }
   wantRead_ = false;
   wantWrite_ = false;
   auto effectiveParams = params;
