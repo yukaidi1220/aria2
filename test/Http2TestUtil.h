@@ -295,16 +295,7 @@ public:
 
   void submitResponseDataNoEndStream(int32_t streamId, const std::string& body)
   {
-    body_ = body;
-    bodyOffset_ = 0;
-    nghttp2_data_provider dataProvider;
-    dataProvider.source.ptr = this;
-    dataProvider.read_callback = readCallbackNoEof;
-    assertNghttp2Success(
-        nghttp2_submit_data(session_, NGHTTP2_FLAG_NONE, streamId,
-                            &dataProvider));
-    assertNghttp2Success(nghttp2_session_send(session_));
-    CPPUNIT_ASSERT(!callbackFailed_);
+    appendDataFrame(streamId, body, NGHTTP2_FLAG_NONE);
   }
 
   void submitEndStream(int32_t streamId)
@@ -377,26 +368,6 @@ private:
     }
     if (server->bodyOffset_ == server->body_.size()) {
       *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
-    }
-    return static_cast<ssize_t>(chunkLength);
-  }
-
-  static ssize_t readCallbackNoEof(nghttp2_session* session, int32_t streamId,
-                                   uint8_t* buf, size_t length,
-                                   uint32_t* dataFlags,
-                                   nghttp2_data_source* source, void* userData)
-  {
-    (void)session;
-    (void)streamId;
-    (void)dataFlags;
-    (void)userData;
-    auto server = static_cast<FakeHttp2ServerSession*>(source->ptr);
-    auto remaining = server->body_.size() - server->bodyOffset_;
-    auto chunkLength = std::min(length, remaining);
-    if (chunkLength > 0) {
-      std::memcpy(buf, server->body_.data() + server->bodyOffset_,
-                  chunkLength);
-      server->bodyOffset_ += chunkLength;
     }
     return static_cast<ssize_t>(chunkLength);
   }

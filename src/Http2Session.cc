@@ -55,7 +55,7 @@
 namespace aria2 {
 
 namespace {
-const int32_t HTTP2_LOCAL_STREAM_WINDOW_SIZE = static_cast<int32_t>(8_m);
+const int32_t HTTP2_LOCAL_STREAM_WINDOW_SIZE = static_cast<int32_t>(256_m);
 const int32_t HTTP2_LOCAL_CONNECTION_WINDOW_SIZE = static_cast<int32_t>(64_m);
 
 nghttp2_nv makeNV(const Http2Header& header)
