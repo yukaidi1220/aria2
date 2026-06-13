@@ -281,16 +281,7 @@ public:
 
   void submitResponseData(int32_t streamId, const std::string& body)
   {
-    body_ = body;
-    bodyOffset_ = 0;
-    nghttp2_data_provider dataProvider;
-    dataProvider.source.ptr = this;
-    dataProvider.read_callback = readCallback;
-    assertNghttp2Success(
-        nghttp2_submit_data(session_, NGHTTP2_FLAG_NONE, streamId,
-                            &dataProvider));
-    assertNghttp2Success(nghttp2_session_send(session_));
-    CPPUNIT_ASSERT(!callbackFailed_);
+    appendDataFrame(streamId, body, NGHTTP2_FLAG_END_STREAM);
   }
 
   void submitResponseDataNoEndStream(int32_t streamId, const std::string& body)
@@ -300,16 +291,7 @@ public:
 
   void submitEndStream(int32_t streamId)
   {
-    body_.clear();
-    bodyOffset_ = 0;
-    nghttp2_data_provider dataProvider;
-    dataProvider.source.ptr = this;
-    dataProvider.read_callback = readCallback;
-    assertNghttp2Success(
-        nghttp2_submit_data(session_, NGHTTP2_FLAG_NONE, streamId,
-                            &dataProvider));
-    assertNghttp2Success(nghttp2_session_send(session_));
-    CPPUNIT_ASSERT(!callbackFailed_);
+    appendDataFrame(streamId, "", NGHTTP2_FLAG_END_STREAM);
   }
 
   void submitRstStream(int32_t streamId, uint32_t errorCode)
