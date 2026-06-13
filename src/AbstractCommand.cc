@@ -1172,17 +1172,18 @@ bool AbstractCommand::execute()
       }
       // Don't use this feature if PREF_MAX_{OVERALL_}DOWNLOAD_LIMIT
       // is used or total length is unknown.
-      if (req_ && fileEntry_->getLength() > 0 &&
-          e_->getRequestGroupMan()->getMaxOverallDownloadSpeedLimit() == 0 &&
+      auto* rgman = e_->getRequestGroupMan().get();
+      if (req_ && fileEntry_->getLength() > 0 && rgman &&
+          rgman->getMaxOverallDownloadSpeedLimit() == 0 &&
           requestGroup_->getMaxDownloadSpeedLimit() == 0 &&
           serverStatTimer_.difference(global::wallclock()) >= 10_s) {
         serverStatTimer_ = global::wallclock();
         std::vector<std::pair<size_t, std::string>> usedHosts;
         if (getOption()->getAsBool(PREF_SELECT_LEAST_USED_HOST)) {
-          getDownloadEngine()->getRequestGroupMan()->getUsedHosts(usedHosts);
+          rgman->getUsedHosts(usedHosts);
         }
         auto fasterRequest = fileEntry_->findFasterRequest(
-            req_, usedHosts, e_->getRequestGroupMan()->getServerStatMan());
+            req_, usedHosts, rgman->getServerStatMan());
         if (fasterRequest) {
           useFasterRequest(fasterRequest);
           return true;
