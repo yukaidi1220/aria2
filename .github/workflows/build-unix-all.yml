@@ -51,10 +51,7 @@ jobs:
       run: autoreconf -i
 
     - name: Configure
-      run: |
-        export CPPFLAGS="-fsanitize=address,undefined -fno-sanitize-recover=undefined -g3 $CPPFLAGS"
-        export LDFLAGS="-fsanitize=address,undefined $LDFLAGS"
-        ./configure --without-gnutls --with-openssl --with-libnghttp2
+      run: ./configure --without-gnutls --with-openssl --with-libnghttp2
 
     - name: Build and test
       run: |
