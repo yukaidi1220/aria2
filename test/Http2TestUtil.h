@@ -223,6 +223,7 @@ public:
 
     assertNghttp2Success(
         nghttp2_submit_settings(session_, NGHTTP2_FLAG_NONE, nullptr, 0));
+    assertNghttp2Success(nghttp2_session_send(session_));
   }
 
   ~FakeHttp2ServerSession() { nghttp2_session_del(session_); }
