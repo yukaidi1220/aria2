@@ -262,7 +262,8 @@ void Http2SessionTest::testFeedInboundDataIgnoresInformationalResponseHeaders()
     CPPUNIT_ASSERT(earlyResponse->headers.empty());
   }
 
-  server.submitResponse(streamId, http2test::createResponseHeaders(), "done");
+  server.submitResponseHeaders(streamId, http2test::createResponseHeaders());
+  server.submitResponseData(streamId, "done");
   client.feedInboundData(server.drainOutboundData());
 
   auto response = client.popResponseEvent(streamId);

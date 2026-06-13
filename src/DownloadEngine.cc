@@ -209,8 +209,10 @@ int DownloadEngine::run(bool oneshot)
     noWait_ = false;
     global::wallclock().reset();
     calculateStatistics();
+    bool didRefresh = false;
     if (lastRefresh_.difference(global::wallclock()) + A2_DELTA_MILLIS >=
         refreshInterval_) {
+      didRefresh = true;
       refreshInterval_ = DEFAULT_REFRESH_INTERVAL;
       lastRefresh_ = global::wallclock();
       executeCommand(commands_, Command::STATUS_ALL);
@@ -220,7 +222,8 @@ int DownloadEngine::run(bool oneshot)
     }
     executeCommand(routineCommands_, Command::STATUS_ALL);
     afterEachIteration();
-    if (!noWait_ && oneshot && refreshInterval_ > std::chrono::milliseconds(0)) {
+    if (!noWait_ && oneshot &&
+        (!didRefresh || refreshInterval_ > std::chrono::milliseconds(0))) {
       return 1;
     }
   }
