@@ -111,7 +111,7 @@ private:
       URISelector* selector, bool uriReuse,
       const std::vector<std::pair<size_t, std::string>>& usedHosts,
       const std::string& referer, const std::string& method,
-      const std::vector<std::string>& inFlightServers);
+      const std::vector<std::string>& inFlightHosts);
 
 public:
   FileEntry();
@@ -262,7 +262,7 @@ public:
   int getMaxConnectionPerServer() const { return maxConnectionPerServer_; }
 
   // Reuse URIs which have not emitted error so far and whose
-  // protocol+host server key is not included in ignore. The reusable URIs are
+  // host is not included in ignore. The reusable URIs are
   // appended to uris_ maxConnectionPerServer_ times.
   void reuseUri(const std::vector<std::string>& ignore);
 
