@@ -33,6 +33,7 @@ jobs:
           autotools-dev \
           g++ \
           gcc \
+          gdb \
           libcppunit-dev \
           libc-ares-dev \
           libexpat1-dev \
@@ -56,16 +57,24 @@ jobs:
     - name: Build and test
       run: |
         make -j"$(nproc)" || exit 1
-        make check || {
-          status=$?
-          echo 'make check failed; printing test logs.'
-          find . -name test-suite.log -print -exec sed -n '1,500p' {} \;
-          echo '=== aria2c.log TAIL (last 200 lines) ==='
-          if [ -f test/aria2c.log ]; then tail -n 200 test/aria2c.log; fi
-          echo '=== aria2c.log HEAD (first 200 lines) ==='
-          if [ -f test/aria2c.log ]; then head -n 200 test/aria2c.log; fi
-          exit "$status"
-        }
+        echo '=== Running tests ==='
+        cd test
+        ./aria2c > aria2c.log 2>&1
+        exit_code=$?
+        if [ "$exit_code" -ne 0 ]; then
+          echo "Test binary exited with code $exit_code"
+          if [ "$exit_code" -eq 139 ] || [ "$exit_code" -eq 134 ] || [ "$exit_code" -eq 137 ]; then
+            echo '=== GDB backtrace ==='
+            gdb -batch -ex run -ex 'thread apply all bt full' -ex quit ./aria2c 2>&1 | tail -150
+          fi
+          echo '=== Last 200 lines of test output ==='
+          tail -n 200 aria2c.log
+          echo '=== First 100 lines of test output ==='
+          head -n 100 aria2c.log
+          echo '=== CppUnit failure summary ==='
+          grep -A 20 '!!!FAILURES!!!' aria2c.log || true
+        fi
+        exit "$exit_code"
 
     - name: Collect artifact
       run: |
