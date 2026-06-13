@@ -51,7 +51,7 @@ jobs:
       run: autoreconf -i
 
     - name: Configure
-      run: ./configure --without-gnutls --with-openssl
+      run: ./configure --without-gnutls --with-openssl --with-libnghttp2
 
     - name: Build and test
       run: |
