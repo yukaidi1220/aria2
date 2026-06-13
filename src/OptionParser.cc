@@ -156,6 +156,9 @@ void OptionParser::parseArg(std::ostream& out,
                             std::vector<std::string>& nonopts, int argc,
                             char* argv[]) const
 {
+  // Reset getopt state so parseArg can be called multiple times
+  // (e.g. from tests) without leftover state from previous invocations.
+  optind = 0;
   size_t numPublicOption =
       countPublicOption(handlers_.begin(), handlers_.end());
   int lopt;
