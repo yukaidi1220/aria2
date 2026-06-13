@@ -273,7 +273,7 @@ public:
                    std::back_inserter(nva), makeNV);
 
     assertNghttp2Success(nghttp2_submit_headers(
-        session_, NGHTTP2_FLAG_NONE, streamId, nullptr, nva.data(),
+        session_, NGHTTP2_FLAG_END_HEADERS, streamId, nullptr, nva.data(),
         nva.size(), nullptr));
     assertNghttp2Success(nghttp2_session_send(session_));
     CPPUNIT_ASSERT(!callbackFailed_);

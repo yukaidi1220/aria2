@@ -162,6 +162,8 @@ public:
 
   using Http2DownloadCommand::executeInternal;
 
+  bool execute() CXX11_OVERRIDE { return executeInternal(); }
+
   bool requeued() const { return requeued_; }
 
 protected:
