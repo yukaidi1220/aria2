@@ -240,6 +240,32 @@ bool Logger::shouldLogNetwork()
          (networkConsoleLogEnabled_ && consoleOutput_);
 }
 
+void Logger::logInfoExceptNetwork(const char* sourceFile, int lineNum,
+                                  const char* msg)
+{
+  // Output to file if file output is not in network mode and log level allows
+  // INFO
+  if (!networkLogEnabled_ && fileLogEnabled(A2_INFO)) {
+    writeHeader(*fpp_, A2_INFO, sourceFile, lineNum);
+    fpp_->printf("%s\n", msg);
+    fpp_->flush();
+  }
+  // Output to console if console output is not in network mode and console
+  // log level allows INFO
+  if (!networkConsoleLogEnabled_ && consoleLogEnabled(A2_INFO)) {
+    global::cout()->printf("\n");
+    writeHeaderConsole(*global::cout(), A2_INFO, colorOutput_);
+    global::cout()->printf("%s\n", msg);
+    global::cout()->flush();
+  }
+}
+
+void Logger::logInfoExceptNetwork(const char* sourceFile, int lineNum,
+                                  const std::string& msg)
+{
+  logInfoExceptNetwork(sourceFile, lineNum, msg.c_str());
+}
+
 namespace {
 // Write a file log header with [NETWORK] tag instead of a severity level.
 template <typename Output>

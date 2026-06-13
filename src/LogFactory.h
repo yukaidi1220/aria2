@@ -119,6 +119,11 @@ public:
    * Returns true if network log mode is enabled for file output.
    */
   static bool isNetworkLogEnabled() { return networkLogEnabled_; }
+
+  /**
+   * Returns true if network log mode is enabled for console output.
+   */
+  static bool isNetworkConsoleLogEnabled() { return networkConsoleLogEnabled_; }
 };
 
 #define A2_LOG_DEBUG_ENABLED                                                   \
@@ -153,6 +158,17 @@ public:
 
 #define A2_LOG_ERROR(msg) A2_LOG(Logger::A2_ERROR, msg)
 #define A2_LOG_ERROR_EX(msg, ex) A2_LOG_EX(Logger::A2_ERROR, msg, ex)
+
+// Log an INFO-level message that is suppressed when network mode is enabled
+// for the corresponding sink (file or console).  This allows the message to
+// appear in normal log modes while being hidden in network mode, independently
+// for each output target.
+#define A2_LOG_INFO_EXCEPT_NETWORK(msg)                                        \
+  do {                                                                         \
+    const std::shared_ptr<aria2::Logger>& logger =                             \
+        aria2::LogFactory::getInstance();                                      \
+    logger->logInfoExceptNetwork(__FILE__, __LINE__, msg);                     \
+  } while (0)
 
 #define A2_LOG_NETWORK_ENABLED                                                 \
   aria2::LogFactory::getInstance()->shouldLogNetwork()

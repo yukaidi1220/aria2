@@ -130,6 +130,16 @@ public:
   // active or network mode is explicitly enabled for an available sink.
   void logNetwork(const char* sourceFile, int lineNum, const char* msg);
   void logNetwork(const char* sourceFile, int lineNum, const std::string& msg);
+
+  // Log an INFO-level message that should be suppressed when network mode is
+  // enabled for the corresponding sink.  The message is output to file if file
+  // output is not in network mode and the log level allows INFO.  The message
+  // is output to console if console output is not in network mode and the
+  // console log level allows INFO.
+  void logInfoExceptNetwork(const char* sourceFile, int lineNum,
+                            const char* msg);
+  void logInfoExceptNetwork(const char* sourceFile, int lineNum,
+                            const std::string& msg);
 };
 
 } // namespace aria2
