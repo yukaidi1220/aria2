@@ -154,7 +154,7 @@ jobs:
             cp src/aria2c.exe /out/
           "
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: aria2-${{ matrix.host }}
         path: out/aria2c.exe
