@@ -1,0 +1,82 @@
+﻿2026-06-13T18:16:51.6973606Z ##[group]Run autoreconf -i
+2026-06-13T18:16:51.6973894Z [36;1mautoreconf -i[0m
+2026-06-13T18:16:51.7030822Z shell: /usr/bin/bash -e {0}
+2026-06-13T18:16:51.7031076Z env:
+2026-06-13T18:16:51.7031384Z   PKG_CONFIG_PATH: /home/runner/work/_temp/static-deps/lib/pkgconfig
+2026-06-13T18:16:51.7031752Z ##[endgroup]
+2026-06-13T18:16:52.9184393Z Copying file ABOUT-NLS
+2026-06-13T18:16:52.9242008Z Copying file config.rpath
+2026-06-13T18:16:53.0483499Z Copying file m4/codeset.m4
+2026-06-13T18:16:53.0593604Z Copying file m4/extern-inline.m4
+2026-06-13T18:16:53.0701368Z Copying file m4/fcntl-o.m4
+2026-06-13T18:16:53.0810018Z Copying file m4/gettext.m4
+2026-06-13T18:16:53.0918658Z Copying file m4/glibc2.m4
+2026-06-13T18:16:53.1026582Z Copying file m4/glibc21.m4
+2026-06-13T18:16:53.1134764Z Copying file m4/iconv.m4
+2026-06-13T18:16:53.1243220Z Copying file m4/intdiv0.m4
+2026-06-13T18:16:53.1352070Z Copying file m4/intl.m4
+2026-06-13T18:16:53.1460198Z Copying file m4/intldir.m4
+2026-06-13T18:16:53.1569452Z Copying file m4/intlmacosx.m4
+2026-06-13T18:16:53.1677530Z Copying file m4/intmax.m4
+2026-06-13T18:16:53.1785929Z Copying file m4/inttypes-pri.m4
+2026-06-13T18:16:53.1894200Z Copying file m4/inttypes_h.m4
+2026-06-13T18:16:53.2003243Z Copying file m4/lcmessage.m4
+2026-06-13T18:16:53.2111719Z Copying file m4/lib-ld.m4
+2026-06-13T18:16:53.2220270Z Copying file m4/lib-link.m4
+2026-06-13T18:16:53.2329929Z Copying file m4/lib-prefix.m4
+2026-06-13T18:16:53.2437515Z Copying file m4/lock.m4
+2026-06-13T18:16:53.2545431Z Copying file m4/longlong.m4
+2026-06-13T18:16:53.2653737Z Copying file m4/nls.m4
+2026-06-13T18:16:53.2761517Z Copying file m4/po.m4
+2026-06-13T18:16:53.2870207Z Copying file m4/printf-posix.m4
+2026-06-13T18:16:53.2979082Z Copying file m4/progtest.m4
+2026-06-13T18:16:53.3085173Z Copying file m4/size_max.m4
+2026-06-13T18:16:53.3192469Z Copying file m4/stdint_h.m4
+2026-06-13T18:16:53.3299484Z Copying file m4/threadlib.m4
+2026-06-13T18:16:53.3407255Z Copying file m4/uintmax_t.m4
+2026-06-13T18:16:53.3512950Z Copying file m4/visibility.m4
+2026-06-13T18:16:53.3621630Z Copying file m4/wchar_t.m4
+2026-06-13T18:16:53.3727651Z Copying file m4/wint_t.m4
+2026-06-13T18:16:53.3834012Z Copying file m4/xsize.m4
+2026-06-13T18:16:53.3942123Z Copying file po/Makefile.in.in
+2026-06-13T18:16:53.4047790Z Copying file po/Makevars.template
+2026-06-13T18:16:53.4156484Z Copying file po/Rules-quot
+2026-06-13T18:16:53.4262407Z Copying file po/boldquot.sed
+2026-06-13T18:16:53.4370624Z Copying file po/en@boldquot.header
+2026-06-13T18:16:53.4478362Z Copying file po/en@quot.header
+2026-06-13T18:16:53.4586371Z Copying file po/insert-header.sin
+2026-06-13T18:16:53.4692947Z Copying file po/quot.sed
+2026-06-13T18:16:53.4802282Z Copying file po/remove-potcdate.sin
+2026-06-13T18:16:55.6041437Z aclocal: installing 'm4/libgcrypt.m4' from '/usr/share/aclocal/libgcrypt.m4'
+2026-06-13T18:16:55.6065457Z aclocal: installing 'm4/libtool.m4' from '/usr/share/aclocal/libtool.m4'
+2026-06-13T18:16:55.6091073Z aclocal: installing 'm4/ltoptions.m4' from '/usr/share/aclocal/ltoptions.m4'
+2026-06-13T18:16:55.6113177Z aclocal: installing 'm4/ltsugar.m4' from '/usr/share/aclocal/ltsugar.m4'
+2026-06-13T18:16:55.6135292Z aclocal: installing 'm4/ltversion.m4' from '/usr/share/aclocal/ltversion.m4'
+2026-06-13T18:16:55.6158070Z aclocal: installing 'm4/lt~obsolete.m4' from '/usr/share/aclocal/lt~obsolete.m4'
+2026-06-13T18:16:55.6179687Z aclocal: installing 'm4/pkg.m4' from '/usr/share/aclocal/pkg.m4'
+2026-06-13T18:16:58.9995023Z libtoolize: putting auxiliary files in AC_CONFIG_AUX_DIR, '.'.
+2026-06-13T18:16:58.9995709Z libtoolize: copying file './ltmain.sh'
+2026-06-13T18:16:59.0189338Z libtoolize: putting macros in AC_CONFIG_MACRO_DIRS, 'm4'.
+2026-06-13T18:16:59.0190599Z libtoolize: copying file 'm4/libtool.m4'
+2026-06-13T18:16:59.0375800Z libtoolize: copying file 'm4/ltoptions.m4'
+2026-06-13T18:16:59.0571227Z libtoolize: copying file 'm4/ltsugar.m4'
+2026-06-13T18:16:59.0764549Z libtoolize: copying file 'm4/ltversion.m4'
+2026-06-13T18:16:59.0958811Z libtoolize: copying file 'm4/lt~obsolete.m4'
+2026-06-13T18:17:00.7747857Z configure.ac:26: installing './compile'
+2026-06-13T18:17:00.7821443Z configure.ac:26: installing './config.guess'
+2026-06-13T18:17:00.7919469Z configure.ac:26: installing './config.sub'
+2026-06-13T18:17:00.7985342Z configure.ac:40: installing './install-sh'
+2026-06-13T18:17:00.8008817Z configure.ac:40: installing './missing'
+2026-06-13T18:17:00.8159788Z Makefile.am: installing './INSTALL'
+2026-06-13T18:17:00.8450192Z lib/Makefile.am: installing './depcomp'
+2026-06-13T18:17:00.9592805Z parallel-tests: installing './test-driver'
+2026-06-13T18:17:01.1252910Z libtoolize: putting auxiliary files in '.'.
+2026-06-13T18:17:01.1253489Z libtoolize: copying file './ltmain.sh'
+2026-06-13T18:17:03.2496409Z configure.ac:13: installing './compile'
+2026-06-13T18:17:03.2517851Z configure.ac:7: installing './config.guess'
+2026-06-13T18:17:03.2540879Z configure.ac:7: installing './config.sub'
+2026-06-13T18:17:03.2562062Z configure.ac:10: installing './install-sh'
+2026-06-13T18:17:03.2582845Z configure.ac:10: installing './missing'
+2026-06-13T18:17:03.2686366Z Makefile.am: installing './INSTALL'
+2026-06-13T18:17:03.4518728Z src/Makefile.am: installing './depcomp'
+2026-06-13T18:17:03.5256787Z parallel-tests: installing './test-driver'

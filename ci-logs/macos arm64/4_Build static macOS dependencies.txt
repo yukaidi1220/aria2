@@ -1,0 +1,1091 @@
+﻿2026-06-13T18:16:11.5405660Z ##[group]Run set -euo pipefail
+2026-06-13T18:16:11.5405930Z [36;1mset -euo pipefail[0m
+2026-06-13T18:16:11.5406160Z [36;1mprefix="$RUNNER_TEMP/static-deps"[0m
+2026-06-13T18:16:11.5406400Z [36;1mmkdir -p "$prefix"[0m
+2026-06-13T18:16:11.5406580Z [36;1m[0m
+2026-06-13T18:16:11.5407040Z [36;1mcurl -L -o c-ares.tar.gz https://github.com/c-ares/c-ares/releases/download/v1.34.5/c-ares-1.34.5.tar.gz[0m
+2026-06-13T18:16:11.5407480Z [36;1mtar xf c-ares.tar.gz[0m
+2026-06-13T18:16:11.5407720Z [36;1mcmake -S c-ares-1.34.5 -B c-ares-build \[0m
+2026-06-13T18:16:11.5408000Z [36;1m  -DCMAKE_INSTALL_PREFIX="$prefix" \[0m
+2026-06-13T18:16:11.5408280Z [36;1m  -DCARES_STATIC=ON \[0m
+2026-06-13T18:16:11.5408470Z [36;1m  -DCARES_SHARED=OFF \[0m
+2026-06-13T18:16:11.5408680Z [36;1m  -DCARES_BUILD_TOOLS=OFF \[0m
+2026-06-13T18:16:11.5408910Z [36;1m  -DCARES_BUILD_TESTS=OFF[0m
+2026-06-13T18:16:11.5409240Z [36;1mcmake --build c-ares-build --parallel "$(sysctl -n hw.ncpu)"[0m
+2026-06-13T18:16:11.5409560Z [36;1mcmake --install c-ares-build[0m
+2026-06-13T18:16:11.5409790Z [36;1m[0m
+2026-06-13T18:16:11.5410160Z [36;1mcurl -L -o nghttp2.tar.gz https://github.com/nghttp2/nghttp2/releases/download/v1.64.0/nghttp2-1.64.0.tar.gz[0m
+2026-06-13T18:16:11.5410600Z [36;1mtar xf nghttp2.tar.gz[0m
+2026-06-13T18:16:11.5410810Z [36;1mcd nghttp2-1.64.0[0m
+2026-06-13T18:16:11.5411000Z [36;1mautoreconf -i[0m
+2026-06-13T18:16:11.5411200Z [36;1m./configure \[0m
+2026-06-13T18:16:11.5411370Z [36;1m  --prefix="$prefix" \[0m
+2026-06-13T18:16:11.5411610Z [36;1m  --enable-lib-only \[0m
+2026-06-13T18:16:11.5411810Z [36;1m  --enable-static \[0m
+2026-06-13T18:16:11.5412020Z [36;1m  --disable-shared \[0m
+2026-06-13T18:16:11.5412220Z [36;1m  --disable-threads \[0m
+2026-06-13T18:16:11.5412410Z [36;1m  --disable-examples \[0m
+2026-06-13T18:16:11.5412870Z [36;1m  --disable-python-bindings \[0m
+2026-06-13T18:16:11.5413080Z [36;1m  --without-libxml2 \[0m
+2026-06-13T18:16:11.5413290Z [36;1m  --without-openssl \[0m
+2026-06-13T18:16:11.5413490Z [36;1m  --without-jemalloc \[0m
+2026-06-13T18:16:11.5413700Z [36;1m  --without-zlib \[0m
+2026-06-13T18:16:11.5413900Z [36;1m  --without-cunit[0m
+2026-06-13T18:16:11.5414110Z [36;1mmake -j"$(sysctl -n hw.ncpu)"[0m
+2026-06-13T18:16:11.5414360Z [36;1mmake install[0m
+2026-06-13T18:16:11.5414540Z [36;1mcd ..[0m
+2026-06-13T18:16:11.5414690Z [36;1m[0m
+2026-06-13T18:16:11.5414960Z [36;1mecho "PKG_CONFIG_PATH=$prefix/lib/pkgconfig" >> "$GITHUB_ENV"[0m
+2026-06-13T18:16:11.5447340Z shell: /bin/bash -e {0}
+2026-06-13T18:16:11.5447580Z ##[endgroup]
+2026-06-13T18:16:11.5856150Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-06-13T18:16:11.5857440Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-06-13T18:16:11.5857940Z 
+2026-06-13T18:16:11.6276100Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:11.7841290Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:11.7864190Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:11.8108380Z 
+2026-06-13T18:16:11.8120730Z 100  985k  100  985k    0     0  4402k      0 --:--:-- --:--:-- --:--:-- 4402k
+2026-06-13T18:16:12.5163160Z -- The C compiler identification is AppleClang 17.0.0.17000013
+2026-06-13T18:16:13.0312170Z -- Detecting C compiler ABI info
+2026-06-13T18:16:13.5158750Z -- Detecting C compiler ABI info - done
+2026-06-13T18:16:13.5286490Z -- Check for working C compiler: /usr/bin/cc - skipped
+2026-06-13T18:16:13.5291670Z -- Detecting C compile features
+2026-06-13T18:16:13.5296940Z -- Detecting C compile features - done
+2026-06-13T18:16:13.5373080Z -- Performing Test HAVE__Wall
+2026-06-13T18:16:13.6684350Z -- Performing Test HAVE__Wall - Success
+2026-06-13T18:16:13.6688090Z -- Performing Test HAVE__Wextra
+2026-06-13T18:16:13.7967470Z -- Performing Test HAVE__Wextra - Success
+2026-06-13T18:16:13.7971500Z -- Performing Test HAVE__Waggregate_return
+2026-06-13T18:16:13.9348720Z -- Performing Test HAVE__Waggregate_return - Success
+2026-06-13T18:16:13.9352660Z -- Performing Test HAVE__Wcast_align
+2026-06-13T18:16:14.0635230Z -- Performing Test HAVE__Wcast_align - Success
+2026-06-13T18:16:14.0639110Z -- Performing Test HAVE__Wcast_qual
+2026-06-13T18:16:14.1932420Z -- Performing Test HAVE__Wcast_qual - Success
+2026-06-13T18:16:14.1936300Z -- Performing Test HAVE__Wconversion
+2026-06-13T18:16:14.3213950Z -- Performing Test HAVE__Wconversion - Success
+2026-06-13T18:16:14.3217970Z -- Performing Test HAVE__Wdeclaration_after_statement
+2026-06-13T18:16:14.4498370Z -- Performing Test HAVE__Wdeclaration_after_statement - Success
+2026-06-13T18:16:14.4502170Z -- Performing Test HAVE__Wdouble_promotion
+2026-06-13T18:16:14.5795620Z -- Performing Test HAVE__Wdouble_promotion - Success
+2026-06-13T18:16:14.5799470Z -- Performing Test HAVE__Wfloat_equal
+2026-06-13T18:16:14.7096860Z -- Performing Test HAVE__Wfloat_equal - Success
+2026-06-13T18:16:14.7101040Z -- Performing Test HAVE__Wformat_security
+2026-06-13T18:16:14.8384820Z -- Performing Test HAVE__Wformat_security - Success
+2026-06-13T18:16:14.8388630Z -- Performing Test HAVE__Winit_self
+2026-06-13T18:16:14.9674440Z -- Performing Test HAVE__Winit_self - Success
+2026-06-13T18:16:14.9678810Z -- Performing Test HAVE__Wjump_misses_init
+2026-06-13T18:16:15.1007480Z -- Performing Test HAVE__Wjump_misses_init - Failed
+2026-06-13T18:16:15.1021070Z -- Performing Test HAVE__Wlogical_op
+2026-06-13T18:16:15.2294670Z -- Performing Test HAVE__Wlogical_op - Failed
+2026-06-13T18:16:15.2299070Z -- Performing Test HAVE__Wmissing_braces
+2026-06-13T18:16:15.3655340Z -- Performing Test HAVE__Wmissing_braces - Success
+2026-06-13T18:16:15.3659460Z -- Performing Test HAVE__Wmissing_declarations
+2026-06-13T18:16:15.5079110Z -- Performing Test HAVE__Wmissing_declarations - Success
+2026-06-13T18:16:15.5082980Z -- Performing Test HAVE__Wmissing_format_attribute
+2026-06-13T18:16:15.6371340Z -- Performing Test HAVE__Wmissing_format_attribute - Success
+2026-06-13T18:16:15.6375140Z -- Performing Test HAVE__Wmissing_include_dirs
+2026-06-13T18:16:15.7668840Z -- Performing Test HAVE__Wmissing_include_dirs - Success
+2026-06-13T18:16:15.7672930Z -- Performing Test HAVE__Wmissing_prototypes
+2026-06-13T18:16:15.8950840Z -- Performing Test HAVE__Wmissing_prototypes - Success
+2026-06-13T18:16:15.8954710Z -- Performing Test HAVE__Wnested_externs
+2026-06-13T18:16:16.0250860Z -- Performing Test HAVE__Wnested_externs - Success
+2026-06-13T18:16:16.0254680Z -- Performing Test HAVE__Wno_coverage_mismatch
+2026-06-13T18:16:16.1543410Z -- Performing Test HAVE__Wno_coverage_mismatch - Failed
+2026-06-13T18:16:16.1547270Z -- Performing Test HAVE__Wold_style_definition
+2026-06-13T18:16:16.2830990Z -- Performing Test HAVE__Wold_style_definition - Success
+2026-06-13T18:16:16.2835090Z -- Performing Test HAVE__Wpacked
+2026-06-13T18:16:16.4130040Z -- Performing Test HAVE__Wpacked - Success
+2026-06-13T18:16:16.4133950Z -- Performing Test HAVE__Wpedantic
+2026-06-13T18:16:16.5514680Z -- Performing Test HAVE__Wpedantic - Success
+2026-06-13T18:16:16.5518980Z -- Performing Test HAVE__Wpointer_arith
+2026-06-13T18:16:16.6918970Z -- Performing Test HAVE__Wpointer_arith - Success
+2026-06-13T18:16:16.6923370Z -- Performing Test HAVE__Wredundant_decls
+2026-06-13T18:16:16.8447430Z -- Performing Test HAVE__Wredundant_decls - Success
+2026-06-13T18:16:16.8451480Z -- Performing Test HAVE__Wshadow
+2026-06-13T18:16:16.9948890Z -- Performing Test HAVE__Wshadow - Success
+2026-06-13T18:16:16.9953290Z -- Performing Test HAVE__Wsign_conversion
+2026-06-13T18:16:17.1394540Z -- Performing Test HAVE__Wsign_conversion - Success
+2026-06-13T18:16:17.1398830Z -- Performing Test HAVE__Wstrict_overflow
+2026-06-13T18:16:17.2834250Z -- Performing Test HAVE__Wstrict_overflow - Success
+2026-06-13T18:16:17.2838200Z -- Performing Test HAVE__Wstrict_prototypes
+2026-06-13T18:16:17.4268260Z -- Performing Test HAVE__Wstrict_prototypes - Success
+2026-06-13T18:16:17.4272310Z -- Performing Test HAVE__Wtrampolines
+2026-06-13T18:16:17.5757720Z -- Performing Test HAVE__Wtrampolines - Failed
+2026-06-13T18:16:17.5761570Z -- Performing Test HAVE__Wundef
+2026-06-13T18:16:17.7067310Z -- Performing Test HAVE__Wundef - Success
+2026-06-13T18:16:17.7071130Z -- Performing Test HAVE__Wunreachable_code
+2026-06-13T18:16:17.8390270Z -- Performing Test HAVE__Wunreachable_code - Success
+2026-06-13T18:16:17.8390630Z -- Performing Test HAVE__Wunused
+2026-06-13T18:16:17.9737120Z -- Performing Test HAVE__Wunused - Success
+2026-06-13T18:16:17.9741150Z -- Performing Test HAVE__Wvariadic_macros
+2026-06-13T18:16:18.1027160Z -- Performing Test HAVE__Wvariadic_macros - Success
+2026-06-13T18:16:18.1031070Z -- Performing Test HAVE__Wvla
+2026-06-13T18:16:18.2317150Z -- Performing Test HAVE__Wvla - Success
+2026-06-13T18:16:18.2321050Z -- Performing Test HAVE__Wwrite_strings
+2026-06-13T18:16:18.3609960Z -- Performing Test HAVE__Wwrite_strings - Success
+2026-06-13T18:16:18.3613800Z -- Performing Test HAVE__Wimplicit_fallthrough_3
+2026-06-13T18:16:18.4898420Z -- Performing Test HAVE__Wimplicit_fallthrough_3 - Failed
+2026-06-13T18:16:18.4902250Z -- Performing Test HAVE__Werror_implicit_int
+2026-06-13T18:16:18.6200830Z -- Performing Test HAVE__Werror_implicit_int - Success
+2026-06-13T18:16:18.6204750Z -- Performing Test HAVE__Werror_implicit_function_declaration
+2026-06-13T18:16:18.7506460Z -- Performing Test HAVE__Werror_implicit_function_declaration - Success
+2026-06-13T18:16:18.7510560Z -- Performing Test HAVE__Werror_partial_availability
+2026-06-13T18:16:18.8802110Z -- Performing Test HAVE__Werror_partial_availability - Success
+2026-06-13T18:16:18.8805910Z -- Performing Test HAVE__Qunused_arguments
+2026-06-13T18:16:19.0101200Z -- Performing Test HAVE__Qunused_arguments - Success
+2026-06-13T18:16:19.0104600Z -- Performing Test HAVE__Wno_long_long
+2026-06-13T18:16:19.1389810Z -- Performing Test HAVE__Wno_long_long - Success
+2026-06-13T18:16:19.1394070Z -- Performing Test HAVE__fno_omit_frame_pointer
+2026-06-13T18:16:19.2680730Z -- Performing Test HAVE__fno_omit_frame_pointer - Success
+2026-06-13T18:16:19.2685080Z -- Performing Test HAVE__O0
+2026-06-13T18:16:19.3972590Z -- Performing Test HAVE__O0 - Success
+2026-06-13T18:16:19.3973450Z -- Looking for res_servicename
+2026-06-13T18:16:19.5336090Z -- Looking for res_servicename - not found
+2026-06-13T18:16:19.5336730Z -- Looking for res_servicename in resolv
+2026-06-13T18:16:19.6769810Z -- Looking for res_servicename in resolv - found
+2026-06-13T18:16:19.6770230Z -- Performing Test IOS
+2026-06-13T18:16:19.7890510Z -- Performing Test IOS - Failed
+2026-06-13T18:16:19.7890960Z -- Performing Test IOS_V10
+2026-06-13T18:16:19.8771080Z -- Performing Test IOS_V10 - Failed
+2026-06-13T18:16:19.8773140Z -- Performing Test MACOS_V1012
+2026-06-13T18:16:20.0121500Z -- Performing Test MACOS_V1012 - Success
+2026-06-13T18:16:20.0121950Z -- Looking for gethostbyname
+2026-06-13T18:16:20.1440800Z -- Looking for gethostbyname - found
+2026-06-13T18:16:20.1441180Z -- Looking for socket
+2026-06-13T18:16:20.2752710Z -- Looking for socket - found
+2026-06-13T18:16:20.2753010Z -- Looking for clock_gettime
+2026-06-13T18:16:20.4071350Z -- Looking for clock_gettime - found
+2026-06-13T18:16:20.4071860Z -- Looking for include file AvailabilityMacros.h
+2026-06-13T18:16:20.5401620Z -- Looking for include file AvailabilityMacros.h - found
+2026-06-13T18:16:20.5402100Z -- Looking for include file sys/types.h
+2026-06-13T18:16:20.6958870Z -- Looking for include file sys/types.h - found
+2026-06-13T18:16:20.6959220Z -- Looking for include file sys/random.h
+2026-06-13T18:16:20.8326580Z -- Looking for include file sys/random.h - found
+2026-06-13T18:16:20.8327000Z -- Looking for include file sys/socket.h
+2026-06-13T18:16:20.9741130Z -- Looking for include file sys/socket.h - found
+2026-06-13T18:16:20.9741830Z -- Looking for include file sys/sockio.h
+2026-06-13T18:16:21.1213350Z -- Looking for include file sys/sockio.h - found
+2026-06-13T18:16:21.1213890Z -- Looking for include file arpa/inet.h
+2026-06-13T18:16:21.2905300Z -- Looking for include file arpa/inet.h - found
+2026-06-13T18:16:21.2915720Z -- Looking for include file arpa/nameser_compat.h
+2026-06-13T18:16:21.4393770Z -- Looking for include file arpa/nameser_compat.h - found
+2026-06-13T18:16:21.4406070Z -- Looking for include file arpa/nameser.h
+2026-06-13T18:16:21.6137540Z -- Looking for include file arpa/nameser.h - found
+2026-06-13T18:16:21.6148720Z -- Looking for include file assert.h
+2026-06-13T18:16:21.7904150Z -- Looking for include file assert.h - found
+2026-06-13T18:16:21.7906790Z -- Looking for include file errno.h
+2026-06-13T18:16:21.9412560Z -- Looking for include file errno.h - found
+2026-06-13T18:16:21.9412980Z -- Looking for include file fcntl.h
+2026-06-13T18:16:22.1107290Z -- Looking for include file fcntl.h - found
+2026-06-13T18:16:22.1118270Z -- Looking for include file inttypes.h
+2026-06-13T18:16:22.2712730Z -- Looking for include file inttypes.h - found
+2026-06-13T18:16:22.2713790Z -- Looking for include file limits.h
+2026-06-13T18:16:22.4089160Z -- Looking for include file limits.h - found
+2026-06-13T18:16:22.4089560Z -- Looking for include file malloc.h
+2026-06-13T18:16:22.4938940Z -- Looking for include file malloc.h - not found
+2026-06-13T18:16:22.4939390Z -- Looking for include file memory.h
+2026-06-13T18:16:22.6512610Z -- Looking for include file memory.h - found
+2026-06-13T18:16:22.6513350Z -- Looking for include file netdb.h
+2026-06-13T18:16:22.7880710Z -- Looking for include file netdb.h - found
+2026-06-13T18:16:22.7881450Z -- Looking for include file netinet/in.h
+2026-06-13T18:16:22.9237450Z -- Looking for include file netinet/in.h - found
+2026-06-13T18:16:22.9237790Z -- Looking for include file netinet6/in6.h
+2026-06-13T18:16:23.0148830Z -- Looking for include file netinet6/in6.h - not found
+2026-06-13T18:16:23.0149740Z -- Looking for include files sys/socket.h, net/if.h
+2026-06-13T18:16:23.1512150Z -- Looking for include files sys/socket.h, net/if.h - found
+2026-06-13T18:16:23.1513110Z -- Looking for include file signal.h
+2026-06-13T18:16:23.3035250Z -- Looking for include file signal.h - found
+2026-06-13T18:16:23.3035650Z -- Looking for include file socket.h
+2026-06-13T18:16:23.3935510Z -- Looking for include file socket.h - not found
+2026-06-13T18:16:23.3935900Z -- Looking for include file stdbool.h
+2026-06-13T18:16:23.5297440Z -- Looking for include file stdbool.h - found
+2026-06-13T18:16:23.5297850Z -- Looking for include file stdint.h
+2026-06-13T18:16:23.6597430Z -- Looking for include file stdint.h - found
+2026-06-13T18:16:23.6597850Z -- Looking for include file stdlib.h
+2026-06-13T18:16:23.7965520Z -- Looking for include file stdlib.h - found
+2026-06-13T18:16:23.7978570Z -- Looking for include file strings.h
+2026-06-13T18:16:23.9365370Z -- Looking for include file strings.h - found
+2026-06-13T18:16:23.9365710Z -- Looking for include file string.h
+2026-06-13T18:16:24.0645020Z -- Looking for include file string.h - found
+2026-06-13T18:16:24.0645400Z -- Looking for include file stropts.h
+2026-06-13T18:16:24.1443360Z -- Looking for include file stropts.h - not found
+2026-06-13T18:16:24.1443690Z -- Looking for include file sys/ioctl.h
+2026-06-13T18:16:24.2780830Z -- Looking for include file sys/ioctl.h - found
+2026-06-13T18:16:24.2781150Z -- Looking for include file sys/param.h
+2026-06-13T18:16:24.4094220Z -- Looking for include file sys/param.h - found
+2026-06-13T18:16:24.4094540Z -- Looking for include file sys/select.h
+2026-06-13T18:16:24.5386920Z -- Looking for include file sys/select.h - found
+2026-06-13T18:16:24.5387350Z -- Looking for include file sys/stat.h
+2026-06-13T18:16:24.6686510Z -- Looking for include file sys/stat.h - found
+2026-06-13T18:16:24.6686840Z -- Looking for include file sys/time.h
+2026-06-13T18:16:24.7992050Z -- Looking for include file sys/time.h - found
+2026-06-13T18:16:24.7993320Z -- Looking for include file sys/uio.h
+2026-06-13T18:16:24.9281850Z -- Looking for include file sys/uio.h - found
+2026-06-13T18:16:24.9282280Z -- Looking for include file sys/event.h
+2026-06-13T18:16:25.0607930Z -- Looking for include file sys/event.h - found
+2026-06-13T18:16:25.0608450Z -- Looking for include file sys/epoll.h
+2026-06-13T18:16:25.1414220Z -- Looking for include file sys/epoll.h - not found
+2026-06-13T18:16:25.1414640Z -- Looking for include file ifaddrs.h
+2026-06-13T18:16:25.2809510Z -- Looking for include file ifaddrs.h - found
+2026-06-13T18:16:25.2809930Z -- Looking for include file time.h
+2026-06-13T18:16:25.4094420Z -- Looking for include file time.h - found
+2026-06-13T18:16:25.4094870Z -- Looking for include file poll.h
+2026-06-13T18:16:25.5369120Z -- Looking for include file poll.h - found
+2026-06-13T18:16:25.5369510Z -- Looking for include file dlfcn.h
+2026-06-13T18:16:25.6661670Z -- Looking for include file dlfcn.h - found
+2026-06-13T18:16:25.6662070Z -- Looking for include file unistd.h
+2026-06-13T18:16:25.7992360Z -- Looking for include file unistd.h - found
+2026-06-13T18:16:25.7992820Z -- Looking for include files sys/types.h, netinet/tcp.h
+2026-06-13T18:16:25.9313860Z -- Looking for include files sys/types.h, netinet/tcp.h - found
+2026-06-13T18:16:25.9316260Z -- Performing Test HAVE_SOCKLEN_T
+2026-06-13T18:16:26.0736160Z -- Performing Test HAVE_SOCKLEN_T - Success
+2026-06-13T18:16:26.0736810Z -- Performing Test HAVE_TYPE_SOCKET
+2026-06-13T18:16:26.1706680Z -- Performing Test HAVE_TYPE_SOCKET - Failed
+2026-06-13T18:16:26.1707670Z -- Performing Test HAVE_SSIZE_T
+2026-06-13T18:16:26.3087560Z -- Performing Test HAVE_SSIZE_T - Success
+2026-06-13T18:16:26.3088220Z -- Performing Test HAVE_LONGLONG
+2026-06-13T18:16:26.4483690Z -- Performing Test HAVE_LONGLONG - Success
+2026-06-13T18:16:26.4484120Z -- Performing Test HAVE_STRUCT_ADDRINFO
+2026-06-13T18:16:26.5920830Z -- Performing Test HAVE_STRUCT_ADDRINFO - Success
+2026-06-13T18:16:26.5921590Z -- Performing Test HAVE_STRUCT_IN6_ADDR
+2026-06-13T18:16:26.7487350Z -- Performing Test HAVE_STRUCT_IN6_ADDR - Success
+2026-06-13T18:16:26.7488190Z -- Performing Test HAVE_STRUCT_SOCKADDR_IN6
+2026-06-13T18:16:26.9133060Z -- Performing Test HAVE_STRUCT_SOCKADDR_IN6 - Success
+2026-06-13T18:16:26.9133560Z -- Performing Test HAVE_STRUCT_SOCKADDR_STORAGE
+2026-06-13T18:16:27.0555890Z -- Performing Test HAVE_STRUCT_SOCKADDR_STORAGE - Success
+2026-06-13T18:16:27.0556410Z -- Performing Test HAVE_STRUCT_TIMEVAL
+2026-06-13T18:16:27.1938710Z -- Performing Test HAVE_STRUCT_TIMEVAL - Success
+2026-06-13T18:16:27.1940250Z -- Looking for AF_INET6
+2026-06-13T18:16:27.3315720Z -- Looking for AF_INET6 - found
+2026-06-13T18:16:27.3317120Z -- Looking for O_NONBLOCK
+2026-06-13T18:16:27.4718790Z -- Looking for O_NONBLOCK - found
+2026-06-13T18:16:27.4720450Z -- Looking for FIONBIO
+2026-06-13T18:16:27.6978400Z -- Looking for FIONBIO - found
+2026-06-13T18:16:27.6979910Z -- Looking for SIOCGIFADDR
+2026-06-13T18:16:27.8401600Z -- Looking for SIOCGIFADDR - found
+2026-06-13T18:16:27.8402950Z -- Looking for MSG_NOSIGNAL
+2026-06-13T18:16:27.9945960Z -- Looking for MSG_NOSIGNAL - found
+2026-06-13T18:16:27.9947450Z -- Looking for PF_INET6
+2026-06-13T18:16:28.1641480Z -- Looking for PF_INET6 - found
+2026-06-13T18:16:28.1643320Z -- Looking for SO_NONBLOCK
+2026-06-13T18:16:28.2728340Z -- Looking for SO_NONBLOCK - not found
+2026-06-13T18:16:28.2730090Z -- Looking for CLOCK_MONOTONIC
+2026-06-13T18:16:28.4130140Z -- Looking for CLOCK_MONOTONIC - found
+2026-06-13T18:16:28.4130960Z -- Performing Test HAVE_STRUCT_SOCKADDR_IN6_SIN6_SCOPE_ID
+2026-06-13T18:16:28.5517130Z -- Performing Test HAVE_STRUCT_SOCKADDR_IN6_SIN6_SCOPE_ID - Success
+2026-06-13T18:16:28.5518220Z -- Looking for strnlen
+2026-06-13T18:16:28.6896890Z -- Looking for strnlen - found
+2026-06-13T18:16:28.6898800Z -- Looking for memmem
+2026-06-13T18:16:28.8285450Z -- Looking for memmem - found
+2026-06-13T18:16:28.8286520Z -- Looking for closesocket
+2026-06-13T18:16:28.9245820Z -- Looking for closesocket - not found
+2026-06-13T18:16:28.9247200Z -- Looking for CloseSocket
+2026-06-13T18:16:29.0189470Z -- Looking for CloseSocket - not found
+2026-06-13T18:16:29.0191090Z -- Looking for connect
+2026-06-13T18:16:29.1578900Z -- Looking for connect - found
+2026-06-13T18:16:29.1580170Z -- Looking for connectx
+2026-06-13T18:16:29.2961410Z -- Looking for connectx - found
+2026-06-13T18:16:29.2963000Z -- Looking for fcntl
+2026-06-13T18:16:29.4340560Z -- Looking for fcntl - found
+2026-06-13T18:16:29.4342110Z -- Looking for freeaddrinfo
+2026-06-13T18:16:29.5752440Z -- Looking for freeaddrinfo - found
+2026-06-13T18:16:29.5754370Z -- Looking for getaddrinfo
+2026-06-13T18:16:29.7131300Z -- Looking for getaddrinfo - found
+2026-06-13T18:16:29.7132900Z -- Looking for getenv
+2026-06-13T18:16:29.8518880Z -- Looking for getenv - found
+2026-06-13T18:16:29.8520390Z -- Looking for gethostname
+2026-06-13T18:16:29.9905720Z -- Looking for gethostname - found
+2026-06-13T18:16:29.9907590Z -- Looking for getnameinfo
+2026-06-13T18:16:30.1284910Z -- Looking for getnameinfo - found
+2026-06-13T18:16:30.1286250Z -- Looking for getrandom
+2026-06-13T18:16:30.2238890Z -- Looking for getrandom - not found
+2026-06-13T18:16:30.2240560Z -- Looking for getservbyport_r
+2026-06-13T18:16:30.3196540Z -- Looking for getservbyport_r - not found
+2026-06-13T18:16:30.3198260Z -- Looking for getservbyname_r
+2026-06-13T18:16:30.4155350Z -- Looking for getservbyname_r - not found
+2026-06-13T18:16:30.4156810Z -- Looking for gettimeofday
+2026-06-13T18:16:30.5550820Z -- Looking for gettimeofday - found
+2026-06-13T18:16:30.5552310Z -- Looking for if_indextoname
+2026-06-13T18:16:30.6945100Z -- Looking for if_indextoname - found
+2026-06-13T18:16:30.6950290Z -- Looking for if_nametoindex
+2026-06-13T18:16:30.8342520Z -- Looking for if_nametoindex - found
+2026-06-13T18:16:30.8345940Z -- Looking for GetBestRoute2
+2026-06-13T18:16:30.9290190Z -- Looking for GetBestRoute2 - not found
+2026-06-13T18:16:30.9291670Z -- Looking for ConvertInterfaceIndexToLuid
+2026-06-13T18:16:31.0315080Z -- Looking for ConvertInterfaceIndexToLuid - not found
+2026-06-13T18:16:31.0320280Z -- Looking for ConvertInterfaceLuidToNameA
+2026-06-13T18:16:31.1338170Z -- Looking for ConvertInterfaceLuidToNameA - not found
+2026-06-13T18:16:31.1339940Z -- Looking for NotifyIpInterfaceChange
+2026-06-13T18:16:31.2355140Z -- Looking for NotifyIpInterfaceChange - not found
+2026-06-13T18:16:31.2356650Z -- Looking for RegisterWaitForSingleObject
+2026-06-13T18:16:31.3386830Z -- Looking for RegisterWaitForSingleObject - not found
+2026-06-13T18:16:31.3388250Z -- Looking for inet_net_pton
+2026-06-13T18:16:31.4779120Z -- Looking for inet_net_pton - found
+2026-06-13T18:16:31.4780540Z -- Looking for inet_ntop
+2026-06-13T18:16:31.6165110Z -- Looking for inet_ntop - found
+2026-06-13T18:16:31.6166630Z -- Looking for inet_pton
+2026-06-13T18:16:31.7552750Z -- Looking for inet_pton - found
+2026-06-13T18:16:31.7554100Z -- Looking for ioctl
+2026-06-13T18:16:31.8955630Z -- Looking for ioctl - found
+2026-06-13T18:16:31.8958620Z -- Looking for ioctlsocket
+2026-06-13T18:16:31.9912490Z -- Looking for ioctlsocket - not found
+2026-06-13T18:16:31.9914040Z -- Looking for IoctlSocket
+2026-06-13T18:16:32.0865020Z -- Looking for IoctlSocket - not found
+2026-06-13T18:16:32.0866460Z -- Looking for recv
+2026-06-13T18:16:32.2356630Z -- Looking for recv - found
+2026-06-13T18:16:32.2358610Z -- Looking for recvfrom
+2026-06-13T18:16:32.4068510Z -- Looking for recvfrom - found
+2026-06-13T18:16:32.4070150Z -- Looking for send
+2026-06-13T18:16:32.5762370Z -- Looking for send - found
+2026-06-13T18:16:32.5764780Z -- Looking for sendto
+2026-06-13T18:16:32.7329570Z -- Looking for sendto - found
+2026-06-13T18:16:32.7330910Z -- Looking for setsockopt
+2026-06-13T18:16:32.8732910Z -- Looking for setsockopt - found
+2026-06-13T18:16:32.8734450Z -- Looking for socket
+2026-06-13T18:16:33.0121580Z -- Looking for socket - found
+2026-06-13T18:16:33.0123210Z -- Looking for strcasecmp
+2026-06-13T18:16:33.1515170Z -- Looking for strcasecmp - found
+2026-06-13T18:16:33.1516800Z -- Looking for strcmpi
+2026-06-13T18:16:33.2451160Z -- Looking for strcmpi - not found
+2026-06-13T18:16:33.2452530Z -- Looking for strdup
+2026-06-13T18:16:33.3848100Z -- Looking for strdup - found
+2026-06-13T18:16:33.3849520Z -- Looking for stricmp
+2026-06-13T18:16:33.4794050Z -- Looking for stricmp - not found
+2026-06-13T18:16:33.4795880Z -- Looking for strncasecmp
+2026-06-13T18:16:33.6211210Z -- Looking for strncasecmp - found
+2026-06-13T18:16:33.6212730Z -- Looking for strncmpi
+2026-06-13T18:16:33.7219720Z -- Looking for strncmpi - not found
+2026-06-13T18:16:33.7221380Z -- Looking for strnicmp
+2026-06-13T18:16:33.8223060Z -- Looking for strnicmp - not found
+2026-06-13T18:16:33.8224800Z -- Looking for writev
+2026-06-13T18:16:33.9627000Z -- Looking for writev - found
+2026-06-13T18:16:33.9628680Z -- Looking for arc4random_buf
+2026-06-13T18:16:34.1021500Z -- Looking for arc4random_buf - found
+2026-06-13T18:16:34.1022840Z -- Looking for stat
+2026-06-13T18:16:34.2414210Z -- Looking for stat - found
+2026-06-13T18:16:34.2415970Z -- Looking for getifaddrs
+2026-06-13T18:16:34.3823500Z -- Looking for getifaddrs - found
+2026-06-13T18:16:34.3825510Z -- Looking for poll
+2026-06-13T18:16:34.5384700Z -- Looking for poll - found
+2026-06-13T18:16:34.5386250Z -- Looking for pipe
+2026-06-13T18:16:34.6803770Z -- Looking for pipe - found
+2026-06-13T18:16:34.6805290Z -- Looking for pipe2
+2026-06-13T18:16:34.7748790Z -- Looking for pipe2 - not found
+2026-06-13T18:16:34.7750210Z -- Looking for kqueue
+2026-06-13T18:16:34.9238250Z -- Looking for kqueue - found
+2026-06-13T18:16:34.9240090Z -- Looking for epoll_create1
+2026-06-13T18:16:35.0236530Z -- Looking for epoll_create1 - not found
+2026-06-13T18:16:35.0236900Z -- Looking for __system_property_get
+2026-06-13T18:16:35.1537020Z -- Looking for __system_property_get - not found
+2026-06-13T18:16:35.1547380Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD
+2026-06-13T18:16:35.2965510Z -- Performing Test CMAKE_HAVE_LIBC_PTHREAD - Success
+2026-06-13T18:16:35.2976200Z -- Found Threads: TRUE
+2026-06-13T18:16:35.2977380Z -- Looking for include file pthread.h
+2026-06-13T18:16:35.4354780Z -- Looking for include file pthread.h - found
+2026-06-13T18:16:35.4355710Z -- Looking for include file pthread_np.h
+2026-06-13T18:16:35.5201860Z -- Looking for include file pthread_np.h - not found
+2026-06-13T18:16:35.5203070Z -- Looking for pthread_init
+2026-06-13T18:16:35.6108170Z -- Looking for pthread_init - not found
+2026-06-13T18:16:35.6206730Z -- Configuring done (23.7s)
+2026-06-13T18:16:35.6485880Z -- Generating done (0.0s)
+2026-06-13T18:16:35.6586340Z -- Build files have been written to: /Users/runner/work/aria2/aria2/c-ares-build
+2026-06-13T18:16:35.7282670Z [  1%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_addrinfo2hostent.c.o
+2026-06-13T18:16:35.7400410Z [  2%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_addrinfo_localhost.c.o
+2026-06-13T18:16:35.7511310Z [  3%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_android.c.o
+2026-06-13T18:16:35.7716050Z [  4%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_cancel.c.o
+2026-06-13T18:16:35.8016380Z [  5%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_conn.c.o
+2026-06-13T18:16:35.8117490Z [  6%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_close_sockets.c.o
+2026-06-13T18:16:35.8318820Z [  7%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_cookie.c.o
+2026-06-13T18:16:35.8622820Z [  8%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_data.c.o
+2026-06-13T18:16:35.8723890Z [  9%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_destroy.c.o
+2026-06-13T18:16:35.9030080Z [ 10%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_free_hostent.c.o
+2026-06-13T18:16:35.9348360Z [ 11%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_free_string.c.o
+2026-06-13T18:16:35.9458440Z [ 13%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_freeaddrinfo.c.o
+2026-06-13T18:16:35.9660440Z [ 14%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_getaddrinfo.c.o
+2026-06-13T18:16:35.9862710Z [ 15%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_getenv.c.o
+2026-06-13T18:16:35.9964210Z [ 16%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_gethostbyaddr.c.o
+2026-06-13T18:16:36.0274320Z [ 17%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_gethostbyname.c.o
+2026-06-13T18:16:36.0476470Z [ 18%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_getnameinfo.c.o
+2026-06-13T18:16:36.0578720Z [ 19%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_hosts_file.c.o
+2026-06-13T18:16:36.0918520Z [ 20%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_init.c.o
+2026-06-13T18:16:36.1090000Z [ 21%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_library_init.c.o
+2026-06-13T18:16:36.1191090Z [ 22%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_metrics.c.o
+2026-06-13T18:16:36.1638700Z [ 23%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_options.c.o
+2026-06-13T18:16:36.1848040Z [ 25%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_parse_into_addrinfo.c.o
+2026-06-13T18:16:36.1950480Z [ 26%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_process.c.o
+2026-06-13T18:16:36.2666760Z [ 27%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_qcache.c.o
+2026-06-13T18:16:36.2767930Z [ 28%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_query.c.o
+2026-06-13T18:16:36.2969260Z [ 29%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_search.c.o
+2026-06-13T18:16:36.3284500Z [ 30%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_send.c.o
+2026-06-13T18:16:36.3390100Z [ 31%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_set_socket_functions.c.o
+2026-06-13T18:16:36.3592250Z [ 32%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_socket.c.o
+2026-06-13T18:16:36.4012010Z [ 33%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_sortaddrinfo.c.o
+2026-06-13T18:16:36.4135990Z [ 34%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_strerror.c.o
+2026-06-13T18:16:36.4356220Z [ 35%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_sysconfig.c.o
+2026-06-13T18:16:36.4732710Z [ 36%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_sysconfig_files.c.o
+2026-06-13T18:16:36.4834160Z [ 38%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_sysconfig_mac.c.o
+2026-06-13T18:16:36.5142570Z [ 39%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_sysconfig_win.c.o
+2026-06-13T18:16:36.5451210Z [ 40%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_timeout.c.o
+2026-06-13T18:16:36.5755760Z [ 41%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_update_servers.c.o
+2026-06-13T18:16:36.6074170Z [ 42%] Building C object src/lib/CMakeFiles/c-ares.dir/ares_version.c.o
+2026-06-13T18:16:36.6476740Z [ 43%] Building C object src/lib/CMakeFiles/c-ares.dir/inet_net_pton.c.o
+2026-06-13T18:16:36.6678040Z [ 44%] Building C object src/lib/CMakeFiles/c-ares.dir/inet_ntop.c.o
+2026-06-13T18:16:36.7189320Z [ 45%] Building C object src/lib/CMakeFiles/c-ares.dir/windows_port.c.o
+2026-06-13T18:16:36.7398040Z [ 46%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_array.c.o
+2026-06-13T18:16:36.7720760Z [ 47%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable.c.o
+2026-06-13T18:16:36.7822000Z [ 48%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable_asvp.c.o
+2026-06-13T18:16:36.8030990Z [ 50%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable_dict.c.o
+2026-06-13T18:16:36.8351140Z [ 51%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable_strvp.c.o
+2026-06-13T18:16:36.8459050Z [ 52%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable_szvp.c.o
+2026-06-13T18:16:36.8665480Z [ 53%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable_vpstr.c.o
+2026-06-13T18:16:36.8991680Z [ 54%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_htable_vpvp.c.o
+2026-06-13T18:16:36.9097920Z [ 55%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_llist.c.o
+2026-06-13T18:16:36.9312020Z [ 56%] Building C object src/lib/CMakeFiles/c-ares.dir/dsa/ares_slist.c.o
+2026-06-13T18:16:36.9621070Z [ 57%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_configchg.c.o
+2026-06-13T18:16:36.9731670Z [ 58%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_epoll.c.o
+2026-06-13T18:16:36.9934240Z [ 59%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_kqueue.c.o
+2026-06-13T18:16:37.0253600Z [ 60%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_poll.c.o
+2026-06-13T18:16:37.0364160Z [ 61%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_select.c.o
+2026-06-13T18:16:37.0590320Z [ 63%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_thread.c.o
+2026-06-13T18:16:37.0901020Z [ 64%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_wake_pipe.c.o
+2026-06-13T18:16:37.1001260Z [ 65%] Building C object src/lib/CMakeFiles/c-ares.dir/event/ares_event_win32.c.o
+2026-06-13T18:16:37.1209140Z [ 66%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_create_query.c.o
+2026-06-13T18:16:37.1518010Z [ 67%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_expand_name.c.o
+2026-06-13T18:16:37.1618930Z [ 68%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_expand_string.c.o
+2026-06-13T18:16:37.1826870Z [ 69%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_fds.c.o
+2026-06-13T18:16:37.2137190Z [ 70%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_getsock.c.o
+2026-06-13T18:16:37.2237460Z [ 71%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_a_reply.c.o
+2026-06-13T18:16:37.2442600Z [ 72%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_aaaa_reply.c.o
+2026-06-13T18:16:37.2747560Z [ 73%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_caa_reply.c.o
+2026-06-13T18:16:37.2848860Z [ 75%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_mx_reply.c.o
+2026-06-13T18:16:37.3053220Z [ 76%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_naptr_reply.c.o
+2026-06-13T18:16:37.3355640Z [ 77%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_ns_reply.c.o
+2026-06-13T18:16:37.3456980Z [ 78%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_ptr_reply.c.o
+2026-06-13T18:16:37.3659100Z [ 79%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_soa_reply.c.o
+2026-06-13T18:16:37.3965000Z [ 80%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_srv_reply.c.o
+2026-06-13T18:16:37.4066160Z [ 81%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_txt_reply.c.o
+2026-06-13T18:16:37.4367960Z [ 82%] Building C object src/lib/CMakeFiles/c-ares.dir/legacy/ares_parse_uri_reply.c.o
+2026-06-13T18:16:37.4569210Z [ 83%] Building C object src/lib/CMakeFiles/c-ares.dir/record/ares_dns_mapping.c.o
+2026-06-13T18:16:37.4684350Z [ 84%] Building C object src/lib/CMakeFiles/c-ares.dir/record/ares_dns_multistring.c.o
+2026-06-13T18:16:37.5002260Z [ 85%] Building C object src/lib/CMakeFiles/c-ares.dir/record/ares_dns_name.c.o
+2026-06-13T18:16:37.5213320Z [ 86%] Building C object src/lib/CMakeFiles/c-ares.dir/record/ares_dns_parse.c.o
+2026-06-13T18:16:37.5314450Z [ 88%] Building C object src/lib/CMakeFiles/c-ares.dir/record/ares_dns_record.c.o
+2026-06-13T18:16:37.5617380Z [ 89%] Building C object src/lib/CMakeFiles/c-ares.dir/record/ares_dns_write.c.o
+2026-06-13T18:16:37.5826590Z [ 90%] Building C object src/lib/CMakeFiles/c-ares.dir/str/ares_buf.c.o
+2026-06-13T18:16:37.6059530Z [ 91%] Building C object src/lib/CMakeFiles/c-ares.dir/str/ares_str.c.o
+2026-06-13T18:16:37.6389140Z [ 92%] Building C object src/lib/CMakeFiles/c-ares.dir/str/ares_strsplit.c.o
+2026-06-13T18:16:37.6690880Z [ 93%] Building C object src/lib/CMakeFiles/c-ares.dir/util/ares_iface_ips.c.o
+2026-06-13T18:16:37.6791260Z [ 94%] Building C object src/lib/CMakeFiles/c-ares.dir/util/ares_threads.c.o
+2026-06-13T18:16:37.6891590Z [ 95%] Building C object src/lib/CMakeFiles/c-ares.dir/util/ares_timeval.c.o
+2026-06-13T18:16:37.7301690Z [ 96%] Building C object src/lib/CMakeFiles/c-ares.dir/util/ares_math.c.o
+2026-06-13T18:16:37.7402280Z [ 97%] Building C object src/lib/CMakeFiles/c-ares.dir/util/ares_rand.c.o
+2026-06-13T18:16:37.7512000Z [ 98%] Building C object src/lib/CMakeFiles/c-ares.dir/util/ares_uri.c.o
+2026-06-13T18:16:37.8251760Z [100%] Linking C static library ../../lib/libcares.a
+2026-06-13T18:16:38.6354990Z [100%] Built target c-ares
+2026-06-13T18:16:38.6554440Z -- Install configuration: ""
+2026-06-13T18:16:38.6555420Z -- Installing: /Users/runner/work/_temp/static-deps/lib/cmake/c-ares/c-ares-targets.cmake
+2026-06-13T18:16:38.6557240Z -- Installing: /Users/runner/work/_temp/static-deps/lib/cmake/c-ares/c-ares-targets-noconfig.cmake
+2026-06-13T18:16:38.6558860Z -- Installing: /Users/runner/work/_temp/static-deps/lib/cmake/c-ares/c-ares-config.cmake
+2026-06-13T18:16:38.6560590Z -- Installing: /Users/runner/work/_temp/static-deps/lib/cmake/c-ares/c-ares-config-version.cmake
+2026-06-13T18:16:38.6562080Z -- Installing: /Users/runner/work/_temp/static-deps/lib/pkgconfig/libcares.pc
+2026-06-13T18:16:38.6564970Z -- Installing: /Users/runner/work/_temp/static-deps/include/ares.h
+2026-06-13T18:16:38.6566480Z -- Installing: /Users/runner/work/_temp/static-deps/include/ares_version.h
+2026-06-13T18:16:38.6567470Z -- Installing: /Users/runner/work/_temp/static-deps/include/ares_build.h
+2026-06-13T18:16:38.6568940Z -- Installing: /Users/runner/work/_temp/static-deps/include/ares_dns.h
+2026-06-13T18:16:38.6570170Z -- Installing: /Users/runner/work/_temp/static-deps/include/ares_dns_record.h
+2026-06-13T18:16:38.6571460Z -- Installing: /Users/runner/work/_temp/static-deps/include/ares_nameser.h
+2026-06-13T18:16:38.6574840Z -- Installing: /Users/runner/work/_temp/static-deps/lib/libcares.a
+2026-06-13T18:16:38.6718400Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_cancel.3
+2026-06-13T18:16:38.6721030Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_create_query.3
+2026-06-13T18:16:38.6724870Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_destroy.3
+2026-06-13T18:16:38.6791260Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_destroy_options.3
+2026-06-13T18:16:38.6794090Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_class_fromstr.3
+2026-06-13T18:16:38.6795960Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_class_t.3
+2026-06-13T18:16:38.6796680Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_class_tostr.3
+2026-06-13T18:16:38.6797600Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_datatype_t.3
+2026-06-13T18:16:38.6799650Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_flags_t.3
+2026-06-13T18:16:38.6800660Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_mapping.3
+2026-06-13T18:16:38.6801340Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_opcode_t.3
+2026-06-13T18:16:38.6801900Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_opcode_tostr.3
+2026-06-13T18:16:38.6803370Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_opt_datatype_t.3
+2026-06-13T18:16:38.6804880Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_opt_get_datatype.3
+2026-06-13T18:16:38.6805620Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_opt_get_name.3
+2026-06-13T18:16:38.6806390Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_parse.3
+2026-06-13T18:16:38.6807980Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rcode_t.3
+2026-06-13T18:16:38.6809590Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rcode_tostr.3
+2026-06-13T18:16:38.6875680Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rec_type_fromstr.3
+2026-06-13T18:16:38.6876550Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rec_type_t.3
+2026-06-13T18:16:38.6877160Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rec_type_tostr.3
+2026-06-13T18:16:38.6878270Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record.3
+2026-06-13T18:16:38.6879190Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_create.3
+2026-06-13T18:16:38.6879730Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_destroy.3
+2026-06-13T18:16:38.6886220Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_duplicate.3
+2026-06-13T18:16:38.6887550Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_get_flags.3
+2026-06-13T18:16:38.6888840Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_get_id.3
+2026-06-13T18:16:38.6889590Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_get_opcode.3
+2026-06-13T18:16:38.6931610Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_get_rcode.3
+2026-06-13T18:16:38.6932410Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_query_add.3
+2026-06-13T18:16:38.6933170Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_query_cnt.3
+2026-06-13T18:16:38.6933790Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_query_get.3
+2026-06-13T18:16:38.6934350Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_query_set_name.3
+2026-06-13T18:16:38.6934880Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_query_set_type.3
+2026-06-13T18:16:38.6935390Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_rr_add.3
+2026-06-13T18:16:38.6935900Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_rr_cnt.3
+2026-06-13T18:16:38.6936410Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_rr_del.3
+2026-06-13T18:16:38.6936870Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_rr_get.3
+2026-06-13T18:16:38.6937350Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_rr_get_const.3
+2026-06-13T18:16:38.6938560Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_record_set_id.3
+2026-06-13T18:16:38.6939000Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr.3
+2026-06-13T18:16:38.6939450Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_add_abin.3
+2026-06-13T18:16:38.6939900Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_del_abin.3
+2026-06-13T18:16:38.6940410Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_del_opt_byid.3
+2026-06-13T18:16:38.6940880Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_abin.3
+2026-06-13T18:16:38.6941340Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_abin_cnt.3
+2026-06-13T18:16:38.6941940Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_addr.3
+2026-06-13T18:16:38.6942760Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_addr6.3
+2026-06-13T18:16:38.6943360Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_bin.3
+2026-06-13T18:16:38.6943830Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_class.3
+2026-06-13T18:16:38.6944290Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_keys.3
+2026-06-13T18:16:38.6944810Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_name.3
+2026-06-13T18:16:38.6945360Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_opt.3
+2026-06-13T18:16:38.6945820Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_opt_byid.3
+2026-06-13T18:16:38.6946300Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_opt_cnt.3
+2026-06-13T18:16:38.6946760Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_str.3
+2026-06-13T18:16:38.6947210Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_ttl.3
+2026-06-13T18:16:38.6948350Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_type.3
+2026-06-13T18:16:38.6949060Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_u16.3
+2026-06-13T18:16:38.6949570Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_u32.3
+2026-06-13T18:16:38.6950070Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_get_u8.3
+2026-06-13T18:16:38.6950610Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_key_datatype.3
+2026-06-13T18:16:38.6951090Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_key_t.3
+2026-06-13T18:16:38.6951590Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_key_to_rec_type.3
+2026-06-13T18:16:38.6952160Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_key_tostr.3
+2026-06-13T18:16:38.6952640Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_addr.3
+2026-06-13T18:16:38.6953120Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_addr6.3
+2026-06-13T18:16:38.6953890Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_bin.3
+2026-06-13T18:16:38.6954380Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_opt.3
+2026-06-13T18:16:38.6954840Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_str.3
+2026-06-13T18:16:38.6955310Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_u16.3
+2026-06-13T18:16:38.6955750Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_u32.3
+2026-06-13T18:16:38.6956210Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_rr_set_u8.3
+2026-06-13T18:16:38.6957010Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_section_t.3
+2026-06-13T18:16:38.6957470Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_section_tostr.3
+2026-06-13T18:16:38.6957940Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dns_write.3
+2026-06-13T18:16:38.6958410Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_dup.3
+2026-06-13T18:16:38.6958890Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_expand_name.3
+2026-06-13T18:16:38.6959350Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_expand_string.3
+2026-06-13T18:16:38.6959760Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_fds.3
+2026-06-13T18:16:38.6960180Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_free_data.3
+2026-06-13T18:16:38.6960610Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_free_hostent.3
+2026-06-13T18:16:38.6961040Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_free_string.3
+2026-06-13T18:16:38.6961530Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_freeaddrinfo.3
+2026-06-13T18:16:38.6962030Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_get_servers.3
+2026-06-13T18:16:38.6962500Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_get_servers_csv.3
+2026-06-13T18:16:38.6962960Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_get_servers_ports.3
+2026-06-13T18:16:38.6963430Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_getaddrinfo.3
+2026-06-13T18:16:38.6963900Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_gethostbyaddr.3
+2026-06-13T18:16:38.6964350Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_gethostbyname.3
+2026-06-13T18:16:38.6964830Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_gethostbyname_file.3
+2026-06-13T18:16:38.6965290Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_getnameinfo.3
+2026-06-13T18:16:38.6965720Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_getsock.3
+2026-06-13T18:16:38.6966360Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_inet_ntop.3
+2026-06-13T18:16:38.6966790Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_inet_pton.3
+2026-06-13T18:16:38.6967240Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_init.3
+2026-06-13T18:16:38.6967690Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_init_options.3
+2026-06-13T18:16:38.6968150Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_library_cleanup.3
+2026-06-13T18:16:38.6968600Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_library_init.3
+2026-06-13T18:16:38.6969160Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_library_init_android.3
+2026-06-13T18:16:38.6969700Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_library_initialized.3
+2026-06-13T18:16:38.6970160Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_mkquery.3
+2026-06-13T18:16:38.6970610Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_opt_param_t.3
+2026-06-13T18:16:38.6971090Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_a_reply.3
+2026-06-13T18:16:38.6971560Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_aaaa_reply.3
+2026-06-13T18:16:38.6972040Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_caa_reply.3
+2026-06-13T18:16:38.6972510Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_mx_reply.3
+2026-06-13T18:16:38.6972990Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_naptr_reply.3
+2026-06-13T18:16:38.6973480Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_ns_reply.3
+2026-06-13T18:16:38.6974120Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_ptr_reply.3
+2026-06-13T18:16:38.6974600Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_soa_reply.3
+2026-06-13T18:16:38.6975140Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_srv_reply.3
+2026-06-13T18:16:38.6975620Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_txt_reply.3
+2026-06-13T18:16:38.6976090Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_parse_uri_reply.3
+2026-06-13T18:16:38.6977290Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_process.3
+2026-06-13T18:16:38.6977790Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_process_fd.3
+2026-06-13T18:16:38.6978320Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_process_fds.3
+2026-06-13T18:16:38.6978850Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_process_pending_write.3
+2026-06-13T18:16:38.6979380Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_query.3
+2026-06-13T18:16:38.6979850Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_query_dnsrec.3
+2026-06-13T18:16:38.6980290Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_queue.3
+2026-06-13T18:16:38.6980750Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_queue_active_queries.3
+2026-06-13T18:16:38.6981260Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_queue_wait_empty.3
+2026-06-13T18:16:38.6981730Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_reinit.3
+2026-06-13T18:16:38.6982170Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_save_options.3
+2026-06-13T18:16:38.6982620Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_search.3
+2026-06-13T18:16:38.6983070Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_search_dnsrec.3
+2026-06-13T18:16:38.6983570Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_send.3
+2026-06-13T18:16:38.6984270Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_send_dnsrec.3
+2026-06-13T18:16:38.6984720Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_local_dev.3
+2026-06-13T18:16:38.6985170Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_local_ip4.3
+2026-06-13T18:16:38.6985610Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_local_ip6.3
+2026-06-13T18:16:38.6986070Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_pending_write_cb.3
+2026-06-13T18:16:38.6986580Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_server_state_callback.3
+2026-06-13T18:16:38.6987070Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_servers.3
+2026-06-13T18:16:38.6987520Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_servers_csv.3
+2026-06-13T18:16:38.6988000Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_servers_ports.3
+2026-06-13T18:16:38.6988580Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_servers_ports_csv.3
+2026-06-13T18:16:38.6989070Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_socket_callback.3
+2026-06-13T18:16:38.6989580Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_socket_configure_callback.3
+2026-06-13T18:16:38.6990100Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_socket_functions.3
+2026-06-13T18:16:38.6990590Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_socket_functions_ex.3
+2026-06-13T18:16:38.6991080Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_set_sortlist.3
+2026-06-13T18:16:38.6991710Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_strerror.3
+2026-06-13T18:16:38.6992140Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_svcb_param_t.3
+2026-06-13T18:16:38.6992580Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_threadsafety.3
+2026-06-13T18:16:38.6993020Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_timeout.3
+2026-06-13T18:16:38.6993450Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_tlsa_match_t.3
+2026-06-13T18:16:38.6993980Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_tlsa_selector_t.3
+2026-06-13T18:16:38.6994420Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_tlsa_usage_t.3
+2026-06-13T18:16:38.6994840Z -- Installing: /Users/runner/work/_temp/static-deps/share/man/man3/ares_version.3
+2026-06-13T18:16:38.7083250Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-06-13T18:16:38.7095950Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-06-13T18:16:38.7096270Z 
+2026-06-13T18:16:38.9345190Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:38.9446590Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:38.9547470Z 
+2026-06-13T18:16:38.9590160Z 100 2493k  100 2493k    0     0  10.0M      0 --:--:-- --:--:-- --:--:-- 10.0M
+2026-06-13T18:16:42.6895220Z glibtoolize: putting auxiliary files in AC_CONFIG_AUX_DIR, '.'.
+2026-06-13T18:16:42.6897010Z glibtoolize: copying file './ltmain.sh'
+2026-06-13T18:16:42.7508420Z glibtoolize: putting macros in AC_CONFIG_MACRO_DIRS, 'm4'.
+2026-06-13T18:16:42.7509270Z glibtoolize: copying file 'm4/libtool.m4'
+2026-06-13T18:16:42.8062690Z glibtoolize: copying file 'm4/ltoptions.m4'
+2026-06-13T18:16:42.9117830Z glibtoolize: copying file 'm4/ltversion.m4'
+2026-06-13T18:16:45.6517570Z configure: WARNING: unrecognized options: --disable-python-bindings, --without-cunit
+2026-06-13T18:16:45.7017790Z checking for gcc... gcc
+2026-06-13T18:16:46.4003850Z checking whether the C compiler works... yes
+2026-06-13T18:16:46.4105590Z checking for C compiler default output file name... a.out
+2026-06-13T18:16:46.4594060Z checking for suffix of executables... 
+2026-06-13T18:16:46.5302900Z checking whether we are cross compiling... no
+2026-06-13T18:16:46.5687350Z checking for suffix of object files... o
+2026-06-13T18:16:46.6026350Z checking whether the compiler supports GNU C... yes
+2026-06-13T18:16:46.6375630Z checking whether gcc accepts -g... yes
+2026-06-13T18:16:46.7538940Z checking for gcc option to enable C23 features... -std=gnu23
+2026-06-13T18:16:46.8219460Z checking whether gcc -std=gnu23 understands -c and -o together... yes
+2026-06-13T18:16:46.8577430Z checking for stdio.h... yes
+2026-06-13T18:16:46.8984110Z checking for stdlib.h... yes
+2026-06-13T18:16:46.9386000Z checking for string.h... yes
+2026-06-13T18:16:46.9848450Z checking for inttypes.h... yes
+2026-06-13T18:16:47.0293690Z checking for stdint.h... yes
+2026-06-13T18:16:47.0708820Z checking for strings.h... yes
+2026-06-13T18:16:47.1117150Z checking for sys/stat.h... yes
+2026-06-13T18:16:47.1518210Z checking for sys/types.h... yes
+2026-06-13T18:16:47.1961120Z checking for unistd.h... yes
+2026-06-13T18:16:47.2397840Z checking for wchar.h... yes
+2026-06-13T18:16:47.2848970Z checking for minix/config.h... no
+2026-06-13T18:16:47.3508680Z checking for vfork.h... no
+2026-06-13T18:16:47.4229190Z checking whether it is safe to define __EXTENSIONS__... yes
+2026-06-13T18:16:47.4592340Z checking whether _XOPEN_SOURCE should be defined... no
+2026-06-13T18:16:47.4882840Z checking build system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:16:47.4883290Z checking host system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:16:47.4897240Z checking how to print strings... printf
+2026-06-13T18:16:47.6491900Z checking for a sed that does not truncate output... /usr/bin/sed
+2026-06-13T18:16:47.6536470Z checking for grep that handles long lines and -e... /usr/bin/grep
+2026-06-13T18:16:47.6560150Z checking for egrep... /usr/bin/grep -E
+2026-06-13T18:16:47.6580600Z checking for fgrep... /usr/bin/grep -F
+2026-06-13T18:16:47.6798980Z checking for ld used by gcc -std=gnu23... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:16:47.6873990Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:16:48.2075540Z checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+2026-06-13T18:16:48.2616220Z checking the name lister (/usr/bin/nm -B) interface... BSD nm
+2026-06-13T18:16:48.2616650Z checking whether ln -s works... yes
+2026-06-13T18:16:48.2681790Z checking the maximum length of command line arguments... 786432
+2026-06-13T18:16:48.2733670Z checking how to convert aarch64-apple-darwin24.6.0 file names to aarch64-apple-darwin24.6.0 format... func_convert_file_noop
+2026-06-13T18:16:48.2734390Z checking how to convert aarch64-apple-darwin24.6.0 file names to toolchain format... func_convert_file_noop
+2026-06-13T18:16:48.2735090Z checking for /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld option to reload object files... -r
+2026-06-13T18:16:48.2741150Z checking for file... file
+2026-06-13T18:16:48.2745260Z checking for objdump... objdump
+2026-06-13T18:16:48.2747990Z checking how to recognize dependent libraries... pass_all
+2026-06-13T18:16:48.2752250Z checking for dlltool... no
+2026-06-13T18:16:48.2753140Z checking how to associate runtime and link libraries... printf %s\n
+2026-06-13T18:16:48.2757330Z checking for ranlib... ranlib
+2026-06-13T18:16:48.2761330Z checking for ar... ar
+2026-06-13T18:16:48.3208340Z checking for archiver @FILE support... no
+2026-06-13T18:16:48.3212830Z checking for strip... strip
+2026-06-13T18:16:48.3216960Z checking for gawk... no
+2026-06-13T18:16:48.3219980Z checking for mawk... no
+2026-06-13T18:16:48.3222880Z checking for nawk... no
+2026-06-13T18:16:48.3225730Z checking for awk... awk
+2026-06-13T18:16:48.6546110Z checking command to parse /usr/bin/nm -B output from gcc -std=gnu23 object... ok
+2026-06-13T18:16:48.6644430Z checking for sysroot... no
+2026-06-13T18:16:48.6732480Z checking for a working dd... /bin/dd
+2026-06-13T18:16:48.6806160Z checking how to truncate binary pipes... /bin/dd bs=4096 count=1
+2026-06-13T18:16:48.6813630Z checking for mt... no
+2026-06-13T18:16:48.6865500Z checking if : is a manifest tool... no
+2026-06-13T18:16:48.6876200Z checking for dsymutil... dsymutil
+2026-06-13T18:16:48.6879040Z checking for nmedit... nmedit
+2026-06-13T18:16:48.6881860Z checking for lipo... lipo
+2026-06-13T18:16:48.6884560Z checking for otool... otool
+2026-06-13T18:16:48.6887560Z checking for otool64... no
+2026-06-13T18:16:48.7484920Z checking for -single_module linker flag... ld: warning: -single_module is obsolete
+2026-06-13T18:16:48.7548800Z no
+2026-06-13T18:16:48.8423760Z checking for -no_fixup_chains linker flag... yes
+2026-06-13T18:16:48.9084480Z checking for -exported_symbols_list linker flag... yes
+2026-06-13T18:16:49.0414020Z checking for -force_load linker flag... yes
+2026-06-13T18:16:49.0859780Z checking for dlfcn.h... yes
+2026-06-13T18:16:49.0922540Z checking for objdir... .libs
+2026-06-13T18:16:49.2288650Z checking if gcc -std=gnu23 supports -fno-rtti -fno-exceptions... yes
+2026-06-13T18:16:49.2289160Z checking for gcc -std=gnu23 option to produce PIC... -fno-common -DPIC
+2026-06-13T18:16:49.2657030Z checking if gcc -std=gnu23 PIC flag -fno-common -DPIC works... yes
+2026-06-13T18:16:49.3018800Z checking if gcc -std=gnu23 static flag -static works... no
+2026-06-13T18:16:49.3521490Z checking if gcc -std=gnu23 supports -c -o file.o... yes
+2026-06-13T18:16:49.3521890Z checking if gcc -std=gnu23 supports -c -o file.o... (cached) yes
+2026-06-13T18:16:49.3522780Z checking whether the gcc -std=gnu23 linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:16:49.3958130Z checking dynamic linker characteristics... darwin24.6.0 dyld
+2026-06-13T18:16:49.3958780Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:16:49.7748260Z checking whether stripping libraries is possible... yes
+2026-06-13T18:16:49.7748620Z checking if libtool supports shared libraries... yes
+2026-06-13T18:16:49.7748910Z checking whether to build shared libraries... no
+2026-06-13T18:16:49.7749210Z checking whether to build static libraries... yes
+2026-06-13T18:16:49.7753240Z checking target system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:16:49.7908640Z checking for a BSD-compatible install... /usr/bin/install -c
+2026-06-13T18:16:49.7957790Z checking whether sleep supports fractional seconds... yes
+2026-06-13T18:16:50.4115290Z checking filesystem timestamp resolution... 2
+2026-06-13T18:16:50.4175230Z checking whether build environment is sane... yes
+2026-06-13T18:16:50.4285880Z checking for a race-free mkdir -p... mkdir -p
+2026-06-13T18:16:50.4445540Z checking whether make sets $(MAKE)... yes
+2026-06-13T18:16:50.4671280Z checking whether make supports the include directive... yes (GNU style)
+2026-06-13T18:16:50.4763070Z checking whether make supports nested variables... yes
+2026-06-13T18:16:50.4884490Z checking xargs -n works... yes
+2026-06-13T18:16:50.5150350Z checking how to create a pax tar archive... gnutar
+2026-06-13T18:16:50.5780470Z checking dependency style of gcc -std=gnu23... gcc3
+2026-06-13T18:16:50.5865900Z checking for gcc... (cached) gcc
+2026-06-13T18:16:50.7265960Z checking whether the compiler supports GNU C... (cached) yes
+2026-06-13T18:16:50.7266460Z checking whether gcc accepts -g... (cached) yes
+2026-06-13T18:16:50.7267980Z checking for gcc option to enable C23 features... (cached) -std=gnu23
+2026-06-13T18:16:50.7271210Z checking whether gcc -std=gnu23 understands -c and -o together... (cached) yes
+2026-06-13T18:16:50.7276300Z checking for g++... g++
+2026-06-13T18:16:51.5616720Z checking whether the compiler supports GNU C++... yes
+2026-06-13T18:16:51.5912450Z checking whether g++ accepts -g... yes
+2026-06-13T18:16:51.6953000Z checking how to run the C++ preprocessor... g++ -E
+2026-06-13T18:16:51.8857950Z checking for ld used by g++... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:16:51.8929780Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:16:51.8930790Z checking whether the g++ linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:16:51.9241520Z checking for g++ option to produce PIC... -fno-common -DPIC
+2026-06-13T18:16:51.9580110Z checking if g++ PIC flag -fno-common -DPIC works... yes
+2026-06-13T18:16:51.9932470Z checking if g++ static flag -static works... no
+2026-06-13T18:16:52.0396660Z checking if g++ supports -c -o file.o... yes
+2026-06-13T18:16:52.0400920Z checking if g++ supports -c -o file.o... (cached) yes
+2026-06-13T18:16:52.0401550Z checking whether the g++ linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:16:52.0402250Z checking dynamic linker characteristics... darwin24.6.0 dyld
+2026-06-13T18:16:52.0402590Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:16:52.0978400Z checking dependency style of g++... gcc3
+2026-06-13T18:16:52.1710970Z checking how to run the C preprocessor... gcc -std=gnu23 -E
+2026-06-13T18:16:52.2545270Z checking whether ln -s works... yes
+2026-06-13T18:16:52.2568800Z checking whether make sets $(MAKE)... (cached) yes
+2026-06-13T18:16:52.2572160Z checking for pkg-config... /opt/homebrew/bin/pkg-config
+2026-06-13T18:16:52.2739290Z checking pkg-config is at least version 0.20... yes
+2026-06-13T18:16:52.4069730Z checking for a Python interpreter with version >= 3.8... python
+2026-06-13T18:16:52.4072770Z checking for python... /Library/Frameworks/Python.framework/Versions/Current/bin/python
+2026-06-13T18:16:52.4229290Z checking for python version... 3.14
+2026-06-13T18:16:52.4401340Z checking for python platform... darwin
+2026-06-13T18:16:52.4401730Z checking for GNU default python prefix... ${prefix}
+2026-06-13T18:16:52.4402080Z checking for GNU default python exec_prefix... ${exec_prefix}
+2026-06-13T18:16:52.4804970Z checking for python script directory (pythondir)... ${PYTHON_PREFIX}/lib/python3.14/site-packages
+2026-06-13T18:16:52.5091710Z checking for python extension module directory (pyexecdir)... ${PYTHON_EXEC_PREFIX}/lib/python3.14/site-packages
+2026-06-13T18:16:52.5660020Z checking whether g++ supports C++20 features by default... no
+2026-06-13T18:16:52.7887330Z checking whether g++ supports C++20 features with -std=gnu++20... yes
+2026-06-13T18:16:53.7592220Z checking whether std::future is available... yes
+2026-06-13T18:16:54.2979210Z checking whether std::map::emplace is available... yes
+2026-06-13T18:16:54.5548680Z checking whether std::atomic<std::shared_ptr<T>> is supported... no
+2026-06-13T18:16:54.5912110Z checking whether thread_local storage class specifier is available.... yes
+2026-06-13T18:16:54.6811460Z checking for library containing dlopen... none required
+2026-06-13T18:16:54.7547970Z checking for wolfssl >= 5.7.0... no
+2026-06-13T18:16:54.7693080Z configure: Package 'wolfssl' not found
+2026-06-13T18:16:54.7714220Z checking whether to enable assertions... yes
+2026-06-13T18:16:54.8176820Z checking for arpa/inet.h... yes
+2026-06-13T18:16:54.8597480Z checking for fcntl.h... yes
+2026-06-13T18:16:54.8598440Z checking for inttypes.h... (cached) yes
+2026-06-13T18:16:54.9017640Z checking for limits.h... yes
+2026-06-13T18:16:54.9451540Z checking for netdb.h... yes
+2026-06-13T18:16:54.9868580Z checking for netinet/in.h... yes
+2026-06-13T18:16:55.0305750Z checking for netinet/ip.h... yes
+2026-06-13T18:16:55.0734060Z checking for pwd.h... yes
+2026-06-13T18:16:55.1143500Z checking for stddef.h... yes
+2026-06-13T18:16:55.1144710Z checking for stdint.h... (cached) yes
+2026-06-13T18:16:55.1145970Z checking for stdlib.h... (cached) yes
+2026-06-13T18:16:55.1147300Z checking for string.h... (cached) yes
+2026-06-13T18:16:55.1561900Z checking for sys/socket.h... yes
+2026-06-13T18:16:55.1975960Z checking for sys/time.h... yes
+2026-06-13T18:16:55.2398930Z checking for syslog.h... yes
+2026-06-13T18:16:55.2400320Z checking for unistd.h... (cached) yes
+2026-06-13T18:16:55.2875620Z checking for windows.h... no
+2026-06-13T18:16:55.3869130Z checking for size_t... yes
+2026-06-13T18:16:55.4926970Z checking for ssize_t... yes
+2026-06-13T18:16:55.5530480Z checking for uint8_t... yes
+2026-06-13T18:16:55.5949750Z checking for uint16_t... yes
+2026-06-13T18:16:55.6370860Z checking for uint32_t... yes
+2026-06-13T18:16:55.6790150Z checking for uint64_t... yes
+2026-06-13T18:16:55.7684450Z checking for int8_t... yes
+2026-06-13T18:16:55.8779910Z checking for int16_t... yes
+2026-06-13T18:16:55.9876120Z checking for int32_t... yes
+2026-06-13T18:16:56.0977100Z checking for int64_t... yes
+2026-06-13T18:16:56.2046630Z checking for off_t... yes
+2026-06-13T18:16:56.3064580Z checking for pid_t... yes
+2026-06-13T18:16:56.4097750Z checking for uid_t... yes
+2026-06-13T18:16:56.5154630Z checking for gid_t... yes
+2026-06-13T18:16:56.6269820Z checking for ptrdiff_t... yes
+2026-06-13T18:16:56.7688980Z checking whether byte ordering is bigendian... no
+2026-06-13T18:16:56.8134990Z checking for inline... inline
+2026-06-13T18:16:56.8848360Z checking for gcc -std=gnu23 option to support large files... none needed
+2026-06-13T18:16:56.9208930Z checking for struct tm.tm_gmtoff... yes
+2026-06-13T18:16:56.9597100Z checking for struct sockaddr_in.sin_len... yes
+2026-06-13T18:16:56.9978280Z checking for struct sockaddr_in6.sin6_len... yes
+2026-06-13T18:16:57.0748390Z checking for working chown... yes
+2026-06-13T18:16:57.1151220Z checking for error_at_line... no
+2026-06-13T18:16:57.1924950Z checking for fork... yes
+2026-06-13T18:16:57.2629940Z checking for vfork... yes
+2026-06-13T18:16:57.3580270Z checking for working fork... yes
+2026-06-13T18:16:57.3580810Z checking for working vfork... (cached) yes
+2026-06-13T18:16:57.4440310Z checking for gcc -std=gnu23 options to detect undeclared functions... none needed
+2026-06-13T18:16:57.4766650Z checking for gcc -std=gnu23 options to ignore future-version functions... -Werror=unguarded-availability-new
+2026-06-13T18:16:57.5242250Z checking whether strerror_r is declared... yes
+2026-06-13T18:16:57.5654420Z checking whether strerror_r returns char *... no
+2026-06-13T18:16:57.6680710Z checking for working strnlen... yes
+2026-06-13T18:16:57.7383380Z checking for _Exit... yes
+2026-06-13T18:16:57.8223500Z checking for accept4... no
+2026-06-13T18:16:57.8984910Z checking for clock_gettime... yes
+2026-06-13T18:16:57.9639890Z checking for dup2... yes
+2026-06-13T18:16:58.0277730Z checking for getcwd... yes
+2026-06-13T18:16:58.0921440Z checking for getpwnam... yes
+2026-06-13T18:16:58.1573700Z checking for localtime_r... yes
+2026-06-13T18:16:58.2258770Z checking for memchr... yes
+2026-06-13T18:16:58.3149900Z checking for memmove... yes
+2026-06-13T18:16:58.4235050Z checking for memset... yes
+2026-06-13T18:16:58.4986920Z checking for mkostemp... yes
+2026-06-13T18:16:58.5651870Z checking for pipe2... no
+2026-06-13T18:16:58.6506580Z checking for socket... yes
+2026-06-13T18:16:58.7269960Z checking for sqrt... yes
+2026-06-13T18:16:58.8135260Z checking for strchr... yes
+2026-06-13T18:16:58.9031680Z checking for strdup... yes
+2026-06-13T18:16:58.9960290Z checking for strerror... yes
+2026-06-13T18:16:59.0863410Z checking for strndup... yes
+2026-06-13T18:16:59.1815210Z checking for strstr... yes
+2026-06-13T18:16:59.2681190Z checking for strtol... yes
+2026-06-13T18:16:59.3649500Z checking for strtoul... yes
+2026-06-13T18:16:59.4471450Z checking for timegm... yes
+2026-06-13T18:16:59.5218160Z checking for timerfd_create... no
+2026-06-13T18:16:59.5769340Z checking checking for GetTickCount64... no
+2026-06-13T18:16:59.6671420Z checking whether initgroups is declared... yes
+2026-06-13T18:16:59.7076330Z checking whether CLOCK_MONOTONIC is declared... yes
+2026-06-13T18:16:59.7433130Z checking whether C compiler accepts -fvisibility=hidden... yes
+2026-06-13T18:16:59.7798500Z checking that generated files are newer than configure... done
+2026-06-13T18:16:59.7800360Z configure: creating ./config.status
+2026-06-13T18:17:00.4341250Z config.status: creating Makefile
+2026-06-13T18:17:00.4504960Z config.status: creating lib/Makefile
+2026-06-13T18:17:00.4710480Z config.status: creating lib/libnghttp2.pc
+2026-06-13T18:17:00.4902260Z config.status: creating lib/includes/Makefile
+2026-06-13T18:17:00.5099210Z config.status: creating lib/includes/nghttp2/nghttp2ver.h
+2026-06-13T18:17:00.5296810Z config.status: creating tests/Makefile
+2026-06-13T18:17:00.5516690Z config.status: creating tests/testdata/Makefile
+2026-06-13T18:17:00.5710750Z config.status: creating third-party/Makefile
+2026-06-13T18:17:00.5935800Z config.status: creating src/Makefile
+2026-06-13T18:17:00.6387050Z config.status: creating src/testdata/Makefile
+2026-06-13T18:17:00.6583430Z config.status: creating bpf/Makefile
+2026-06-13T18:17:00.6778050Z config.status: creating examples/Makefile
+2026-06-13T18:17:00.6982890Z config.status: creating integration-tests/Makefile
+2026-06-13T18:17:00.7180440Z config.status: creating integration-tests/config.go
+2026-06-13T18:17:00.7372450Z config.status: creating integration-tests/setenv
+2026-06-13T18:17:00.7611170Z config.status: creating doc/Makefile
+2026-06-13T18:17:00.7843170Z config.status: creating doc/conf.py
+2026-06-13T18:17:00.8052360Z config.status: creating doc/index.rst
+2026-06-13T18:17:00.8256860Z config.status: creating doc/package_README.rst
+2026-06-13T18:17:00.8458180Z config.status: creating doc/tutorial-client.rst
+2026-06-13T18:17:00.8656310Z config.status: creating doc/tutorial-server.rst
+2026-06-13T18:17:00.8855670Z config.status: creating doc/tutorial-hpack.rst
+2026-06-13T18:17:00.9056540Z config.status: creating doc/nghttpx-howto.rst
+2026-06-13T18:17:00.9302990Z config.status: creating doc/h2load-howto.rst
+2026-06-13T18:17:00.9603070Z config.status: creating doc/building-android-binary.rst
+2026-06-13T18:17:00.9847010Z config.status: creating doc/nghttp2.h.rst
+2026-06-13T18:17:01.0059690Z config.status: creating doc/nghttp2ver.h.rst
+2026-06-13T18:17:01.0261870Z config.status: creating doc/contribute.rst
+2026-06-13T18:17:01.0462780Z config.status: creating contrib/Makefile
+2026-06-13T18:17:01.0666870Z config.status: creating script/Makefile
+2026-06-13T18:17:01.0872080Z config.status: creating config.h
+2026-06-13T18:17:01.1074170Z config.status: executing libtool commands
+2026-06-13T18:17:01.1389710Z config.status: executing depfiles commands
+2026-06-13T18:17:02.0415990Z configure: WARNING: unrecognized options: --disable-python-bindings, --without-cunit
+2026-06-13T18:17:02.0420950Z configure: summary of build options:
+2026-06-13T18:17:02.0421360Z 
+2026-06-13T18:17:02.0421560Z     Package version: 1.64.0
+2026-06-13T18:17:02.0421910Z     Library version: 42:3:28
+2026-06-13T18:17:02.0422310Z     Install prefix:  /Users/runner/work/_temp/static-deps
+2026-06-13T18:17:02.0422750Z     System types:
+2026-06-13T18:17:02.0423060Z       Build:         aarch64-apple-darwin24.6.0
+2026-06-13T18:17:02.0423450Z       Host:          aarch64-apple-darwin24.6.0
+2026-06-13T18:17:02.0424620Z       Target:        aarch64-apple-darwin24.6.0
+2026-06-13T18:17:02.0427550Z     Compiler:
+2026-06-13T18:17:02.0431050Z       C compiler:     gcc -std=gnu23
+2026-06-13T18:17:02.0658880Z       CFLAGS:         -g -O2
+2026-06-13T18:17:02.0759970Z       LDFLAGS:        
+2026-06-13T18:17:02.0860890Z       C++ compiler:   g++ -std=gnu++20
+2026-06-13T18:17:02.0866730Z       CXXFLAGS:       -g -O2
+2026-06-13T18:17:02.0869960Z       CXXCPP:         g++ -E -std=gnu++20
+2026-06-13T18:17:02.0876590Z       C preprocessor: gcc -std=gnu23 -E
+2026-06-13T18:17:02.0897330Z       CPPFLAGS:       
+2026-06-13T18:17:02.0897690Z       WARNCFLAGS:     
+2026-06-13T18:17:02.0898180Z       WARNCXXFLAGS:   
+2026-06-13T18:17:02.0898530Z       CXX1XCXXFLAGS:  
+2026-06-13T18:17:02.0898840Z       EXTRACFLAG:     -fvisibility=hidden
+2026-06-13T18:17:02.0899240Z       BPFCFLAGS:      
+2026-06-13T18:17:02.0899850Z       EXTRABPFCFLAGS: 
+2026-06-13T18:17:02.0900190Z       LIBS:           
+2026-06-13T18:17:02.0900510Z       DEFS:           -DHAVE_CONFIG_H
+2026-06-13T18:17:02.0900920Z       EXTRA_DEFS:     -D__APPLE_USE_RFC_3542
+2026-06-13T18:17:02.0901280Z     Library:
+2026-06-13T18:17:02.0901570Z       Shared:         no
+2026-06-13T18:17:02.0914430Z       Static:         yes
+2026-06-13T18:17:02.0915170Z     Libtool:
+2026-06-13T18:17:02.0915540Z       LIBTOOL_LDFLAGS: 
+2026-06-13T18:17:02.0915860Z     Python:
+2026-06-13T18:17:02.0916700Z       Python:         /Library/Frameworks/Python.framework/Versions/Current/bin/python
+2026-06-13T18:17:02.0917740Z       PYTHON_VERSION: 3.14
+2026-06-13T18:17:02.0918370Z     Test:
+2026-06-13T18:17:02.0918950Z       Failmalloc:     yes
+2026-06-13T18:17:02.0919390Z     Libs:
+2026-06-13T18:17:02.0919540Z       wolfSSL:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0919760Z       OpenSSL:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0919970Z       Libxml2:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0920220Z       Libev:          no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0920490Z       Libc-ares:      no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0920720Z       libngtcp2:      no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0920970Z       libngtcp2_crypto_quictls: no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0921300Z       libngtcp2_crypto_boringssl: no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0921550Z       libnghttp3:     no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0921810Z       libbpf:         no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0922030Z       Libevent(SSL):  no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0922260Z       Jansson:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0922520Z       Jemalloc:       no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0923120Z       Zlib:           no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0923390Z       Systemd:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0923610Z       Libbrotlienc:   no (CFLAGS="' LIBS='')
+2026-06-13T18:17:02.0923830Z       Libbrotlidec:   no (CFLAGS="' LIBS='')
+2026-06-13T18:17:02.0924030Z     Third-party:
+2026-06-13T18:17:02.0924170Z       http-parser:    no
+2026-06-13T18:17:02.0924390Z       MRuby:          no (CFLAGS='' LIBS='')
+2026-06-13T18:17:02.0924580Z       Neverbleed:     no
+2026-06-13T18:17:02.0924770Z     Features:
+2026-06-13T18:17:02.0924910Z       Applications:   no
+2026-06-13T18:17:02.0925130Z       HPACK tools:    no
+2026-06-13T18:17:02.0925340Z       Examples:       no
+2026-06-13T18:17:02.0925550Z       Threading:      no
+2026-06-13T18:17:02.0925720Z       HTTP/3 (EXPERIMENTAL): no
+2026-06-13T18:17:02.0925890Z 
+2026-06-13T18:17:02.1501240Z /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/make  all-recursive
+2026-06-13T18:17:02.1581470Z Making all in lib
+2026-06-13T18:17:02.1676130Z Making all in includes
+2026-06-13T18:17:02.1705000Z make[3]: Nothing to be done for `all'.
+2026-06-13T18:17:02.1768940Z   CC       nghttp2_pq.lo
+2026-06-13T18:17:02.1771220Z   CC       nghttp2_map.lo
+2026-06-13T18:17:02.1772940Z   CC       nghttp2_queue.lo
+2026-06-13T18:17:02.2897770Z   CC       nghttp2_frame.lo
+2026-06-13T18:17:02.3001070Z   CC       nghttp2_buf.lo
+2026-06-13T18:17:02.3003400Z   CC       nghttp2_stream.lo
+2026-06-13T18:17:02.4516080Z   CC       nghttp2_outbound_item.lo
+2026-06-13T18:17:02.4629520Z   CC       nghttp2_session.lo
+2026-06-13T18:17:02.4716150Z   CC       nghttp2_submit.lo
+2026-06-13T18:17:02.5480980Z   CC       nghttp2_helper.lo
+2026-06-13T18:17:02.6008090Z   CC       nghttp2_alpn.lo
+2026-06-13T18:17:02.6561730Z   CC       nghttp2_hd.lo
+2026-06-13T18:17:02.6969510Z   CC       nghttp2_hd_huffman.lo
+2026-06-13T18:17:02.8165740Z   CC       nghttp2_hd_huffman_data.lo
+2026-06-13T18:17:02.9378610Z   CC       nghttp2_priority_spec.lo
+2026-06-13T18:17:02.9435130Z   CC       nghttp2_version.lo
+2026-06-13T18:17:03.0248540Z   CC       nghttp2_option.lo
+2026-06-13T18:17:03.0441480Z   CC       nghttp2_callbacks.lo
+2026-06-13T18:17:03.0465880Z   CC       nghttp2_mem.lo
+2026-06-13T18:17:03.1328590Z   CC       nghttp2_http.lo
+2026-06-13T18:17:03.1407830Z   CC       nghttp2_rcbuf.lo
+2026-06-13T18:17:03.1409120Z   CC       nghttp2_extpri.lo
+2026-06-13T18:17:03.2320680Z   CC       nghttp2_ratelim.lo
+2026-06-13T18:17:03.2331800Z   CC       nghttp2_time.lo
+2026-06-13T18:17:03.2719380Z   CC       nghttp2_debug.lo
+2026-06-13T18:17:03.3227890Z   CC       sfparse.lo
+2026-06-13T18:17:03.4416030Z   CCLD     libnghttp2.la
+2026-06-13T18:17:03.5702070Z Making all in third-party
+2026-06-13T18:17:03.5739470Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:17:03.5741120Z Making all in src
+2026-06-13T18:17:03.5843190Z Making all in testdata
+2026-06-13T18:17:03.5868480Z make[3]: Nothing to be done for `all'.
+2026-06-13T18:17:03.5911710Z make[3]: Nothing to be done for `all-am'.
+2026-06-13T18:17:03.5917060Z Making all in bpf
+2026-06-13T18:17:03.5942950Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:17:03.5944760Z Making all in examples
+2026-06-13T18:17:03.5972130Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:17:03.5973980Z Making all in tests
+2026-06-13T18:17:03.6059590Z Making all in testdata
+2026-06-13T18:17:03.6086040Z make[3]: Nothing to be done for `all'.
+2026-06-13T18:17:03.6134810Z make[3]: Nothing to be done for `all-am'.
+2026-06-13T18:17:03.6142980Z Making all in integration-tests
+2026-06-13T18:17:03.6178550Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:17:03.6182120Z Making all in doc
+2026-06-13T18:17:03.6219280Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:17:03.6222420Z Making all in contrib
+2026-06-13T18:17:03.6252020Z rm -f nghttpx-init nghttpx-init.tmp
+2026-06-13T18:17:03.6260320Z sed -e 's|@bindir[@]|/Users/runner/work/_temp/static-deps/bin|g' nghttpx.service.in > nghttpx.service
+2026-06-13T18:17:03.6261800Z sed -e 's|@bindir[@]|/Users/runner/work/_temp/static-deps/bin|g' nghttpx-upstart.conf.in > nghttpx-upstart.conf
+2026-06-13T18:17:03.6279160Z sed -e 's|@bindir[@]|/Users/runner/work/_temp/static-deps/bin|g' nghttpx-init.in > nghttpx-init.tmp
+2026-06-13T18:17:03.6334560Z chmod +x nghttpx-init.tmp
+2026-06-13T18:17:03.6355190Z mv nghttpx-init.tmp nghttpx-init
+2026-06-13T18:17:03.6378870Z Making all in script
+2026-06-13T18:17:03.6406990Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:17:03.6443060Z make[2]: Nothing to be done for `all-am'.
+2026-06-13T18:17:03.6594150Z Making install in lib
+2026-06-13T18:17:03.6784720Z Making install in includes
+2026-06-13T18:17:03.6831260Z make[3]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.6857800Z  mkdir -p '/Users/runner/work/_temp/static-deps/include'
+2026-06-13T18:17:03.6920890Z  mkdir -p '/Users/runner/work/_temp/static-deps/include/nghttp2'
+2026-06-13T18:17:03.6936360Z  /usr/bin/install -c -m 644  nghttp2/nghttp2.h nghttp2/nghttp2ver.h '/Users/runner/work/_temp/static-deps/include/nghttp2'
+2026-06-13T18:17:03.7336300Z  mkdir -p '/Users/runner/work/_temp/static-deps/lib'
+2026-06-13T18:17:03.7352610Z  /bin/sh ../libtool   --mode=install /usr/bin/install -c   libnghttp2.la '/Users/runner/work/_temp/static-deps/lib'
+2026-06-13T18:17:03.7597370Z libtool: install: /usr/bin/install -c .libs/libnghttp2.lai /Users/runner/work/_temp/static-deps/lib/libnghttp2.la
+2026-06-13T18:17:03.7639450Z libtool: install: /usr/bin/install -c .libs/libnghttp2.a /Users/runner/work/_temp/static-deps/lib/libnghttp2.a
+2026-06-13T18:17:03.7697180Z libtool: install: chmod 644 /Users/runner/work/_temp/static-deps/lib/libnghttp2.a
+2026-06-13T18:17:03.7737550Z libtool: install: ranlib /Users/runner/work/_temp/static-deps/lib/libnghttp2.a
+2026-06-13T18:17:03.8107320Z  mkdir -p '/Users/runner/work/_temp/static-deps/lib/pkgconfig'
+2026-06-13T18:17:03.8145740Z  /usr/bin/install -c -m 644 libnghttp2.pc '/Users/runner/work/_temp/static-deps/lib/pkgconfig'
+2026-06-13T18:17:03.8178530Z Making install in third-party
+2026-06-13T18:17:03.8235610Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8236200Z make[2]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8239000Z Making install in src
+2026-06-13T18:17:03.8336330Z Making install in testdata
+2026-06-13T18:17:03.8381160Z make[3]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8381520Z make[3]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8490760Z  mkdir -p '/Users/runner/work/_temp/static-deps/bin'
+2026-06-13T18:17:03.8547320Z make[3]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8553730Z Making install in bpf
+2026-06-13T18:17:03.8599920Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8653570Z Making install in examples
+2026-06-13T18:17:03.8702890Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8703560Z make[2]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8705880Z Making install in tests
+2026-06-13T18:17:03.8792090Z Making install in testdata
+2026-06-13T18:17:03.8839660Z make[3]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8839980Z make[3]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8906640Z make[3]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8907010Z make[3]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8913290Z Making install in integration-tests
+2026-06-13T18:17:03.8968470Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.8969070Z make[2]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.8972560Z Making install in doc
+2026-06-13T18:17:03.9035260Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.9071110Z  mkdir -p '/Users/runner/work/_temp/static-deps/share/man/man1'
+2026-06-13T18:17:03.9148860Z  /usr/bin/install -c -m 644 nghttp.1 nghttpd.1 nghttpx.1 h2load.1 '/Users/runner/work/_temp/static-deps/share/man/man1'
+2026-06-13T18:17:03.9189580Z Making install in contrib
+2026-06-13T18:17:03.9248700Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.9249380Z make[2]: Nothing to be done for `install-data-am'.
+2026-06-13T18:17:03.9253220Z Making install in script
+2026-06-13T18:17:03.9308330Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.9339790Z  mkdir -p '/Users/runner/work/_temp/static-deps/share/nghttp2'
+2026-06-13T18:17:03.9389420Z  /usr/bin/install -c fetch-ocsp-response '/Users/runner/work/_temp/static-deps/share/nghttp2'
+2026-06-13T18:17:03.9475240Z make[2]: Nothing to be done for `install-exec-am'.
+2026-06-13T18:17:03.9510260Z  mkdir -p '/Users/runner/work/_temp/static-deps/share/doc/nghttp2'
+2026-06-13T18:17:03.9560830Z  /usr/bin/install -c -m 644 README.rst '/Users/runner/work/_temp/static-deps/share/doc/nghttp2'

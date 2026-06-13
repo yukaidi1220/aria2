@@ -1,0 +1,56 @@
+﻿2026-06-13T18:16:07.1068860Z ##[group]Run brew install \
+2026-06-13T18:16:07.1069530Z [36;1mbrew install \[0m
+2026-06-13T18:16:07.1069970Z [36;1m  autoconf \[0m
+2026-06-13T18:16:07.1070420Z [36;1m  automake \[0m
+2026-06-13T18:16:07.1070900Z [36;1m  cmake \[0m
+2026-06-13T18:16:07.1071320Z [36;1m  gettext \[0m
+2026-06-13T18:16:07.1071740Z [36;1m  libtool \[0m
+2026-06-13T18:16:07.1072230Z [36;1m  pkg-config[0m
+2026-06-13T18:16:07.1139310Z shell: /bin/bash -e {0}
+2026-06-13T18:16:07.1139890Z ##[endgroup]
+2026-06-13T18:16:11.3715510Z [33mWarning:[0m autoconf 2.73 is already installed and up-to-date.
+2026-06-13T18:16:11.3748970Z To reinstall 2.73, run:
+2026-06-13T18:16:11.3781640Z   brew reinstall autoconf
+2026-06-13T18:16:11.3896170Z [33mWarning:[0m cmake 4.3.3 is already installed and up-to-date.
+2026-06-13T18:16:11.3943170Z To reinstall 4.3.3, run:
+2026-06-13T18:16:11.4013360Z   brew reinstall cmake
+2026-06-13T18:16:11.4038800Z [33mWarning:[0m gettext 1.0 is already installed and up-to-date.
+2026-06-13T18:16:11.4061140Z To reinstall 1.0, run:
+2026-06-13T18:16:11.4087580Z   brew reinstall gettext
+2026-06-13T18:16:11.4130620Z [33mWarning:[0m libtool 2.5.4 is already installed and up-to-date.
+2026-06-13T18:16:11.4156240Z To reinstall 2.5.4, run:
+2026-06-13T18:16:11.4166630Z   brew reinstall libtool
+2026-06-13T18:16:11.4194700Z [33mWarning:[0m pkgconf 2.5.1 is already installed and up-to-date.
+2026-06-13T18:16:11.4211030Z To reinstall 2.5.1, run:
+2026-06-13T18:16:11.4240130Z   brew reinstall pkgconf
+2026-06-13T18:16:11.6251380Z ##[warning]The following taps are not trusted:
+  aws/tap
+  azure/bicep
+
+Homebrew will ignore formulae, casks and commands from these taps when `HOMEBREW_REQUIRE_TAP_TRUST` is set.
+This will become the default in Homebrew 6.0.0 or 5.2.0, whichever comes first.
+Enable trust checks now with:
+  export HOMEBREW_REQUIRE_TAP_TRUST=1
+Trust specific formulae, casks or commands with:
+  brew trust --formula <user>/<tap>/<formula>
+  brew trust --cask <user>/<tap>/<cask>
+  brew trust --command <user>/<tap>/<command>
+or trust installed formulae from these taps with:
+  brew trust --formula azure/bicep/bicep
+You can trust all formulae, casks and commands from these taps with:
+  brew trust aws/tap azure/bicep
+Prefer trusting only the specific formulae, casks or commands you need.
+Untap them with:
+  brew untap aws/tap azure/bicep
+To keep allowing them by default during the transition:
+  export HOMEBREW_NO_REQUIRE_TAP_TRUST=1
+This is not recommended and will be removed in a later release.
+
+2026-06-13T18:16:14.1692870Z Inspect the formula dependency plan before installing with `brew install --ask`.
+2026-06-13T18:16:14.1722370Z Enable ask mode by setting `HOMEBREW_ASK=1`.
+2026-06-13T18:16:14.1763680Z Hide these hints with `HOMEBREW_NO_ENV_HINTS=1` (see `man brew`).
+2026-06-13T18:16:14.1785990Z [32m==>[0m [1mFetching downloads for: [32mautomake[39m[0m
+2026-06-13T18:16:14.8379380Z ✔︎ Bottle Manifest automake (1.18.1)
+2026-06-13T18:16:15.7718290Z ✔︎ Bottle automake (1.18.1)
+2026-06-13T18:16:15.8942200Z [34m==>[0m [1mPouring automake--1.18.1.sequoia.bottle.tar.gz[0m
+2026-06-13T18:16:16.2772070Z 🍺  /usr/local/Cellar/automake/1.18.1: 134 files, 3.6MB

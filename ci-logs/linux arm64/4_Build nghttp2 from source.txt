@@ -1,0 +1,573 @@
+﻿2026-06-13T18:16:31.1164778Z ##[group]Run set -euo pipefail
+2026-06-13T18:16:31.1165238Z [36;1mset -euo pipefail[0m
+2026-06-13T18:16:31.1165556Z [36;1mprefix="$RUNNER_TEMP/static-deps"[0m
+2026-06-13T18:16:31.1165903Z [36;1mmkdir -p "$prefix"[0m
+2026-06-13T18:16:31.1167337Z [36;1mcurl -L -o nghttp2.tar.gz https://github.com/nghttp2/nghttp2/releases/download/v1.64.0/nghttp2-1.64.0.tar.gz[0m
+2026-06-13T18:16:31.1167987Z [36;1mtar xf nghttp2.tar.gz[0m
+2026-06-13T18:16:31.1168274Z [36;1mcd nghttp2-1.64.0[0m
+2026-06-13T18:16:31.1168522Z [36;1mautoreconf -i[0m
+2026-06-13T18:16:31.1168795Z [36;1m./configure \[0m
+2026-06-13T18:16:31.1169053Z [36;1m  --prefix="$prefix" \[0m
+2026-06-13T18:16:31.1169335Z [36;1m  --enable-lib-only \[0m
+2026-06-13T18:16:31.1169634Z [36;1m  --enable-static \[0m
+2026-06-13T18:16:31.1169896Z [36;1m  --disable-shared \[0m
+2026-06-13T18:16:31.1170168Z [36;1m  --disable-threads \[0m
+2026-06-13T18:16:31.1170454Z [36;1m  --disable-examples \[0m
+2026-06-13T18:16:31.1170731Z [36;1m  --disable-python-bindings \[0m
+2026-06-13T18:16:31.1171141Z [36;1m  --without-libxml2 \[0m
+2026-06-13T18:16:31.1171402Z [36;1m  --without-openssl \[0m
+2026-06-13T18:16:31.1171705Z [36;1m  --without-jemalloc \[0m
+2026-06-13T18:16:31.1171971Z [36;1m  --without-zlib \[0m
+2026-06-13T18:16:31.1172213Z [36;1m  --without-cunit[0m
+2026-06-13T18:16:31.1172521Z [36;1mmake -j"$(nproc)"[0m
+2026-06-13T18:16:31.1172771Z [36;1mmake install[0m
+2026-06-13T18:16:31.1173024Z [36;1mcd ..[0m
+2026-06-13T18:16:31.1173328Z [36;1mecho "PKG_CONFIG_PATH=$prefix/lib/pkgconfig" >> "$GITHUB_ENV"[0m
+2026-06-13T18:16:31.1205358Z shell: /usr/bin/bash -e {0}
+2026-06-13T18:16:31.1205695Z ##[endgroup]
+2026-06-13T18:16:31.1302263Z   % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+2026-06-13T18:16:31.1302779Z                                  Dload  Upload   Total   Spent    Left  Speed
+2026-06-13T18:16:31.1303161Z 
+2026-06-13T18:16:31.3991996Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:31.3992812Z   0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+2026-06-13T18:16:31.7237228Z 
+2026-06-13T18:16:31.7238140Z 100 2493k  100 2493k    0     0  4200k      0 --:--:-- --:--:-- --:--:-- 4200k
+2026-06-13T18:16:34.4377510Z libtoolize:   error: './ltmain.sh' is newer: use '--force' to overwrite
+2026-06-13T18:16:34.4542038Z libtoolize:   error: 'm4/libtool.m4' is newer: use '--force' to overwrite
+2026-06-13T18:16:34.5186599Z libtoolize:   error: 'm4/ltversion.m4' is newer: use '--force' to overwrite
+2026-06-13T18:16:36.2847896Z configure: WARNING: unrecognized options: --disable-python-bindings, --without-cunit
+2026-06-13T18:16:36.3167920Z checking for gcc... gcc
+2026-06-13T18:16:36.9741070Z checking whether the C compiler works... yes
+2026-06-13T18:16:36.9741653Z checking for C compiler default output file name... a.out
+2026-06-13T18:16:36.9986432Z checking for suffix of executables... 
+2026-06-13T18:16:37.1315965Z checking whether we are cross compiling... no
+2026-06-13T18:16:37.1466359Z checking for suffix of object files... o
+2026-06-13T18:16:37.1599189Z checking whether the compiler supports GNU C... yes
+2026-06-13T18:16:37.1735619Z checking whether gcc accepts -g... yes
+2026-06-13T18:16:37.2765669Z checking for gcc option to enable C11 features... none needed
+2026-06-13T18:16:37.3012021Z checking whether gcc understands -c and -o together... yes
+2026-06-13T18:16:37.3214508Z checking for stdio.h... yes
+2026-06-13T18:16:37.3990245Z checking for stdlib.h... yes
+2026-06-13T18:16:37.4206491Z checking for string.h... yes
+2026-06-13T18:16:37.4450126Z checking for inttypes.h... yes
+2026-06-13T18:16:37.4652560Z checking for stdint.h... yes
+2026-06-13T18:16:37.4854145Z checking for strings.h... yes
+2026-06-13T18:16:37.5100349Z checking for sys/stat.h... yes
+2026-06-13T18:16:37.5304078Z checking for sys/types.h... yes
+2026-06-13T18:16:37.5632003Z checking for unistd.h... yes
+2026-06-13T18:16:37.5938058Z checking for wchar.h... yes
+2026-06-13T18:16:37.6200882Z checking for minix/config.h... no
+2026-06-13T18:16:37.6465845Z checking for vfork.h... no
+2026-06-13T18:16:37.6741909Z checking whether it is safe to define __EXTENSIONS__... yes
+2026-06-13T18:16:37.6932008Z checking whether _XOPEN_SOURCE should be defined... no
+2026-06-13T18:16:37.7298620Z checking build system type... aarch64-unknown-linux-gnu
+2026-06-13T18:16:37.7299155Z checking host system type... aarch64-unknown-linux-gnu
+2026-06-13T18:16:37.7669727Z checking how to print strings... printf
+2026-06-13T18:16:37.7702370Z checking for a sed that does not truncate output... /usr/bin/sed
+2026-06-13T18:16:37.7726661Z checking for grep that handles long lines and -e... /usr/bin/grep
+2026-06-13T18:16:37.7739930Z checking for egrep... /usr/bin/grep -E
+2026-06-13T18:16:37.7752588Z checking for fgrep... /usr/bin/grep -F
+2026-06-13T18:16:37.7789513Z checking for ld used by gcc... /usr/bin/ld
+2026-06-13T18:16:37.7806487Z checking if the linker (/usr/bin/ld) is GNU ld... yes
+2026-06-13T18:16:37.7917466Z checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+2026-06-13T18:16:41.6820571Z checking the name lister (/usr/bin/nm -B) interface... BSD nm
+2026-06-13T18:16:41.6821109Z checking whether ln -s works... yes
+2026-06-13T18:16:41.6861012Z checking the maximum length of command line arguments... 3145728
+2026-06-13T18:16:41.6886919Z checking how to convert aarch64-unknown-linux-gnu file names to aarch64-unknown-linux-gnu format... func_convert_file_noop
+2026-06-13T18:16:41.6887861Z checking how to convert aarch64-unknown-linux-gnu file names to toolchain format... func_convert_file_noop
+2026-06-13T18:16:41.6888473Z checking for /usr/bin/ld option to reload object files... -r
+2026-06-13T18:16:41.6890294Z checking for file... file
+2026-06-13T18:16:41.6893111Z checking for objdump... objdump
+2026-06-13T18:16:41.6895002Z checking how to recognize dependent libraries... pass_all
+2026-06-13T18:16:41.6898448Z checking for dlltool... no
+2026-06-13T18:16:41.6899020Z checking how to associate runtime and link libraries... printf %s\n
+2026-06-13T18:16:41.6901702Z checking for ar... ar
+2026-06-13T18:16:41.7364227Z checking for archiver @FILE support... @
+2026-06-13T18:16:41.7365922Z checking for strip... strip
+2026-06-13T18:16:41.7369290Z checking for ranlib... ranlib
+2026-06-13T18:16:41.7371245Z checking for gawk... gawk
+2026-06-13T18:16:41.8153060Z checking command to parse /usr/bin/nm -B output from gcc object... ok
+2026-06-13T18:16:41.8166833Z checking for sysroot... no
+2026-06-13T18:16:41.8206983Z checking for a working dd... /usr/bin/dd
+2026-06-13T18:16:41.8237675Z checking how to truncate binary pipes... /usr/bin/dd bs=4096 count=1
+2026-06-13T18:16:41.8242829Z checking for mt... mt
+2026-06-13T18:16:41.8363463Z checking if mt is a manifest tool... no
+2026-06-13T18:16:41.9072031Z checking for dlfcn.h... yes
+2026-06-13T18:16:41.9100433Z checking for objdir... .libs
+2026-06-13T18:16:41.9695067Z checking if gcc supports -fno-rtti -fno-exceptions... no
+2026-06-13T18:16:41.9695627Z checking for gcc option to produce PIC... -fPIC -DPIC
+2026-06-13T18:16:41.9851559Z checking if gcc PIC flag -fPIC -DPIC works... yes
+2026-06-13T18:16:42.2799873Z checking if gcc static flag -static works... yes
+2026-06-13T18:16:42.3053296Z checking if gcc supports -c -o file.o... yes
+2026-06-13T18:16:42.3053781Z checking if gcc supports -c -o file.o... (cached) yes
+2026-06-13T18:16:42.3164377Z checking whether the gcc linker (/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:16:42.3709318Z checking dynamic linker characteristics... GNU/Linux ld.so
+2026-06-13T18:16:42.3709890Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:16:42.3842537Z checking whether stripping libraries is possible... yes
+2026-06-13T18:16:42.3842982Z checking if libtool supports shared libraries... yes
+2026-06-13T18:16:42.3843343Z checking whether to build shared libraries... no
+2026-06-13T18:16:42.3844522Z checking whether to build static libraries... yes
+2026-06-13T18:16:42.3849160Z checking target system type... aarch64-unknown-linux-gnu
+2026-06-13T18:16:42.3962758Z checking for a BSD-compatible install... /usr/bin/install -c
+2026-06-13T18:16:42.3989341Z checking whether build environment is sane... yes
+2026-06-13T18:16:42.4060469Z checking for a race-free mkdir -p... /usr/bin/mkdir -p
+2026-06-13T18:16:42.4283523Z checking whether make sets $(MAKE)... yes
+2026-06-13T18:16:42.4376860Z checking whether make supports the include directive... yes (GNU style)
+2026-06-13T18:16:42.4397707Z checking whether make supports nested variables... yes
+2026-06-13T18:16:42.4532020Z checking how to create a pax tar archive... gnutar
+2026-06-13T18:16:42.4781500Z checking dependency style of gcc... gcc3
+2026-06-13T18:16:42.4803415Z checking whether make supports nested variables... (cached) yes
+2026-06-13T18:16:42.4875638Z checking for gcc... (cached) gcc
+2026-06-13T18:16:42.5066522Z checking whether the compiler supports GNU C... (cached) yes
+2026-06-13T18:16:42.5067021Z checking whether gcc accepts -g... (cached) yes
+2026-06-13T18:16:42.5075838Z checking for gcc option to enable C11 features... (cached) none needed
+2026-06-13T18:16:42.5076595Z checking whether gcc understands -c and -o together... (cached) yes
+2026-06-13T18:16:42.5077050Z checking for g++... g++
+2026-06-13T18:16:43.0169667Z checking whether the compiler supports GNU C++... yes
+2026-06-13T18:16:43.0504377Z checking whether g++ accepts -g... yes
+2026-06-13T18:16:43.2966625Z checking for g++ option to enable C++11 features... none needed
+2026-06-13T18:16:43.3335662Z checking how to run the C++ preprocessor... g++ -E
+2026-06-13T18:16:43.4074911Z checking for ld used by g++... /usr/bin/ld
+2026-06-13T18:16:43.4091798Z checking if the linker (/usr/bin/ld) is GNU ld... yes
+2026-06-13T18:16:43.4145805Z checking whether the g++ linker (/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:16:43.4701096Z checking for g++ option to produce PIC... -fPIC -DPIC
+2026-06-13T18:16:43.4867323Z checking if g++ PIC flag -fPIC -DPIC works... yes
+2026-06-13T18:16:43.5580319Z checking if g++ static flag -static works... yes
+2026-06-13T18:16:43.5811702Z checking if g++ supports -c -o file.o... yes
+2026-06-13T18:16:43.5812216Z checking if g++ supports -c -o file.o... (cached) yes
+2026-06-13T18:16:43.5812666Z checking whether the g++ linker (/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:16:43.5848748Z checking dynamic linker characteristics... (cached) GNU/Linux ld.so
+2026-06-13T18:16:43.5849467Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:16:43.6109488Z checking dependency style of g++... gcc3
+2026-06-13T18:16:43.6332926Z checking how to run the C preprocessor... gcc -E
+2026-06-13T18:16:43.6550189Z checking whether ln -s works... yes
+2026-06-13T18:16:43.6570854Z checking whether make sets $(MAKE)... (cached) yes
+2026-06-13T18:16:43.6574364Z checking for pkg-config... /usr/bin/pkg-config
+2026-06-13T18:16:43.6625282Z checking pkg-config is at least version 0.20... yes
+2026-06-13T18:16:43.6763314Z checking for a Python interpreter with version >= 3.8... python
+2026-06-13T18:16:43.6764960Z checking for python... /usr/bin/python
+2026-06-13T18:16:43.6892765Z checking for python version... 3.10
+2026-06-13T18:16:43.7017659Z checking for python platform... linux
+2026-06-13T18:16:43.7018069Z checking for GNU default python prefix... ${prefix}
+2026-06-13T18:16:43.7018465Z checking for GNU default python exec_prefix... ${exec_prefix}
+2026-06-13T18:16:43.7261947Z checking for python script directory (pythondir)... ${PYTHON_PREFIX}/lib/python3.10/site-packages
+2026-06-13T18:16:43.7498507Z checking for python extension module directory (pyexecdir)... ${PYTHON_EXEC_PREFIX}/lib/python3.10/site-packages
+2026-06-13T18:16:43.8054073Z checking whether g++ supports C++20 features by default... no
+2026-06-13T18:16:43.9098646Z checking whether g++ supports C++20 features with -std=gnu++20... yes
+2026-06-13T18:16:45.0447388Z checking whether std::future is available... yes
+2026-06-13T18:16:45.2271486Z checking whether std::map::emplace is available... yes
+2026-06-13T18:16:45.6195314Z checking whether std::atomic<std::shared_ptr<T>> is supported... no
+2026-06-13T18:16:45.6354824Z checking whether thread_local storage class specifier is available.... yes
+2026-06-13T18:16:45.6652630Z checking for library containing dlopen... none required
+2026-06-13T18:16:45.6689527Z checking for wolfssl >= 5.7.0... no
+2026-06-13T18:16:45.6714254Z configure: No package 'wolfssl' found
+2026-06-13T18:16:45.6730731Z checking whether to enable assertions... yes
+2026-06-13T18:16:45.7421908Z checking for arpa/inet.h... yes
+2026-06-13T18:16:45.7708118Z checking for fcntl.h... yes
+2026-06-13T18:16:45.7709181Z checking for inttypes.h... (cached) yes
+2026-06-13T18:16:45.7977176Z checking for limits.h... yes
+2026-06-13T18:16:45.8365041Z checking for netdb.h... yes
+2026-06-13T18:16:45.8649564Z checking for netinet/in.h... yes
+2026-06-13T18:16:45.8978100Z checking for netinet/ip.h... yes
+2026-06-13T18:16:45.9243597Z checking for pwd.h... yes
+2026-06-13T18:16:45.9506675Z checking for stddef.h... yes
+2026-06-13T18:16:45.9507915Z checking for stdint.h... (cached) yes
+2026-06-13T18:16:45.9508393Z checking for stdlib.h... (cached) yes
+2026-06-13T18:16:45.9509275Z checking for string.h... (cached) yes
+2026-06-13T18:16:45.9783245Z checking for sys/socket.h... yes
+2026-06-13T18:16:46.0043087Z checking for sys/time.h... yes
+2026-06-13T18:16:46.0315239Z checking for syslog.h... yes
+2026-06-13T18:16:46.0316125Z checking for unistd.h... (cached) yes
+2026-06-13T18:16:46.0603690Z checking for windows.h... no
+2026-06-13T18:16:46.1181113Z checking for size_t... yes
+2026-06-13T18:16:46.1752219Z checking for ssize_t... yes
+2026-06-13T18:16:46.2042607Z checking for uint8_t... yes
+2026-06-13T18:16:46.2330579Z checking for uint16_t... yes
+2026-06-13T18:16:46.2622411Z checking for uint32_t... yes
+2026-06-13T18:16:46.2911149Z checking for uint64_t... yes
+2026-06-13T18:16:46.3487895Z checking for int8_t... yes
+2026-06-13T18:16:46.4072052Z checking for int16_t... yes
+2026-06-13T18:16:46.4651650Z checking for int32_t... yes
+2026-06-13T18:16:46.5228698Z checking for int64_t... yes
+2026-06-13T18:16:46.5800202Z checking for off_t... yes
+2026-06-13T18:16:46.6372793Z checking for pid_t... yes
+2026-06-13T18:16:46.6475605Z checking for uid_t in sys/types.h... yes
+2026-06-13T18:16:46.7038416Z checking for ptrdiff_t... yes
+2026-06-13T18:16:46.7919937Z checking whether byte ordering is bigendian... no
+2026-06-13T18:16:46.8042325Z checking for inline... inline
+2026-06-13T18:16:46.8043801Z checking for special C compiler options needed for large files... no
+2026-06-13T18:16:46.8203218Z checking for _FILE_OFFSET_BITS value needed for large files... no
+2026-06-13T18:16:46.8378014Z checking for struct tm.tm_gmtoff... yes
+2026-06-13T18:16:46.8862946Z checking for struct sockaddr_in.sin_len... no
+2026-06-13T18:16:46.9238122Z checking for struct sockaddr_in6.sin6_len... no
+2026-06-13T18:16:46.9703511Z checking for working chown... yes
+2026-06-13T18:16:47.0002357Z checking for error_at_line... yes
+2026-06-13T18:16:47.0329187Z checking for fork... yes
+2026-06-13T18:16:47.0620087Z checking for vfork... yes
+2026-06-13T18:16:47.1055650Z checking for working fork... yes
+2026-06-13T18:16:47.1056508Z checking for working vfork... (cached) yes
+2026-06-13T18:16:47.1401844Z checking for gcc options needed to detect all undeclared functions... none needed
+2026-06-13T18:16:47.1727183Z checking whether strerror_r is declared... yes
+2026-06-13T18:16:47.1920119Z checking whether strerror_r returns char *... yes
+2026-06-13T18:16:47.2355123Z checking for working strnlen... yes
+2026-06-13T18:16:47.2673870Z checking for _Exit... yes
+2026-06-13T18:16:47.2966594Z checking for accept4... yes
+2026-06-13T18:16:47.3260801Z checking for clock_gettime... yes
+2026-06-13T18:16:47.3554626Z checking for dup2... yes
+2026-06-13T18:16:47.3847422Z checking for getcwd... yes
+2026-06-13T18:16:47.4137027Z checking for getpwnam... yes
+2026-06-13T18:16:47.4431114Z checking for localtime_r... yes
+2026-06-13T18:16:47.4754118Z checking for memchr... yes
+2026-06-13T18:16:47.5083294Z checking for memmove... yes
+2026-06-13T18:16:47.5406553Z checking for memset... yes
+2026-06-13T18:16:47.5701529Z checking for mkostemp... yes
+2026-06-13T18:16:47.5998814Z checking for pipe2... yes
+2026-06-13T18:16:47.6294751Z checking for socket... yes
+2026-06-13T18:16:47.6623422Z checking for sqrt... no
+2026-06-13T18:16:47.6944499Z checking for strchr... yes
+2026-06-13T18:16:47.7259448Z checking for strdup... yes
+2026-06-13T18:16:47.7551282Z checking for strerror... yes
+2026-06-13T18:16:47.7865746Z checking for strndup... yes
+2026-06-13T18:16:47.8178933Z checking for strstr... yes
+2026-06-13T18:16:47.8472024Z checking for strtol... yes
+2026-06-13T18:16:47.8758476Z checking for strtoul... yes
+2026-06-13T18:16:47.9049248Z checking for timegm... yes
+2026-06-13T18:16:47.9334018Z checking for timerfd_create... yes
+2026-06-13T18:16:47.9493227Z checking checking for GetTickCount64... no
+2026-06-13T18:16:47.9769424Z checking whether initgroups is declared... yes
+2026-06-13T18:16:47.9981608Z checking whether CLOCK_MONOTONIC is declared... yes
+2026-06-13T18:16:48.0152061Z checking whether C compiler accepts -fvisibility=hidden... yes
+2026-06-13T18:16:48.0375062Z checking that generated files are newer than configure... done
+2026-06-13T18:16:48.0375584Z configure: creating ./config.status
+2026-06-13T18:16:48.5846377Z config.status: creating Makefile
+2026-06-13T18:16:48.5936929Z config.status: creating lib/Makefile
+2026-06-13T18:16:48.6058828Z config.status: creating lib/libnghttp2.pc
+2026-06-13T18:16:48.6181770Z config.status: creating lib/includes/Makefile
+2026-06-13T18:16:48.6302558Z config.status: creating lib/includes/nghttp2/nghttp2ver.h
+2026-06-13T18:16:48.6427644Z config.status: creating tests/Makefile
+2026-06-13T18:16:48.6552901Z config.status: creating tests/testdata/Makefile
+2026-06-13T18:16:48.6672459Z config.status: creating third-party/Makefile
+2026-06-13T18:16:48.6797767Z config.status: creating src/Makefile
+2026-06-13T18:16:48.6948930Z config.status: creating src/testdata/Makefile
+2026-06-13T18:16:48.7068447Z config.status: creating bpf/Makefile
+2026-06-13T18:16:48.7194216Z config.status: creating examples/Makefile
+2026-06-13T18:16:48.7319209Z config.status: creating integration-tests/Makefile
+2026-06-13T18:16:48.7442826Z config.status: creating integration-tests/config.go
+2026-06-13T18:16:48.7568037Z config.status: creating integration-tests/setenv
+2026-06-13T18:16:48.7698050Z config.status: creating doc/Makefile
+2026-06-13T18:16:48.7827609Z config.status: creating doc/conf.py
+2026-06-13T18:16:48.7957030Z config.status: creating doc/index.rst
+2026-06-13T18:16:48.8084256Z config.status: creating doc/package_README.rst
+2026-06-13T18:16:48.8211815Z config.status: creating doc/tutorial-client.rst
+2026-06-13T18:16:48.8335508Z config.status: creating doc/tutorial-server.rst
+2026-06-13T18:16:48.8461019Z config.status: creating doc/tutorial-hpack.rst
+2026-06-13T18:16:48.8583981Z config.status: creating doc/nghttpx-howto.rst
+2026-06-13T18:16:48.8706387Z config.status: creating doc/h2load-howto.rst
+2026-06-13T18:16:48.8829426Z config.status: creating doc/building-android-binary.rst
+2026-06-13T18:16:48.8951924Z config.status: creating doc/nghttp2.h.rst
+2026-06-13T18:16:48.9074971Z config.status: creating doc/nghttp2ver.h.rst
+2026-06-13T18:16:48.9200386Z config.status: creating doc/contribute.rst
+2026-06-13T18:16:48.9325581Z config.status: creating contrib/Makefile
+2026-06-13T18:16:48.9445368Z config.status: creating script/Makefile
+2026-06-13T18:16:48.9564930Z config.status: creating config.h
+2026-06-13T18:16:48.9643835Z config.status: executing libtool commands
+2026-06-13T18:16:48.9722799Z config.status: executing depfiles commands
+2026-06-13T18:16:49.4495550Z configure: WARNING: unrecognized options: --disable-python-bindings, --without-cunit
+2026-06-13T18:16:49.4498167Z configure: summary of build options:
+2026-06-13T18:16:49.4498385Z 
+2026-06-13T18:16:49.4498526Z     Package version: 1.64.0
+2026-06-13T18:16:49.4498795Z     Library version: 42:3:28
+2026-06-13T18:16:49.4499160Z     Install prefix:  /home/runner/work/_temp/static-deps
+2026-06-13T18:16:49.4499514Z     System types:
+2026-06-13T18:16:49.4499992Z       Build:         aarch64-unknown-linux-gnu
+2026-06-13T18:16:49.4500337Z       Host:          aarch64-unknown-linux-gnu
+2026-06-13T18:16:49.4500651Z       Target:        aarch64-unknown-linux-gnu
+2026-06-13T18:16:49.4501035Z     Compiler:
+2026-06-13T18:16:49.4501244Z       C compiler:     gcc
+2026-06-13T18:16:49.4501519Z       CFLAGS:         -g -O2
+2026-06-13T18:16:49.4501767Z       LDFLAGS:        
+2026-06-13T18:16:49.4502003Z       C++ compiler:   g++ -std=gnu++20
+2026-06-13T18:16:49.4502315Z       CXXFLAGS:       -g -O2
+2026-06-13T18:16:49.4502571Z       CXXCPP:         g++ -E -std=gnu++20
+2026-06-13T18:16:49.4502869Z       C preprocessor: gcc -E
+2026-06-13T18:16:49.4503162Z       CPPFLAGS:       
+2026-06-13T18:16:49.4503386Z       WARNCFLAGS:     
+2026-06-13T18:16:49.4503645Z       WARNCXXFLAGS:   
+2026-06-13T18:16:49.4503882Z       CXX1XCXXFLAGS:  
+2026-06-13T18:16:49.4504137Z       EXTRACFLAG:     -fvisibility=hidden
+2026-06-13T18:16:49.4504471Z       BPFCFLAGS:      
+2026-06-13T18:16:49.4504739Z       EXTRABPFCFLAGS: 
+2026-06-13T18:16:49.4504976Z       LIBS:           
+2026-06-13T18:16:49.4505212Z       DEFS:           -DHAVE_CONFIG_H
+2026-06-13T18:16:49.4505486Z       EXTRA_DEFS:     
+2026-06-13T18:16:49.4506025Z     Library:
+2026-06-13T18:16:49.4506597Z       Shared:         no
+2026-06-13T18:16:49.4506851Z       Static:         yes
+2026-06-13T18:16:49.4507124Z     Libtool:
+2026-06-13T18:16:49.4507339Z       LIBTOOL_LDFLAGS: 
+2026-06-13T18:16:49.4507574Z     Python:
+2026-06-13T18:16:49.4507789Z       Python:         /usr/bin/python
+2026-06-13T18:16:49.4508072Z       PYTHON_VERSION: 3.10
+2026-06-13T18:16:49.4508333Z     Test:
+2026-06-13T18:16:49.4508545Z       Failmalloc:     yes
+2026-06-13T18:16:49.4508802Z     Libs:
+2026-06-13T18:16:49.4509041Z       wolfSSL:        no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4509338Z       OpenSSL:        no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4509665Z       Libxml2:        no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4509971Z       Libev:          no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4510267Z       Libc-ares:      no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4510610Z       libngtcp2:      no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4510938Z       libngtcp2_crypto_quictls: no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4511310Z       libngtcp2_crypto_boringssl: no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4511668Z       libnghttp3:     no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4511967Z       libbpf:         no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4512297Z       Libevent(SSL):  no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4512592Z       Jansson:        no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4512926Z       Jemalloc:       no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4513238Z       Zlib:           no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4513528Z       Systemd:        no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4513864Z       Libbrotlienc:   no (CFLAGS="' LIBS='')
+2026-06-13T18:16:49.4514163Z       Libbrotlidec:   no (CFLAGS="' LIBS='')
+2026-06-13T18:16:49.4514442Z     Third-party:
+2026-06-13T18:16:49.4514702Z       http-parser:    no
+2026-06-13T18:16:49.4514952Z       MRuby:          no (CFLAGS='' LIBS='')
+2026-06-13T18:16:49.4515254Z       Neverbleed:     no
+2026-06-13T18:16:49.4515496Z     Features:
+2026-06-13T18:16:49.4515706Z       Applications:   no
+2026-06-13T18:16:49.4515974Z       HPACK tools:    no
+2026-06-13T18:16:49.4516508Z       Examples:       no
+2026-06-13T18:16:49.4516808Z       Threading:      no
+2026-06-13T18:16:49.4517059Z       HTTP/3 (EXPERIMENTAL): no
+2026-06-13T18:16:49.4517246Z 
+2026-06-13T18:16:49.4895886Z (CDPATH="${ZSH_VERSION+.}:" && cd . && /bin/bash '/home/runner/work/aria2/aria2/nghttp2-1.64.0/missing' autoheader)
+2026-06-13T18:16:49.5955989Z rm -f stamp-h1
+2026-06-13T18:16:49.5969961Z touch config.h.in
+2026-06-13T18:16:49.5999235Z cd . && /bin/bash ./config.status config.h
+2026-06-13T18:16:49.7332924Z config.status: creating config.h
+2026-06-13T18:16:49.7372697Z config.status: config.h is unchanged
+2026-06-13T18:16:49.7413287Z make  all-recursive
+2026-06-13T18:16:49.7432794Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:49.7461955Z Making all in lib
+2026-06-13T18:16:49.7481038Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:49.7510611Z Making all in includes
+2026-06-13T18:16:49.7524851Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib/includes'
+2026-06-13T18:16:49.7525539Z make[3]: Nothing to be done for 'all'.
+2026-06-13T18:16:49.7525996Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib/includes'
+2026-06-13T18:16:49.7544152Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:49.7560556Z   CC       nghttp2_pq.lo
+2026-06-13T18:16:49.7563401Z   CC       nghttp2_map.lo
+2026-06-13T18:16:49.7571493Z   CC       nghttp2_queue.lo
+2026-06-13T18:16:49.7572110Z   CC       nghttp2_frame.lo
+2026-06-13T18:16:49.9966347Z   CC       nghttp2_buf.lo
+2026-06-13T18:16:50.0182949Z   CC       nghttp2_stream.lo
+2026-06-13T18:16:50.0384249Z   CC       nghttp2_outbound_item.lo
+2026-06-13T18:16:50.1112859Z   CC       nghttp2_session.lo
+2026-06-13T18:16:50.1564587Z   CC       nghttp2_submit.lo
+2026-06-13T18:16:50.1936918Z   CC       nghttp2_helper.lo
+2026-06-13T18:16:50.2044562Z   CC       nghttp2_alpn.lo
+2026-06-13T18:16:50.2691504Z   CC       nghttp2_hd.lo
+2026-06-13T18:16:50.3042837Z   CC       nghttp2_hd_huffman.lo
+2026-06-13T18:16:50.3377472Z   CC       nghttp2_hd_huffman_data.lo
+2026-06-13T18:16:50.3888000Z   CC       nghttp2_version.lo
+2026-06-13T18:16:50.3989900Z   CC       nghttp2_priority_spec.lo
+2026-06-13T18:16:50.4492841Z   CC       nghttp2_option.lo
+2026-06-13T18:16:50.4665771Z   CC       nghttp2_callbacks.lo
+2026-06-13T18:16:50.5299881Z   CC       nghttp2_mem.lo
+2026-06-13T18:16:50.5452597Z   CC       nghttp2_http.lo
+2026-06-13T18:16:50.5980354Z   CC       nghttp2_rcbuf.lo
+2026-06-13T18:16:50.6671183Z   CC       nghttp2_extpri.lo
+2026-06-13T18:16:50.6697231Z   CC       nghttp2_ratelim.lo
+2026-06-13T18:16:50.7151269Z   CC       nghttp2_time.lo
+2026-06-13T18:16:50.7287388Z   CC       nghttp2_debug.lo
+2026-06-13T18:16:50.7307961Z   CC       sfparse.lo
+2026-06-13T18:16:51.4375269Z   CCLD     libnghttp2.la
+2026-06-13T18:16:51.6845374Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.6849209Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.6852597Z Making all in third-party
+2026-06-13T18:16:51.6872884Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/third-party'
+2026-06-13T18:16:51.6873470Z make[2]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.6873915Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/third-party'
+2026-06-13T18:16:51.6875801Z Making all in src
+2026-06-13T18:16:51.6907889Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.6938373Z Making all in testdata
+2026-06-13T18:16:51.6952981Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src/testdata'
+2026-06-13T18:16:51.6953482Z make[3]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.6954014Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src/testdata'
+2026-06-13T18:16:51.6981092Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.6981679Z make[3]: Nothing to be done for 'all-am'.
+2026-06-13T18:16:51.6982093Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.6984385Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.6988824Z Making all in bpf
+2026-06-13T18:16:51.7002502Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/bpf'
+2026-06-13T18:16:51.7003058Z make[2]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.7003509Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/bpf'
+2026-06-13T18:16:51.7005480Z Making all in examples
+2026-06-13T18:16:51.7022235Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/examples'
+2026-06-13T18:16:51.7022745Z make[2]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.7023271Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/examples'
+2026-06-13T18:16:51.7024599Z Making all in tests
+2026-06-13T18:16:51.7044177Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.7074528Z Making all in testdata
+2026-06-13T18:16:51.7088659Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests/testdata'
+2026-06-13T18:16:51.7089354Z make[3]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.7089808Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests/testdata'
+2026-06-13T18:16:51.7107855Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.7108472Z make[3]: Nothing to be done for 'all-am'.
+2026-06-13T18:16:51.7108930Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.7111055Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.7114851Z Making all in integration-tests
+2026-06-13T18:16:51.7129672Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/integration-tests'
+2026-06-13T18:16:51.7130286Z make[2]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.7130752Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/integration-tests'
+2026-06-13T18:16:51.7132475Z Making all in doc
+2026-06-13T18:16:51.7151340Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/doc'
+2026-06-13T18:16:51.7151790Z make[2]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.7152249Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/doc'
+2026-06-13T18:16:51.7154084Z Making all in contrib
+2026-06-13T18:16:51.7168545Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/contrib'
+2026-06-13T18:16:51.7169095Z rm -f nghttpx-init nghttpx-init.tmp
+2026-06-13T18:16:51.7171030Z sed -e 's|@bindir[@]|/home/runner/work/_temp/static-deps/bin|g' nghttpx.service.in > nghttpx.service
+2026-06-13T18:16:51.7174214Z sed -e 's|@bindir[@]|/home/runner/work/_temp/static-deps/bin|g' nghttpx-upstart.conf.in > nghttpx-upstart.conf
+2026-06-13T18:16:51.7190991Z sed -e 's|@bindir[@]|/home/runner/work/_temp/static-deps/bin|g' nghttpx-init.in > nghttpx-init.tmp
+2026-06-13T18:16:51.7212836Z chmod +x nghttpx-init.tmp
+2026-06-13T18:16:51.7226159Z mv nghttpx-init.tmp nghttpx-init
+2026-06-13T18:16:51.7242356Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/contrib'
+2026-06-13T18:16:51.7245888Z Making all in script
+2026-06-13T18:16:51.7260794Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/script'
+2026-06-13T18:16:51.7261298Z make[2]: Nothing to be done for 'all'.
+2026-06-13T18:16:51.7261820Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/script'
+2026-06-13T18:16:51.7276640Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:51.7295529Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:51.7300107Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:51.7346835Z Making install in lib
+2026-06-13T18:16:51.7391683Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.7422464Z Making install in includes
+2026-06-13T18:16:51.7437456Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib/includes'
+2026-06-13T18:16:51.7455874Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib/includes'
+2026-06-13T18:16:51.7456564Z make[3]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.7465438Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/include'
+2026-06-13T18:16:51.7507491Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/include/nghttp2'
+2026-06-13T18:16:51.7517083Z  /usr/bin/install -c -m 644  nghttp2/nghttp2.h nghttp2/nghttp2ver.h '/home/runner/work/_temp/static-deps/include/nghttp2'
+2026-06-13T18:16:51.7531861Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib/includes'
+2026-06-13T18:16:51.7533210Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib/includes'
+2026-06-13T18:16:51.7654885Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.7737860Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.7747428Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/lib'
+2026-06-13T18:16:51.7757599Z  /bin/bash ../libtool   --mode=install /usr/bin/install -c   libnghttp2.la '/home/runner/work/_temp/static-deps/lib'
+2026-06-13T18:16:51.8018067Z libtool: install: /usr/bin/install -c .libs/libnghttp2.lai /home/runner/work/_temp/static-deps/lib/libnghttp2.la
+2026-06-13T18:16:51.8063373Z libtool: install: /usr/bin/install -c .libs/libnghttp2.a /home/runner/work/_temp/static-deps/lib/libnghttp2.a
+2026-06-13T18:16:51.8099616Z libtool: install: chmod 644 /home/runner/work/_temp/static-deps/lib/libnghttp2.a
+2026-06-13T18:16:51.8125519Z libtool: install: ranlib /home/runner/work/_temp/static-deps/lib/libnghttp2.a
+2026-06-13T18:16:51.8690987Z libtool: finish: PATH="/snap/bin:/home/runner/.local/bin:/opt/pipx_bin:/home/runner/.cargo/bin:/home/runner/.config/composer/vendor/bin:/home/runner/.dotnet/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/sbin" ldconfig -n /home/runner/work/_temp/static-deps/lib
+2026-06-13T18:16:51.8701353Z ----------------------------------------------------------------------
+2026-06-13T18:16:51.8701905Z Libraries have been installed in:
+2026-06-13T18:16:51.8702202Z    /home/runner/work/_temp/static-deps/lib
+2026-06-13T18:16:51.8702411Z 
+2026-06-13T18:16:51.8702648Z If you ever happen to want to link against installed libraries
+2026-06-13T18:16:51.8703107Z in a given directory, LIBDIR, you must either use libtool, and
+2026-06-13T18:16:51.8703524Z specify the full pathname of the library, or use the '-LLIBDIR'
+2026-06-13T18:16:51.8703978Z flag during linking and do at least one of the following:
+2026-06-13T18:16:51.8704375Z    - add LIBDIR to the 'LD_LIBRARY_PATH' environment variable
+2026-06-13T18:16:51.8704731Z      during execution
+2026-06-13T18:16:51.8705028Z    - add LIBDIR to the 'LD_RUN_PATH' environment variable
+2026-06-13T18:16:51.8705367Z      during linking
+2026-06-13T18:16:51.8705663Z    - use the '-Wl,-rpath -Wl,LIBDIR' linker flag
+2026-06-13T18:16:51.8706053Z    - have your system administrator add LIBDIR to '/etc/ld.so.conf'
+2026-06-13T18:16:51.8706480Z 
+2026-06-13T18:16:51.8706715Z See any operating system documentation about shared libraries for
+2026-06-13T18:16:51.8707181Z more information, such as the ld(1) and ld.so(8) manual pages.
+2026-06-13T18:16:51.8707606Z ----------------------------------------------------------------------
+2026-06-13T18:16:51.8715983Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/lib/pkgconfig'
+2026-06-13T18:16:51.8736791Z  /usr/bin/install -c -m 644 libnghttp2.pc '/home/runner/work/_temp/static-deps/lib/pkgconfig'
+2026-06-13T18:16:51.8751122Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.8752783Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.8757632Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/lib'
+2026-06-13T18:16:51.8762089Z Making install in third-party
+2026-06-13T18:16:51.8781383Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/third-party'
+2026-06-13T18:16:51.8805281Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/third-party'
+2026-06-13T18:16:51.8805799Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.8806810Z make[2]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.8807363Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/third-party'
+2026-06-13T18:16:51.8807972Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/third-party'
+2026-06-13T18:16:51.8809990Z Making install in src
+2026-06-13T18:16:51.8840243Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.8869438Z Making install in testdata
+2026-06-13T18:16:51.8882868Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src/testdata'
+2026-06-13T18:16:51.8900235Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src/testdata'
+2026-06-13T18:16:51.8900718Z make[3]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.8901233Z make[3]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.8901679Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src/testdata'
+2026-06-13T18:16:51.8902299Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src/testdata'
+2026-06-13T18:16:51.8931304Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.8964345Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.8973015Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/bin'
+2026-06-13T18:16:51.9006095Z make[3]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.9006830Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.9007574Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.9011405Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/src'
+2026-06-13T18:16:51.9014515Z Making install in bpf
+2026-06-13T18:16:51.9028580Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/bpf'
+2026-06-13T18:16:51.9046590Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/bpf'
+2026-06-13T18:16:51.9047115Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9070282Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/bpf'
+2026-06-13T18:16:51.9071047Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/bpf'
+2026-06-13T18:16:51.9074832Z Making install in examples
+2026-06-13T18:16:51.9090542Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/examples'
+2026-06-13T18:16:51.9110193Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/examples'
+2026-06-13T18:16:51.9110719Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9111163Z make[2]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.9111621Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/examples'
+2026-06-13T18:16:51.9112181Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/examples'
+2026-06-13T18:16:51.9114575Z Making install in tests
+2026-06-13T18:16:51.9133519Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.9163290Z Making install in testdata
+2026-06-13T18:16:51.9176477Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests/testdata'
+2026-06-13T18:16:51.9193774Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests/testdata'
+2026-06-13T18:16:51.9194383Z make[3]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9194922Z make[3]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.9195770Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests/testdata'
+2026-06-13T18:16:51.9196512Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests/testdata'
+2026-06-13T18:16:51.9214950Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.9237868Z make[3]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.9238419Z make[3]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9238891Z make[3]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.9239347Z make[3]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.9240666Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.9244203Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/tests'
+2026-06-13T18:16:51.9247891Z Making install in integration-tests
+2026-06-13T18:16:51.9262238Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/integration-tests'
+2026-06-13T18:16:51.9279992Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/integration-tests'
+2026-06-13T18:16:51.9280541Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9280983Z make[2]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.9281503Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/integration-tests'
+2026-06-13T18:16:51.9282149Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/integration-tests'
+2026-06-13T18:16:51.9283894Z Making install in doc
+2026-06-13T18:16:51.9302342Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/doc'
+2026-06-13T18:16:51.9323894Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/doc'
+2026-06-13T18:16:51.9324410Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9337616Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/share/man/man1'
+2026-06-13T18:16:51.9378453Z  /usr/bin/install -c -m 644 nghttp.1 nghttpd.1 nghttpx.1 h2load.1 '/home/runner/work/_temp/static-deps/share/man/man1'
+2026-06-13T18:16:51.9394648Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/doc'
+2026-06-13T18:16:51.9396026Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/doc'
+2026-06-13T18:16:51.9399650Z Making install in contrib
+2026-06-13T18:16:51.9414111Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/contrib'
+2026-06-13T18:16:51.9431881Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/contrib'
+2026-06-13T18:16:51.9432379Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9432855Z make[2]: Nothing to be done for 'install-data-am'.
+2026-06-13T18:16:51.9433284Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/contrib'
+2026-06-13T18:16:51.9433861Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/contrib'
+2026-06-13T18:16:51.9436513Z Making install in script
+2026-06-13T18:16:51.9451128Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/script'
+2026-06-13T18:16:51.9468395Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/script'
+2026-06-13T18:16:51.9468865Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9478865Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/share/nghttp2'
+2026-06-13T18:16:51.9505975Z  /usr/bin/install -c fetch-ocsp-response '/home/runner/work/_temp/static-deps/share/nghttp2'
+2026-06-13T18:16:51.9520251Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/script'
+2026-06-13T18:16:51.9520894Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0/script'
+2026-06-13T18:16:51.9538115Z make[1]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:51.9576082Z make[2]: Entering directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:51.9577254Z make[2]: Nothing to be done for 'install-exec-am'.
+2026-06-13T18:16:51.9584211Z  /usr/bin/mkdir -p '/home/runner/work/_temp/static-deps/share/doc/nghttp2'
+2026-06-13T18:16:51.9604657Z  /usr/bin/install -c -m 644 README.rst '/home/runner/work/_temp/static-deps/share/doc/nghttp2'
+2026-06-13T18:16:51.9618627Z make[2]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'
+2026-06-13T18:16:51.9619789Z make[1]: Leaving directory '/home/runner/work/aria2/aria2/nghttp2-1.64.0'

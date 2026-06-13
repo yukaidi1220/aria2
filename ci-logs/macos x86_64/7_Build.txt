@@ -1,0 +1,783 @@
+﻿2026-06-13T18:19:35.1078560Z ##[group]Run make -j"$(sysctl -n hw.ncpu)"
+2026-06-13T18:19:35.1079140Z [36;1mmake -j"$(sysctl -n hw.ncpu)"[0m
+2026-06-13T18:19:35.1135280Z shell: /bin/bash -e {0}
+2026-06-13T18:19:35.1135660Z env:
+2026-06-13T18:19:35.1136130Z   PKG_CONFIG_PATH: /Users/runner/work/_temp/static-deps/lib/pkgconfig
+2026-06-13T18:19:35.1136750Z ##[endgroup]
+2026-06-13T18:19:35.1503900Z /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/make  all-recursive
+2026-06-13T18:19:35.1678900Z Making all in po
+2026-06-13T18:19:35.1736720Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:19:35.1742900Z Making all in lib
+2026-06-13T18:19:35.1807960Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:19:35.1813810Z Making all in deps
+2026-06-13T18:19:35.1998950Z Making all in wslay
+2026-06-13T18:19:35.2057510Z /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/make  all-recursive
+2026-06-13T18:19:35.2209840Z Making all in lib
+2026-06-13T18:19:35.2384810Z Making all in includes
+2026-06-13T18:19:35.2437860Z make[6]: Nothing to be done for `all'.
+2026-06-13T18:19:35.2546730Z   CC       wslay_frame.lo
+2026-06-13T18:19:35.2550090Z   CC       wslay_event.lo
+2026-06-13T18:19:35.2553990Z   CC       wslay_queue.lo
+2026-06-13T18:19:35.2557080Z   CC       wslay_net.lo
+2026-06-13T18:19:35.9448620Z   CCLD     libwslay.la
+2026-06-13T18:19:36.0452100Z libtool: warning: '-version-info/-version-number' is ignored for convenience libraries
+2026-06-13T18:19:36.1928280Z Making all in tests
+2026-06-13T18:19:36.1992920Z make[5]: Nothing to be done for `all'.
+2026-06-13T18:19:36.2052670Z make[5]: Nothing to be done for `all-am'.
+2026-06-13T18:19:36.2124040Z make[3]: Nothing to be done for `all-am'.
+2026-06-13T18:19:36.2135510Z Making all in src
+2026-06-13T18:19:36.2498210Z Making all in includes
+2026-06-13T18:19:36.2551550Z make[3]: Nothing to be done for `all'.
+2026-06-13T18:19:36.2832370Z   CXX      AbstractAuthResolver.lo
+2026-06-13T18:19:36.2836650Z   CXX      A2STR.lo
+2026-06-13T18:19:36.2843250Z   CXX      main.o
+2026-06-13T18:19:36.2850060Z   CXX      AbstractCommand.lo
+2026-06-13T18:19:37.1681620Z   CXX      AbstractDiskWriter.lo
+2026-06-13T18:19:37.5454080Z   CXX      AbstractHttpServerResponseCommand.lo
+2026-06-13T18:19:37.6517940Z   CXX      AbstractOptionHandler.lo
+2026-06-13T18:19:38.6190210Z   CXX      AbstractProxyRequestCommand.lo
+2026-06-13T18:19:38.8317250Z   CXX      AbstractProxyResponseCommand.lo
+2026-06-13T18:19:39.2924660Z   CXX      AbstractSingleDiskAdaptor.lo
+2026-06-13T18:19:40.7185930Z   CXX      AdaptiveFileAllocationIterator.lo
+2026-06-13T18:19:40.8894240Z   CXX      AdaptiveURISelector.lo
+2026-06-13T18:19:41.0315560Z   CXX      AltSvcParser.lo
+2026-06-13T18:19:41.9384300Z   CXX      AuthConfig.lo
+2026-06-13T18:19:43.3857090Z   CXX      AuthConfigFactory.lo
+2026-06-13T18:19:43.7667370Z   CXX      AutoSaveCommand.lo
+2026-06-13T18:19:43.9127800Z   CXX      BackupIPv4ConnectCommand.lo
+2026-06-13T18:19:43.9490210Z   CXX      base32.lo
+2026-06-13T18:19:45.3528340Z   CXX      bitfield.lo
+2026-06-13T18:19:45.4852000Z   CXX      BitfieldMan.lo
+2026-06-13T18:19:45.6192930Z   CXX      BufferedFile.lo
+2026-06-13T18:19:45.6311890Z   CXX      ByteArrayDiskWriter.lo
+2026-06-13T18:19:46.7678940Z   CXX      CheckIntegrityCommand.lo
+2026-06-13T18:19:46.9254830Z   CXX      CheckIntegrityDispatcherCommand.lo
+2026-06-13T18:19:46.9996720Z   CXX      CheckIntegrityEntry.lo
+2026-06-13T18:19:47.8858880Z   CXX      Checksum.lo
+2026-06-13T18:19:48.7576280Z   CXX      ChecksumCheckIntegrityEntry.lo
+2026-06-13T18:19:48.8856810Z   CXX      ChunkChecksum.lo
+2026-06-13T18:19:48.9231410Z   CXX      ChunkedDecodingStreamFilter.lo
+2026-06-13T18:19:49.5830670Z   CXX      ColorizedStream.lo
+2026-06-13T18:19:50.3212540Z   CXX      Command.lo
+2026-06-13T18:19:50.6727760Z   CXX      ConnectCommand.lo
+2026-06-13T18:19:50.9309940Z   CXX      console.lo
+2026-06-13T18:19:51.2404090Z   CXX      ConsoleStatCalc.lo
+2026-06-13T18:19:51.3931870Z   CXX      ContentTypeRequestGroupCriteria.lo
+2026-06-13T18:19:52.0769800Z   CXX      Context.lo
+2026-06-13T18:19:52.6849560Z   CXX      ContextAttribute.lo
+2026-06-13T18:19:52.8946360Z   CXX      Cookie.lo
+2026-06-13T18:19:53.0963310Z   CXX      CookieStorage.lo
+2026-06-13T18:19:53.8618290Z   CXX      cookie_helper.lo
+2026-06-13T18:19:54.0818880Z   CXX      CreateRequestCommand.lo
+2026-06-13T18:19:54.1566170Z   CXX      CUIDCounter.lo
+2026-06-13T18:19:54.3811270Z   CXX      DefaultAuthResolver.lo
+2026-06-13T18:19:55.1280100Z   CXX      DefaultBtProgressInfoFile.lo
+2026-06-13T18:19:55.4986910Z   CXX      DefaultDiskWriter.lo
+2026-06-13T18:19:55.8829160Z   CXX      DefaultDiskWriterFactory.lo
+2026-06-13T18:19:56.0095020Z   CXX      DefaultPieceStorage.lo
+2026-06-13T18:19:56.2538630Z   CXX      DefaultStreamPieceSelector.lo
+2026-06-13T18:19:56.8697810Z   CXX      DirectDiskAdaptor.lo
+2026-06-13T18:19:56.9273120Z   CXX      DiskAdaptor.lo
+2026-06-13T18:19:57.1607360Z   CXX      DlAbortEx.lo
+2026-06-13T18:19:57.9777470Z   CXX      DlRetryEx.lo
+2026-06-13T18:19:58.0901930Z   CXX      DNSCache.lo
+2026-06-13T18:19:58.2086060Z   CXX      DnsMessage.lo
+2026-06-13T18:19:58.7899210Z   CXX      AsyncDnsServerConfig.lo
+2026-06-13T18:19:59.3099470Z   CXX      DownloadCommand.lo
+2026-06-13T18:19:59.8745900Z   CXX      DownloadContext.lo
+2026-06-13T18:20:00.7377180Z   CXX      DownloadEngine.lo
+2026-06-13T18:20:00.8117140Z   CXX      DownloadEngineFactory.lo
+2026-06-13T18:20:01.7678850Z   CXX      DownloadFailureException.lo
+2026-06-13T18:20:01.9089280Z   CXX      DownloadHandler.lo
+2026-06-13T18:20:02.5628800Z   CXX      DownloadHandlerConstants.lo
+2026-06-13T18:20:02.8140030Z   CXX      DownloadResult.lo
+2026-06-13T18:20:03.1594440Z   CXX      download_handlers.lo
+2026-06-13T18:20:03.3128770Z   CXX      download_helper.lo
+2026-06-13T18:20:04.5119290Z   CXX      Exception.lo
+2026-06-13T18:20:04.8946250Z   CXX      FatalException.lo
+2026-06-13T18:20:05.3236690Z   CXX      FeatureConfig.lo
+2026-06-13T18:20:05.7528560Z   CXX      FeedbackURISelector.lo
+2026-06-13T18:20:05.8010220Z   CXX      File.lo
+2026-06-13T18:20:06.5979490Z   CXX      FileAllocationCommand.lo
+2026-06-13T18:20:07.1141500Z   CXX      FileAllocationDispatcherCommand.lo
+2026-06-13T18:20:07.2223610Z   CXX      FileAllocationEntry.lo
+2026-06-13T18:20:08.2073740Z   CXX      FileEntry.lo
+2026-06-13T18:20:08.2377410Z   CXX      FillRequestGroupCommand.lo
+2026-06-13T18:20:08.5497670Z   CXX      fmt.lo
+2026-06-13T18:20:08.6998260Z   CXX      FtpConnection.lo
+2026-06-13T18:20:09.2579800Z   CXX      FtpDownloadCommand.lo
+2026-06-13T18:20:09.6580800Z   CXX      FtpFinishDownloadCommand.lo
+2026-06-13T18:20:10.4991460Z   CXX      FtpInitiateConnectionCommand.lo
+2026-06-13T18:20:10.8420470Z   CXX      FtpNegotiationCommand.lo
+2026-06-13T18:20:11.1681540Z   CXX      FtpTunnelRequestCommand.lo
+2026-06-13T18:20:12.6267580Z   CXX      FtpTunnelResponseCommand.lo
+2026-06-13T18:20:12.6671060Z   CXX      GeomStreamPieceSelector.lo
+2026-06-13T18:20:13.5507080Z   CXX      GroupId.lo
+2026-06-13T18:20:13.9918630Z   CXX      GrowSegment.lo
+2026-06-13T18:20:14.1829500Z   CXX      HaveEraseCommand.lo
+2026-06-13T18:20:14.2507930Z   CXX      help_tags.lo
+2026-06-13T18:20:14.9539830Z   CXX      HostMapping.lo
+2026-06-13T18:20:15.0030260Z   CXX      HttpConnection.lo
+2026-06-13T18:20:15.2364590Z   CXX      HttpLog.lo
+2026-06-13T18:20:15.7762010Z   CXX      HttpDownloadCommand.lo
+2026-06-13T18:20:16.6735400Z   CXX      HttpHeader.lo
+2026-06-13T18:20:16.8681090Z   CXX      HttpHeaderProcessor.lo
+2026-06-13T18:20:17.2625540Z   CXX      Http2HeaderBlock.lo
+2026-06-13T18:20:17.8941710Z   CXX      HttpInitiateConnectionCommand.lo
+2026-06-13T18:20:18.3958160Z   CXX      HttpListenCommand.lo
+2026-06-13T18:20:18.6664460Z   CXX      HttpProtocol.lo
+2026-06-13T18:20:19.4970660Z   CXX      HttpProxyRequestCommand.lo
+2026-06-13T18:20:19.5673530Z   CXX      HttpProxyResponseCommand.lo
+2026-06-13T18:20:20.1886480Z   CXX      HttpRequest.lo
+2026-06-13T18:20:20.5675980Z   CXX      HttpRequestFactory.lo
+2026-06-13T18:20:20.7736720Z   CXX      HttpRequestCommand.lo
+2026-06-13T18:20:20.9408460Z   CXX      HttpTLSHandshakeParams.lo
+2026-06-13T18:20:22.3355770Z   CXX      HttpResponse.lo
+2026-06-13T18:20:22.5448720Z   CXX      HttpResponseCommand.lo
+2026-06-13T18:20:22.7255390Z   CXX      HttpServer.lo
+2026-06-13T18:20:23.7706660Z   CXX      HttpServerBodyCommand.lo
+2026-06-13T18:20:24.8841800Z   CXX      HttpServerCommand.lo
+2026-06-13T18:20:25.3342950Z   CXX      HttpServerResponseCommand.lo
+2026-06-13T18:20:25.6841170Z   CXX      HttpSkipResponseCommand.lo
+2026-06-13T18:20:25.9283160Z   CXX      HttpsServiceBindingCache.lo
+2026-06-13T18:20:26.8938390Z   CXX      InitiateConnectionCommand.lo
+2026-06-13T18:20:27.0185830Z   CXX      InitiateConnectionCommandFactory.lo
+2026-06-13T18:20:27.8354220Z   CXX      InorderStreamPieceSelector.lo
+2026-06-13T18:20:28.5834680Z   CXX      RandomStreamPieceSelector.lo
+2026-06-13T18:20:28.6476560Z   CXX      InorderURISelector.lo
+2026-06-13T18:20:28.9415510Z   CXX      IOFile.lo
+2026-06-13T18:20:29.2455700Z   CXX      IteratableChecksumValidator.lo
+2026-06-13T18:20:29.9253030Z   CXX      IteratableChunkChecksumValidator.lo
+2026-06-13T18:20:30.3028010Z   CXX      json.lo
+2026-06-13T18:20:30.3858110Z   CXX      JsonParser.lo
+2026-06-13T18:20:30.9285300Z   CXX      LogFactory.lo
+2026-06-13T18:20:31.3860480Z   CXX      Logger.lo
+2026-06-13T18:20:31.7518340Z   CXX      LongestSequencePieceSelector.lo
+2026-06-13T18:20:31.7911480Z   CXX      MessageDigest.lo
+2026-06-13T18:20:31.8408060Z   CXX      message_digest_helper.lo
+2026-06-13T18:20:32.6719250Z   CXX      MetadataInfo.lo
+2026-06-13T18:20:32.8415810Z   CXX      MetalinkHttpEntry.lo
+2026-06-13T18:20:32.9745950Z   CXX      MultiDiskAdaptor.lo
+2026-06-13T18:20:33.3459280Z   CXX      MultiFileAllocationIterator.lo
+2026-06-13T18:20:33.6194360Z   CXX      MultiUrlRequestInfo.lo
+2026-06-13T18:20:33.7860940Z   CXX      NameResolver.lo
+2026-06-13T18:20:34.8245630Z   CXX      Netrc.lo
+2026-06-13T18:20:34.9254490Z   CXX      NetrcAuthResolver.lo
+2026-06-13T18:20:35.2051160Z   CXX      NetStat.lo
+2026-06-13T18:20:35.7110000Z   CXX      Notifier.lo
+2026-06-13T18:20:35.9924790Z   CXX      NsCookieParser.lo
+2026-06-13T18:20:36.2778680Z   CXX      NullSinkStreamFilter.lo
+2026-06-13T18:20:36.4324510Z   CXX      Option.lo
+2026-06-13T18:20:36.8868190Z   CXX      OptionHandler.lo
+2026-06-13T18:20:37.0076880Z   CXX      OptionHandlerException.lo
+2026-06-13T18:20:37.4965430Z   CXX      OptionHandlerFactory.lo
+2026-06-13T18:20:37.8001030Z   CXX      OptionHandlerImpl.lo
+2026-06-13T18:20:37.8725830Z   CXX      OptionParser.lo
+2026-06-13T18:20:38.0249060Z   CXX      option_processing.lo
+2026-06-13T18:20:39.6294180Z   CXX      paramed_string.lo
+2026-06-13T18:20:40.5076290Z   CXX      PeerStat.lo
+2026-06-13T18:20:42.6649630Z   CXX      Piece.lo
+2026-06-13T18:20:43.3347820Z   CXX      PiecedSegment.lo
+2026-06-13T18:20:43.6603970Z   CXX      PieceHashCheckIntegrityEntry.lo
+2026-06-13T18:20:44.0202050Z   CXX      PieceStatMan.lo
+2026-06-13T18:20:44.7168660Z   CXX      Platform.lo
+2026-06-13T18:20:44.7195760Z   CXX      prefs.lo
+2026-06-13T18:20:45.1470910Z   CXX      ProtocolDetector.lo
+2026-06-13T18:20:45.5792270Z   CXX      Range.lo
+2026-06-13T18:20:45.8524700Z   CXX      RarestPieceSelector.lo
+2026-06-13T18:20:45.9887270Z   CXX      RealtimeCommand.lo
+2026-06-13T18:20:46.2663470Z   CXX      RecoverableException.lo
+2026-06-13T18:20:46.6185750Z   CXX      Request.lo
+2026-06-13T18:20:47.1116910Z   CXX      RequestGroup.lo
+2026-06-13T18:20:47.1397880Z   CXX      RequestGroupEntry.lo
+2026-06-13T18:20:47.3573710Z   CXX      RequestGroupMan.lo
+2026-06-13T18:20:47.9884410Z   CXX      RpcMethod.lo
+2026-06-13T18:20:48.3165710Z   CXX      RpcMethodFactory.lo
+2026-06-13T18:20:49.6527310Z   CXX      RpcMethodImpl.lo
+2026-06-13T18:20:50.9682100Z   CXX      RpcRequest.lo
+2026-06-13T18:20:51.6493300Z   CXX      RpcResponse.lo
+2026-06-13T18:20:52.1691850Z   CXX      rpc_helper.lo
+2026-06-13T18:20:53.0537530Z   CXX      SaveSessionCommand.lo
+2026-06-13T18:20:53.1416160Z   CXX      SegmentMan.lo
+2026-06-13T18:20:53.6098440Z   CXX      SelectEventPoll.lo
+2026-06-13T18:20:54.4538040Z   CXX      ServerStat.lo
+2026-06-13T18:20:54.4736320Z   CXX      ServerStatMan.lo
+2026-06-13T18:20:55.8663440Z   CXX      SessionSerializer.lo
+2026-06-13T18:20:55.9888260Z   CXX      Signature.lo
+2026-06-13T18:20:56.1608940Z   CXX      SimpleRandomizer.lo
+2026-06-13T18:20:56.7191840Z   CXX      SingleFileAllocationIterator.lo
+2026-06-13T18:20:57.4300650Z   CXX      SinkStreamFilter.lo
+2026-06-13T18:20:57.6724750Z   CXX      SocketBuffer.lo
+2026-06-13T18:20:58.0513830Z   CXX      SocketCore.lo
+2026-06-13T18:20:58.1846780Z   CXX      SocketRecvBuffer.lo
+2026-06-13T18:20:58.5997990Z   CXX      StartupOptionLog.lo
+2026-06-13T18:20:59.0965080Z   CXX      SpeedCalc.lo
+2026-06-13T18:20:59.2026200Z   CXX      StreamCheckIntegrityEntry.lo
+2026-06-13T18:20:59.6576440Z   CXX      StreamFileAllocationEntry.lo
+2026-06-13T18:21:00.4170960Z   CXX      StreamFilter.lo
+2026-06-13T18:21:00.5591940Z   CXX      ServiceBindingSelector.lo
+2026-06-13T18:21:00.6163600Z   CXX      TimeA2.lo
+2026-06-13T18:21:01.1834580Z   CXX      TimeBasedCommand.lo
+2026-06-13T18:21:01.4014760Z   CXX      TimedHaltCommand.lo
+2026-06-13T18:21:02.0007260Z   CXX      TimerA2.lo
+2026-06-13T18:21:02.5503560Z   CXX      TLSSNIHostMapping.lo
+2026-06-13T18:21:02.6109910Z   CXX      TorrentAttribute.lo
+2026-06-13T18:21:03.0333750Z   CXX      TransferStat.lo
+2026-06-13T18:21:03.1173280Z   CXX      TruncFileAllocationIterator.lo
+2026-06-13T18:21:03.6489130Z   CXX      UnknownLengthPieceStorage.lo
+2026-06-13T18:21:03.6988620Z   CXX      UnknownOptionException.lo
+2026-06-13T18:21:03.9049640Z   CXX      uri.lo
+2026-06-13T18:21:04.0491060Z   CXX      UriListParser.lo
+2026-06-13T18:21:04.5078340Z   CXX      URIResult.lo
+2026-06-13T18:21:05.2409980Z   CC       uri_split.lo
+2026-06-13T18:21:05.2917410Z   CXX      util.lo
+2026-06-13T18:21:05.3516950Z   CXX      util_security.lo
+2026-06-13T18:21:05.4347230Z   CXX      ValueBase.lo
+2026-06-13T18:21:05.5104460Z   CXX      ValueBaseStructParserStateImpl.lo
+2026-06-13T18:21:06.7319080Z   CXX      ValueBaseStructParserStateMachine.lo
+2026-06-13T18:21:06.7480200Z   CXX      version_usage.lo
+2026-06-13T18:21:07.2845120Z   CXX      wallclock.lo
+2026-06-13T18:21:08.3486490Z   CXX      WatchProcessCommand.lo
+2026-06-13T18:21:08.4930710Z   CXX      WrDiskCache.lo
+2026-06-13T18:21:08.5584190Z   CXX      WrDiskCacheEntry.lo
+2026-06-13T18:21:09.2813380Z   CXX      XmlRpcRequestParserController.lo
+2026-06-13T18:21:09.9402600Z   CXX      OpenedFileCounter.lo
+2026-06-13T18:21:10.0345320Z   CXX      SHA1IOFile.lo
+2026-06-13T18:21:10.1589750Z   CXX      EvictSocketPoolCommand.lo
+2026-06-13T18:21:10.7153050Z   CXX      WebSocketInteractionCommand.lo
+2026-06-13T18:21:10.9531350Z   CXX      WebSocketResponseCommand.lo
+2026-06-13T18:21:11.3332820Z   CXX      WebSocketSession.lo
+2026-06-13T18:21:11.5533950Z   CXX      WebSocketSessionMan.lo
+2026-06-13T18:21:12.2823720Z   CXX      FallocFileAllocationIterator.lo
+2026-06-13T18:21:12.3652020Z   CXX      AppleMessageDigestImpl.lo
+2026-06-13T18:21:13.0269820Z   CXX      AppleTLSContext.lo
+2026-06-13T18:21:13.1058810Z   CXX      AppleTLSSession.lo
+2026-06-13T18:21:13.3774750Z AppleMessageDigestImpl.cc:73:61: warning: 'CC_MD5_Init' is deprecated: first deprecated in macOS 10.15 - This function is cryptographically broken and should not be used in security contexts. Clients should migrate to SHA256 (or stronger). [-Wdeprecated-declarations]
+2026-06-13T18:21:13.3851030Z    73 | typedef MessageDigestBase<CC_MD5_DIGEST_LENGTH, CC_MD5_CTX, CC_MD5_Init,
+2026-06-13T18:21:13.3860820Z       |                                                             ^
+2026-06-13T18:21:13.3920440Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/CommonCrypto/CommonDigest.h:133:12: note: 'CC_MD5_Init' has been explicitly marked deprecated here
+2026-06-13T18:21:13.3933130Z   133 | extern int CC_MD5_Init(CC_MD5_CTX *c)
+2026-06-13T18:21:13.3975240Z       |            ^
+2026-06-13T18:21:13.3985430Z AppleMessageDigestImpl.cc:74:27: warning: 'CC_MD5_Update' is deprecated: first deprecated in macOS 10.15 - This function is cryptographically broken and should not be used in security contexts. Clients should migrate to SHA256 (or stronger). [-Wdeprecated-declarations]
+2026-06-13T18:21:13.4020520Z    74 |                           CC_MD5_Update, CC_MD5_Final>
+2026-06-13T18:21:13.4024300Z       |                           ^
+2026-06-13T18:21:13.4052310Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/CommonCrypto/CommonDigest.h:136:12: note: 'CC_MD5_Update' has been explicitly marked deprecated here
+2026-06-13T18:21:13.4093820Z   136 | extern int CC_MD5_Update(CC_MD5_CTX *c, const void *data, CC_LONG len)
+2026-06-13T18:21:13.4094630Z   CXX      InternalDHKeyExchange.lo
+2026-06-13T18:21:13.4104620Z       |            ^
+2026-06-13T18:21:13.4115440Z AppleMessageDigestImpl.cc:74:42: warning: 'CC_MD5_Final' is deprecated: first deprecated in macOS 10.15 - This function is cryptographically broken and should not be used in security contexts. Clients should migrate to SHA256 (or stronger). [-Wdeprecated-declarations]
+2026-06-13T18:21:13.4126510Z    74 |                           CC_MD5_Update, CC_MD5_Final>
+2026-06-13T18:21:13.4169320Z       |                                          ^
+2026-06-13T18:21:13.4178460Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/CommonCrypto/CommonDigest.h:139:12: note: 'CC_MD5_Final' has been explicitly marked deprecated here
+2026-06-13T18:21:13.4208710Z   139 | extern int CC_MD5_Final(unsigned char *md, CC_MD5_CTX *c)
+2026-06-13T18:21:13.4214740Z       |            ^
+2026-06-13T18:21:13.7699620Z AppleMessageDigestImpl.cc:55:41: warning: 'CC_MD5_Init' is deprecated: first deprecated in macOS 10.15 - This function is cryptographically broken and should not be used in security contexts. Clients should migrate to SHA256 (or stronger). [-Wdeprecated-declarations]
+2026-06-13T18:21:13.8301160Z    55 |   virtual void reset() CXX11_OVERRIDE { init_fn(&ctx_); }
+2026-06-13T18:21:13.8396420Z       |                                         ^
+2026-06-13T18:21:13.8661110Z AppleMessageDigestImpl.cc:50:25: note: in instantiation of member function 'aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>::reset' requested here
+2026-06-13T18:21:13.8702410Z    50 |   MessageDigestBase() { reset(); }
+2026-06-13T18:21:13.9316080Z       |                         ^
+2026-06-13T18:21:13.9405660Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/unique_ptr.h:635:30: note: in instantiation of member function 'aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>::MessageDigestBase' requested here
+2026-06-13T18:21:13.9666570Z   635 |   return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...));
+2026-06-13T18:21:13.9706490Z       |                              ^
+2026-06-13T18:21:14.0321580Z ./MessageDigestImpl.h:59:42: note: in instantiation of function template specialization 'std::make_unique<aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>>' requested here
+2026-06-13T18:21:14.0412850Z    59 |     return std::make_tuple([]() { return make_unique<T>(); }, T::length());
+2026-06-13T18:21:14.0680880Z       |                                          ^
+2026-06-13T18:21:14.0715340Z AppleMessageDigestImpl.cc:105:13: note: in instantiation of function template specialization 'aria2::MessageDigestImpl::make_hi<aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>>' requested here
+2026-06-13T18:21:14.1087710Z   105 |     {"md5", make_hi<MessageDigestMD5>()},
+2026-06-13T18:21:14.1260940Z       |             ^
+2026-06-13T18:21:14.1435580Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/CommonCrypto/CommonDigest.h:133:12: note: 'CC_MD5_Init' has been explicitly marked deprecated here
+2026-06-13T18:21:14.1796130Z   133 | extern int CC_MD5_Init(CC_MD5_CTX *c)
+2026-06-13T18:21:14.2090930Z       |            ^
+2026-06-13T18:21:14.2268120Z AppleMessageDigestImpl.cc:62:7: warning: 'CC_MD5_Update' is deprecated: first deprecated in macOS 10.15 - This function is cryptographically broken and should not be used in security contexts. Clients should migrate to SHA256 (or stronger). [-Wdeprecated-declarations]
+2026-06-13T18:21:14.2443680Z    62 |       update_fn(&ctx_, bytes, l);
+2026-06-13T18:21:14.2802550Z       |       ^
+2026-06-13T18:21:14.3103350Z AppleMessageDigestImpl.cc:50:3: note: in instantiation of member function 'aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>::update' requested here
+2026-06-13T18:21:14.3275910Z    50 |   MessageDigestBase() { reset(); }
+2026-06-13T18:21:14.3448310Z       |   ^
+2026-06-13T18:21:14.3814310Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/unique_ptr.h:635:30: note: in instantiation of member function 'aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>::MessageDigestBase' requested here
+2026-06-13T18:21:14.4110010Z   635 |   return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...));
+2026-06-13T18:21:14.4322730Z       |                              ^
+2026-06-13T18:21:14.4479330Z ./MessageDigestImpl.h:59:42: note: in instantiation of function template specialization 'std::make_unique<aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>>' requested here
+2026-06-13T18:21:14.4835420Z    59 |     return std::make_tuple([]() { return make_unique<T>(); }, T::length());
+2026-06-13T18:21:14.5190120Z       |                                          ^
+2026-06-13T18:21:14.5336700Z AppleMessageDigestImpl.cc:105:13: note: in instantiation of function template specialization 'aria2::MessageDigestImpl::make_hi<aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>>' requested here
+2026-06-13T18:21:14.5858720Z   105 |     {"md5", make_hi<MessageDigestMD5>()},
+2026-06-13T18:21:14.6195210Z       |             ^
+2026-06-13T18:21:14.6294300Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/CommonCrypto/CommonDigest.h:136:12: note: 'CC_MD5_Update' has been explicitly marked deprecated here
+2026-06-13T18:21:14.6347670Z   136 | extern int CC_MD5_Update(CC_MD5_CTX *c, const void *data, CC_LONG len)
+2026-06-13T18:21:14.6388670Z       |            ^
+2026-06-13T18:21:14.6409370Z AppleMessageDigestImpl.cc:67:59: warning: 'CC_MD5_Final' is deprecated: first deprecated in macOS 10.15 - This function is cryptographically broken and should not be used in security contexts. Clients should migrate to SHA256 (or stronger). [-Wdeprecated-declarations]
+2026-06-13T18:21:14.6451360Z    67 |   virtual void digest(unsigned char* md) CXX11_OVERRIDE { final_fn(md, &ctx_); }
+2026-06-13T18:21:14.6460760Z       |                                                           ^
+2026-06-13T18:21:14.6505170Z AppleMessageDigestImpl.cc:50:3: note: in instantiation of member function 'aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>::digest' requested here
+2026-06-13T18:21:14.6517210Z    50 |   MessageDigestBase() { reset(); }
+2026-06-13T18:21:14.6524010Z       |   ^
+2026-06-13T18:21:14.6558040Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/c++/v1/__memory/unique_ptr.h:635:30: note: in instantiation of member function 'aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>::MessageDigestBase' requested here
+2026-06-13T18:21:14.6590770Z   635 |   return unique_ptr<_Tp>(new _Tp(std::forward<_Args>(__args)...));
+2026-06-13T18:21:14.6638170Z       |                              ^
+2026-06-13T18:21:14.6638760Z   CXX      InternalARC4Encryptor.lo
+2026-06-13T18:21:14.6651790Z ./MessageDigestImpl.h:59:42: note: in instantiation of function template specialization 'std::make_unique<aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>>' requested here
+2026-06-13T18:21:14.6665540Z    59 |     return std::make_tuple([]() { return make_unique<T>(); }, T::length());
+2026-06-13T18:21:14.6685590Z       |                                          ^
+2026-06-13T18:21:14.6729980Z AppleMessageDigestImpl.cc:105:13: note: in instantiation of function template specialization 'aria2::MessageDigestImpl::make_hi<aria2::(anonymous namespace)::MessageDigestBase<16, CC_MD5state_st, &CC_MD5_Init, &CC_MD5_Update, &CC_MD5_Final>>' requested here
+2026-06-13T18:21:14.6732270Z   105 |     {"md5", make_hi<MessageDigestMD5>()},
+2026-06-13T18:21:14.6741480Z       |             ^
+2026-06-13T18:21:14.6765090Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/usr/include/CommonCrypto/CommonDigest.h:139:12: note: 'CC_MD5_Final' has been explicitly marked deprecated here
+2026-06-13T18:21:14.6770380Z   139 | extern int CC_MD5_Final(unsigned char *md, CC_MD5_CTX *c)
+2026-06-13T18:21:14.6777230Z       |            ^
+2026-06-13T18:21:14.6785860Z AppleTLSSession.cc:89:8: warning: 'kSSLProtocol2' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.6825050Z    89 |   case kSSLProtocol2:
+2026-06-13T18:21:14.6836730Z       |        ^
+2026-06-13T18:21:14.6848030Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:164:5: note: 'kSSLProtocol2' has been explicitly marked deprecated here
+2026-06-13T18:21:14.6859300Z   164 |     kSSLProtocol2 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 1,
+2026-06-13T18:21:14.6871120Z       |     ^
+2026-06-13T18:21:14.6878650Z AppleTLSSession.cc:91:8: warning: 'kSSLProtocol3' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.6895960Z    91 |   case kSSLProtocol3:
+2026-06-13T18:21:14.6899860Z       |        ^
+2026-06-13T18:21:14.6905320Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:165:5: note: 'kSSLProtocol3' has been explicitly marked deprecated here
+2026-06-13T18:21:14.6918740Z   165 |     kSSLProtocol3 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 2,
+2026-06-13T18:21:14.6923230Z       |     ^
+2026-06-13T18:21:14.6928010Z AppleTLSSession.cc:93:8: warning: 'kTLSProtocol1' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.6933580Z    93 |   case kTLSProtocol1:
+2026-06-13T18:21:14.6943790Z       |        ^
+2026-06-13T18:21:14.6952360Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:157:5: note: 'kTLSProtocol1' has been explicitly marked deprecated here
+2026-06-13T18:21:14.6954570Z   CXX      GZipDecodingStreamFilter.lo
+2026-06-13T18:21:14.6955250Z   157 |     kTLSProtocol1 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 4,
+2026-06-13T18:21:14.6960520Z       |     ^
+2026-06-13T18:21:14.6965590Z AppleTLSSession.cc:95:8: warning: 'kTLSProtocol11' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.6974930Z    95 |   case kTLSProtocol11:
+2026-06-13T18:21:14.6985720Z       |        ^
+2026-06-13T18:21:14.6998020Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:158:5: note: 'kTLSProtocol11' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7000360Z   158 |     kTLSProtocol11 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 7,
+2026-06-13T18:21:14.7009010Z       |     ^
+2026-06-13T18:21:14.7009960Z AppleTLSSession.cc:97:8: warning: 'kTLSProtocol12' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7011070Z    97 |   case kTLSProtocol12:
+2026-06-13T18:21:14.7011500Z       |        ^
+2026-06-13T18:21:14.7017040Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:159:5: note: 'kTLSProtocol12' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7019680Z   159 |     kTLSProtocol12 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 8,
+2026-06-13T18:21:14.7043660Z       |     ^
+2026-06-13T18:21:14.7049410Z AppleTLSSession.cc:99:8: warning: 'kTLSProtocol13' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7067800Z    99 |   case kTLSProtocol13:
+2026-06-13T18:21:14.7082270Z       |        ^
+2026-06-13T18:21:14.7092540Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:161:5: note: 'kTLSProtocol13' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7101880Z   161 |     kTLSProtocol13 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 10,
+2026-06-13T18:21:14.7102590Z   CXX      GZipEncoder.lo
+2026-06-13T18:21:14.7111560Z       |     ^
+2026-06-13T18:21:14.7115830Z AppleTLSSession.cc:345:18: warning: 'SSLGetNumberSupportedCiphers' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7125370Z   345 |   OSStatus err = SSLGetNumberSupportedCiphers(ctx, &supported);
+2026-06-13T18:21:14.7129330Z       |                  ^
+2026-06-13T18:21:14.7136490Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:818:1: note: 'SSLGetNumberSupportedCiphers' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7150330Z   818 | SSLGetNumberSupportedCiphers (SSLContextRef                     context,
+2026-06-13T18:21:14.7162120Z       | ^
+2026-06-13T18:21:14.7171470Z AppleTLSSession.cc:351:9: warning: 'SSLGetSupportedCiphers' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7178430Z   351 |   err = SSLGetSupportedCiphers(ctx, &rv[0], &supported);
+2026-06-13T18:21:14.7182340Z       |         ^
+2026-06-13T18:21:14.7192830Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:832:1: note: 'SSLGetSupportedCiphers' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7219130Z   832 | SSLGetSupportedCiphers           (SSLContextRef                 context,
+2026-06-13T18:21:14.7220110Z       | ^
+2026-06-13T18:21:14.7238430Z AppleTLSSession.cc:380:47: warning: 'kSSLServerSide' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7242640Z   380 |       nullptr, ctx->getSide() == TLS_SERVER ? kSSLServerSide : kSSLClientSide,
+2026-06-13T18:21:14.7247450Z       |                                               ^
+2026-06-13T18:21:14.7257510Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:217:5: note: 'kSSLServerSide' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7266450Z   217 |     kSSLServerSide CF_ENUM_DEPRECATED(10_2, 10_15, 2_0, 13_0),
+2026-06-13T18:21:14.7269200Z       |     ^
+2026-06-13T18:21:14.7278160Z AppleTLSSession.cc:380:64: warning: 'kSSLClientSide' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7292190Z   380 |       nullptr, ctx->getSide() == TLS_SERVER ? kSSLServerSide : kSSLClientSide,
+2026-06-13T18:21:14.7298660Z       |                                                                ^
+2026-06-13T18:21:14.7310840Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:218:5: note: 'kSSLClientSide' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7316790Z   218 |     kSSLClientSide CF_ENUM_DEPRECATED(10_2, 10_15, 2_0, 13_0)
+2026-06-13T18:21:14.7328710Z       |     ^
+2026-06-13T18:21:14.7334400Z AppleTLSSession.cc:381:7: warning: 'kSSLStreamType' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7336850Z   381 |       kSSLStreamType);
+2026-06-13T18:21:14.7343140Z       |       ^
+2026-06-13T18:21:14.7353430Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:223:5: note: 'kSSLStreamType' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7362280Z   223 |     kSSLStreamType CF_ENUM_DEPRECATED(10_2, 10_15, 2_0, 13_0),
+2026-06-13T18:21:14.7383480Z       |     ^
+2026-06-13T18:21:14.7392020Z AppleTLSSession.cc:379:13: warning: 'SSLCreateContext' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7393530Z   379 |   sslCtx_ = SSLCreateContext(
+2026-06-13T18:21:14.7397550Z       |             ^
+2026-06-13T18:21:14.7403150Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:316:1: note: 'SSLCreateContext' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7413320Z   316 | SSLCreateContext(CFAllocatorRef __nullable alloc, SSLProtocolSide protocolSide, SSLConnectionType connectionType)
+2026-06-13T18:21:14.7419950Z       | ^
+2026-06-13T18:21:14.7422270Z AppleTLSSession.cc:395:45: warning: 'kTLSProtocol11' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7430610Z   395 |     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol11);
+2026-06-13T18:21:14.7438660Z       |                                             ^
+2026-06-13T18:21:14.7454120Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:158:5: note: 'kTLSProtocol11' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7470350Z   158 |     kTLSProtocol11 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 7,
+2026-06-13T18:21:14.7489440Z       |     ^
+2026-06-13T18:21:14.7499550Z AppleTLSSession.cc:395:11: warning: 'SSLSetProtocolVersionMin' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7517560Z   395 |     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol11);
+2026-06-13T18:21:14.7533380Z       |           ^
+2026-06-13T18:21:14.7542440Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:458:1: note: 'SSLSetProtocolVersionMin' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7544900Z   458 | SSLSetProtocolVersionMin  (SSLContextRef      context,
+2026-06-13T18:21:14.7557650Z       | ^
+2026-06-13T18:21:14.7571470Z AppleTLSSession.cc:398:45: warning: 'kTLSProtocol12' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7587800Z   398 |     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol12);
+2026-06-13T18:21:14.7591630Z       |                                             ^
+2026-06-13T18:21:14.7606870Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:159:5: note: 'kTLSProtocol12' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7610000Z   159 |     kTLSProtocol12 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 8,
+2026-06-13T18:21:14.7610710Z       |     ^
+2026-06-13T18:21:14.7612310Z AppleTLSSession.cc:398:11: warning: 'SSLSetProtocolVersionMin' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7614040Z   398 |     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol12);
+2026-06-13T18:21:14.7614690Z       |           ^
+2026-06-13T18:21:14.7617150Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:458:1: note: 'SSLSetProtocolVersionMin' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7619540Z   458 | SSLSetProtocolVersionMin  (SSLContextRef      context,
+2026-06-13T18:21:14.7620250Z       | ^
+2026-06-13T18:21:14.7621210Z AppleTLSSession.cc:401:45: warning: 'kTLSProtocol13' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7622530Z   401 |     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol13);
+2026-06-13T18:21:14.7623210Z       |                                             ^
+2026-06-13T18:21:14.7625330Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:161:5: note: 'kTLSProtocol13' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7627650Z   161 |     kTLSProtocol13 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 10,
+2026-06-13T18:21:14.7628330Z       |     ^
+2026-06-13T18:21:14.7629780Z AppleTLSSession.cc:401:11: warning: 'SSLSetProtocolVersionMin' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7631500Z   401 |     (void)SSLSetProtocolVersionMin(sslCtx_, kTLSProtocol13);
+2026-06-13T18:21:14.7632150Z       |           ^
+2026-06-13T18:21:14.7634210Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:458:1: note: 'SSLSetProtocolVersionMin' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7636950Z   458 | SSLSetProtocolVersionMin  (SSLContextRef      context,
+2026-06-13T18:21:14.7637580Z       | ^
+2026-06-13T18:21:14.7638720Z AppleTLSSession.cc:425:29: warning: 'kSSLSessionOptionSendOneByteRecord' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7640170Z   425 |                             kSSLSessionOptionSendOneByteRecord,
+2026-06-13T18:21:14.7640770Z       |                             ^
+2026-06-13T18:21:14.7643220Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:123:5: note: 'kSSLSessionOptionSendOneByteRecord' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7645970Z   123 |     kSSLSessionOptionSendOneByteRecord CF_ENUM_DEPRECATED(10_2, 10_15, 2_0, 13_0) = 4,
+2026-06-13T18:21:14.7646880Z       |     ^
+2026-06-13T18:21:14.7648260Z AppleTLSSession.cc:423:9: warning: 'SSLSetSessionOption' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7649860Z   423 |   (void)SSLSetSessionOption(sslCtx_,
+2026-06-13T18:21:14.7650380Z       |         ^
+2026-06-13T18:21:14.7652440Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:384:1: note: 'SSLSetSessionOption' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7654890Z   384 | SSLSetSessionOption                     (SSLContextRef          context,
+2026-06-13T18:21:14.7655630Z       | ^
+2026-06-13T18:21:14.7656740Z AppleTLSSession.cc:432:38: warning: 'kSSLSessionOptionFalseStart' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7658740Z   432 |   (void)SSLSetSessionOption(sslCtx_, kSSLSessionOptionFalseStart, true);
+2026-06-13T18:21:14.7659550Z       |                                      ^
+2026-06-13T18:21:14.7661820Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:117:5: note: 'kSSLSessionOptionFalseStart' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7664420Z   117 |     kSSLSessionOptionFalseStart CF_ENUM_DEPRECATED(10_2, 10_15, 2_0, 13_0) = 3,
+2026-06-13T18:21:14.7665240Z       |     ^
+2026-06-13T18:21:14.7666610Z AppleTLSSession.cc:432:9: warning: 'SSLSetSessionOption' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7668450Z   432 |   (void)SSLSetSessionOption(sslCtx_, kSSLSessionOptionFalseStart, true);
+2026-06-13T18:21:14.7669240Z       |         ^
+2026-06-13T18:21:14.7671300Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:384:1: note: 'SSLSetSessionOption' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7673880Z   384 | SSLSetSessionOption                     (SSLContextRef          context,
+2026-06-13T18:21:14.7674610Z       | ^
+2026-06-13T18:21:14.7675760Z AppleTLSSession.cc:438:40: warning: 'kSSLSessionOptionBreakOnServerAuth' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7677360Z   438 |     (void)SSLSetSessionOption(sslCtx_, kSSLSessionOptionBreakOnServerAuth,
+2026-06-13T18:21:14.7678160Z       |                                        ^
+2026-06-13T18:21:14.7680430Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:99:2: note: 'kSSLSessionOptionBreakOnServerAuth' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7683530Z    99 |         kSSLSessionOptionBreakOnServerAuth CF_ENUM_DEPRECATED(10_2, 10_15, 2_0, 13_0) = 0,
+2026-06-13T18:21:14.7684430Z       |         ^
+2026-06-13T18:21:14.7685810Z AppleTLSSession.cc:438:11: warning: 'SSLSetSessionOption' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7687660Z   438 |     (void)SSLSetSessionOption(sslCtx_, kSSLSessionOptionBreakOnServerAuth,
+2026-06-13T18:21:14.7688460Z       |           ^
+2026-06-13T18:21:14.7690520Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:384:1: note: 'SSLSetSessionOption' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7693120Z   384 | SSLSetSessionOption                     (SSLContextRef          context,
+2026-06-13T18:21:14.7693830Z       | ^
+2026-06-13T18:21:14.7695160Z AppleTLSSession.cc:456:7: warning: 'SSLSetEnabledCiphers' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7696960Z   456 |   if (SSLSetEnabledCiphers(sslCtx_, &enabled[0], enabled.size()) != noErr) {
+2026-06-13T18:21:14.7697730Z       |       ^
+2026-06-13T18:21:14.7699740Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:865:1: note: 'SSLSetEnabledCiphers' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7702130Z   865 | SSLSetEnabledCiphers            (SSLContextRef                  context,
+2026-06-13T18:21:14.7702850Z       | ^
+2026-06-13T18:21:14.7704170Z AppleTLSSession.cc:484:16: warning: 'SSLSetCertificate' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7706130Z   484 |   lastError_ = SSLSetCertificate(sslCtx_, certs);
+2026-06-13T18:21:14.7706710Z       |                ^
+2026-06-13T18:21:14.7708730Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:637:1: note: 'SSLSetCertificate' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7711110Z   637 | SSLSetCertificate                       (SSLContextRef          context,
+2026-06-13T18:21:14.7711810Z       | ^
+2026-06-13T18:21:14.7713380Z AppleTLSSession.cc:493:16: warning: 'SSLSetDiffieHellmanParams' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7715310Z   493 |   lastError_ = SSLSetDiffieHellmanParams(sslCtx_, dhparam, sizeof(dhparam));
+2026-06-13T18:21:14.7716140Z       |                ^
+2026-06-13T18:21:14.7718320Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1522:1: note: 'SSLSetDiffieHellmanParams' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7721020Z  1522 | SSLSetDiffieHellmanParams       (SSLContextRef                  context,
+2026-06-13T18:21:14.7721820Z       | ^
+2026-06-13T18:21:14.7723300Z AppleTLSSession.cc:525:16: warning: 'SSLSetIOFuncs' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7724970Z   525 |   lastError_ = SSLSetIOFuncs(sslCtx_, SocketRead, SocketWrite);
+2026-06-13T18:21:14.7725670Z       |                ^
+2026-06-13T18:21:14.7727670Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:418:1: note: 'SSLSetIOFuncs' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7730050Z   418 | SSLSetIOFuncs                           (SSLContextRef          context,
+2026-06-13T18:21:14.7731540Z       | ^
+2026-06-13T18:21:14.7732850Z AppleTLSSession.cc:531:16: warning: 'SSLSetConnection' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7734440Z   531 |   lastError_ = SSLSetConnection(sslCtx_, this);
+2026-06-13T18:21:14.7735020Z       |                ^
+2026-06-13T18:21:14.7737050Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:657:1: note: 'SSLSetConnection' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7739470Z   657 | SSLSetConnection                        (SSLContextRef                  context,
+2026-06-13T18:21:14.7740200Z       | ^
+2026-06-13T18:21:14.7741570Z AppleTLSSession.cc:549:7: warning: 'SSLSetPeerDomainName' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7743570Z   549 |       SSLSetPeerDomainName(sslCtx_, hostname.c_str(), hostname.length());
+2026-06-13T18:21:14.7744330Z       |       ^
+2026-06-13T18:21:14.7746320Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:686:1: note: 'SSLSetPeerDomainName' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7748680Z   686 | SSLSetPeerDomainName            (SSLContextRef          context,
+2026-06-13T18:21:14.7749380Z       | ^
+2026-06-13T18:21:14.7750610Z AppleTLSSession.cc:560:16: warning: 'SSLClose' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7752060Z   560 |   lastError_ = SSLClose(sslCtx_);
+2026-06-13T18:21:14.7753060Z       |                ^
+2026-06-13T18:21:14.7754960Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1731:1: note: 'SSLClose' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7757180Z  1731 | SSLClose                                        (SSLContextRef          context)
+2026-06-13T18:21:14.7757850Z       | ^
+2026-06-13T18:21:14.7759200Z AppleTLSSession.cc:571:18: warning: 'SSLGetBufferedReadSize' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7761100Z   571 |     lastError_ = SSLGetBufferedReadSize(sslCtx_, &buffered);
+2026-06-13T18:21:14.7761760Z       |                  ^
+2026-06-13T18:21:14.7763820Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1705:1: note: 'SSLGetBufferedReadSize' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7766200Z  1705 | SSLGetBufferedReadSize          (SSLContextRef context,
+2026-06-13T18:21:14.7766860Z       | ^
+2026-06-13T18:21:14.7768080Z AppleTLSSession.cc:594:18: warning: 'SSLWrite' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7769620Z   594 |     lastError_ = SSLWrite(sslCtx_, nullptr, 0, &processed);
+2026-06-13T18:21:14.7770260Z       |                  ^
+2026-06-13T18:21:14.7772190Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1670:1: note: 'SSLWrite' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7774430Z  1670 | SSLWrite                                        (SSLContextRef          context,
+2026-06-13T18:21:14.7775100Z       | ^
+2026-06-13T18:21:14.7776320Z AppleTLSSession.cc:616:16: warning: 'SSLWrite' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7778200Z   616 |   lastError_ = SSLWrite(sslCtx_, data, len, &processed);
+2026-06-13T18:21:14.7778810Z       |                ^
+2026-06-13T18:21:14.7780700Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1670:1: note: 'SSLWrite' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7782930Z  1670 | SSLWrite                                        (SSLContextRef          context,
+2026-06-13T18:21:14.7783610Z       | ^
+2026-06-13T18:21:14.7784820Z AppleTLSSession.cc:668:16: warning: 'SSLRead' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7786350Z   668 |   lastError_ = SSLRead(sslCtx_, data, len, &processed);
+2026-06-13T18:21:14.7786970Z       |                ^
+2026-06-13T18:21:14.7788920Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1689:1: note: 'SSLRead' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7791190Z  1689 | SSLRead                                         (SSLContextRef          context,
+2026-06-13T18:21:14.7791850Z       | ^
+2026-06-13T18:21:14.7793120Z AppleTLSSession.cc:733:16: warning: 'SSLHandshake' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7794620Z   733 |   lastError_ = SSLHandshake(sslCtx_);
+2026-06-13T18:21:14.7795150Z       |                ^
+2026-06-13T18:21:14.7797130Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1641:1: note: 'SSLHandshake' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7799880Z  1641 | SSLHandshake                            (SSLContextRef          context)
+2026-06-13T18:21:14.7800560Z       | ^
+2026-06-13T18:21:14.7801540Z AppleTLSSession.cc:752:23: warning: 'kSSLProtocolUnknown' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7802780Z   752 |   SSLProtocol proto = kSSLProtocolUnknown;
+2026-06-13T18:21:14.7803320Z       |                       ^
+2026-06-13T18:21:14.7805370Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:156:5: note: 'kSSLProtocolUnknown' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7807760Z   156 |     kSSLProtocolUnknown CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 0,
+2026-06-13T18:21:14.7808490Z       |     ^
+2026-06-13T18:21:14.7809950Z AppleTLSSession.cc:753:9: warning: 'SSLGetNegotiatedProtocolVersion' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7811750Z   753 |   (void)SSLGetNegotiatedProtocolVersion(sslCtx_, &proto);
+2026-06-13T18:21:14.7812390Z       |         ^
+2026-06-13T18:21:14.7814490Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:803:1: note: 'SSLGetNegotiatedProtocolVersion' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7817030Z   803 | SSLGetNegotiatedProtocolVersion         (SSLContextRef          context,
+2026-06-13T18:21:14.7817800Z       | ^
+2026-06-13T18:21:14.7819130Z AppleTLSSession.cc:755:9: warning: 'SSLGetNegotiatedCipher' is deprecated: first deprecated in macOS 10.15 - No longer supported. Use Network.framework. [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7820890Z   755 |   (void)SSLGetNegotiatedCipher(sslCtx_, &suite);
+2026-06-13T18:21:14.7821490Z       |         ^
+2026-06-13T18:21:14.7823720Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecureTransport.h:1314:1: note: 'SSLGetNegotiatedCipher' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7826570Z  1314 | SSLGetNegotiatedCipher          (SSLContextRef          context,
+2026-06-13T18:21:14.7827280Z       | ^
+2026-06-13T18:21:14.7828260Z AppleTLSSession.cc:760:8: warning: 'kTLSProtocol11' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7829460Z   760 |   case kTLSProtocol11:
+2026-06-13T18:21:14.7829900Z       |        ^
+2026-06-13T18:21:14.7831930Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:158:5: note: 'kTLSProtocol11' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7834330Z   158 |     kTLSProtocol11 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 7,
+2026-06-13T18:21:14.7835040Z       |     ^
+2026-06-13T18:21:14.7836030Z AppleTLSSession.cc:763:8: warning: 'kTLSProtocol12' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7837220Z   763 |   case kTLSProtocol12:
+2026-06-13T18:21:14.7837670Z       |        ^
+2026-06-13T18:21:14.7839710Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:159:5: note: 'kTLSProtocol12' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7842150Z   159 |     kTLSProtocol12 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 8,
+2026-06-13T18:21:14.7843040Z       |     ^
+2026-06-13T18:21:14.7844070Z AppleTLSSession.cc:766:8: warning: 'kTLSProtocol13' is deprecated: first deprecated in macOS 10.15 [-Wdeprecated-declarations]
+2026-06-13T18:21:14.7845550Z   766 |   case kTLSProtocol13:
+2026-06-13T18:21:14.7847150Z       |        ^
+2026-06-13T18:21:14.7849940Z /Applications/Xcode_16.4.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk/System/Library/Frameworks/Security.framework/Headers/SecProtocolTypes.h:161:5: note: 'kTLSProtocol13' has been explicitly marked deprecated here
+2026-06-13T18:21:14.7853310Z   161 |     kTLSProtocol13 CF_ENUM_DEPRECATED(10_2, 10_15, 5_0, 13_0) = 10,
+2026-06-13T18:21:14.7854290Z       |     ^
+2026-06-13T18:21:14.7854780Z 6 warnings generated.
+2026-06-13T18:21:14.7855340Z 42 warnings generated.
+2026-06-13T18:21:14.9068430Z   CXX      GZipFile.lo
+2026-06-13T18:21:14.9925630Z   CXX      Adler32MessageDigestImpl.lo
+2026-06-13T18:21:15.7409610Z   CXX      Http2BodyQueue.lo
+2026-06-13T18:21:15.9139950Z   CXX      Http2ConnectionContext.lo
+2026-06-13T18:21:16.0152560Z   CXX      Http2Connection.lo
+2026-06-13T18:21:16.0419710Z   CXX      Http2DownloadCommand.lo
+2026-06-13T18:21:16.9885320Z   CXX      Http2MultiplexExchange.lo
+2026-06-13T18:21:17.0135590Z   CXX      Http2ResponseCommand.lo
+2026-06-13T18:21:17.1169650Z   CXX      Http2ResponseAdapter.lo
+2026-06-13T18:21:17.8271970Z   CXX      Http2Session.lo
+2026-06-13T18:21:18.3833730Z   CXX      Http2SingleStreamExchange.lo
+2026-06-13T18:21:18.7155110Z   CXX      Http2SocketCoreTransport.lo
+2026-06-13T18:21:18.7168850Z   CXX      Http2Transaction.lo
+2026-06-13T18:21:19.6836600Z   CXX      Http2TransactionPump.lo
+2026-06-13T18:21:19.7905670Z   CXX      AsyncServiceBindingResolver.lo
+2026-06-13T18:21:19.9061870Z   CXX      AsyncNameResolver.lo
+2026-06-13T18:21:20.1705640Z   CXX      AsyncNameResolverMan.lo
+2026-06-13T18:21:21.1847670Z   CXX      AsyncDotNameResolver.lo
+2026-06-13T18:21:21.2616150Z AsyncServiceBindingResolver.cc:347:5: warning: 'ares_send' is deprecated: Use ares_send_dnsrec instead [-Wdeprecated-declarations]
+2026-06-13T18:21:21.2648450Z   347 |     ares_send(channel_,
+2026-06-13T18:21:21.2664780Z       |     ^
+2026-06-13T18:21:21.2735610Z /Users/runner/work/_temp/static-deps/include/ares.h:816:14: note: 'ares_send' has been explicitly marked deprecated here
+2026-06-13T18:21:21.2957550Z   816 | CARES_EXTERN CARES_DEPRECATED_FOR(ares_send_dnsrec) void ares_send(
+2026-06-13T18:21:21.3007100Z       |              ^
+2026-06-13T18:21:21.3024740Z /Users/runner/work/_temp/static-deps/include/ares.h:153:22: note: expanded from macro 'CARES_DEPRECATED_FOR'
+2026-06-13T18:21:21.3116860Z   153 |       __attribute__((deprecated("Use " #f " instead")))
+2026-06-13T18:21:21.3283540Z       |                      ^
+2026-06-13T18:21:21.7545170Z 1 warning generated.
+2026-06-13T18:21:21.7545670Z   CXX      AsyncDohNameResolver.lo
+2026-06-13T18:21:21.7835730Z   CXX      PlainBootstrapResolver.lo
+2026-06-13T18:21:23.1671250Z   CXX      AbstractBtMessage.lo
+2026-06-13T18:21:23.8364010Z   CXX      ActivePeerConnectionCommand.lo
+2026-06-13T18:21:24.4304460Z   CXX      AnnounceList.lo
+2026-06-13T18:21:25.0949210Z   CXX      AnnounceTier.lo
+2026-06-13T18:21:25.3048200Z   CXX      bencode2.lo
+2026-06-13T18:21:25.5903220Z   CXX      BencodeParser.lo
+2026-06-13T18:21:26.2148380Z   CXX      bittorrent_helper.lo
+2026-06-13T18:21:26.7088520Z   CXX      BtAbortOutstandingRequestEvent.lo
+2026-06-13T18:21:26.8975060Z   CXX      BtAllowedFastMessage.lo
+2026-06-13T18:21:27.0598550Z   CXX      BtAnnounce.lo
+2026-06-13T18:21:27.7542390Z   CXX      BtBitfieldMessage.lo
+2026-06-13T18:21:28.1236610Z   CXX      BtBitfieldMessageValidator.lo
+2026-06-13T18:21:28.2648380Z   CXX      BtCancelMessage.lo
+2026-06-13T18:21:29.1867030Z   CXX      BtCheckIntegrityEntry.lo
+2026-06-13T18:21:29.3579780Z   CXX      BtChokeMessage.lo
+2026-06-13T18:21:29.5658110Z   CXX      BtDependency.lo
+2026-06-13T18:21:30.2362980Z   CXX      BtExtendedMessage.lo
+2026-06-13T18:21:30.7219480Z   CXX      BtFileAllocationEntry.lo
+2026-06-13T18:21:30.7465670Z   CXX      BtHandshakeMessage.lo
+2026-06-13T18:21:31.7854170Z   CXX      BtHandshakeMessageValidator.lo
+2026-06-13T18:21:31.8474330Z   CXX      BtHaveAllMessage.lo
+2026-06-13T18:21:32.1524070Z   CXX      BtHaveMessage.lo
+2026-06-13T18:21:32.5309300Z   CXX      BtHaveNoneMessage.lo
+2026-06-13T18:21:33.6131440Z   CXX      BtInterestedMessage.lo
+2026-06-13T18:21:33.9896330Z   CXX      BtKeepAliveMessage.lo
+2026-06-13T18:21:34.5182100Z   CXX      BtLeecherStateChoke.lo
+2026-06-13T18:21:34.8220470Z   CXX      BtNotInterestedMessage.lo
+2026-06-13T18:21:35.0988720Z   CXX      BtPieceMessage.lo
+2026-06-13T18:21:35.2669040Z   CXX      BtPieceMessageValidator.lo
+2026-06-13T18:21:36.0563790Z   CXX      BtPortMessage.lo
+2026-06-13T18:21:36.1632430Z   CXX      BtPostDownloadHandler.lo
+2026-06-13T18:21:36.4793590Z   CXX      BtRegistry.lo
+2026-06-13T18:21:36.6721140Z   CXX      BtRejectMessage.lo
+2026-06-13T18:21:37.3717750Z   CXX      BtRequestMessage.lo
+2026-06-13T18:21:37.9033130Z   CXX      BtRuntime.lo
+2026-06-13T18:21:37.9106010Z   CXX      BtSeederStateChoke.lo
+2026-06-13T18:21:38.0180010Z   CXX      BtSetup.lo
+2026-06-13T18:21:38.8020720Z   CXX      BtStopDownloadCommand.lo
+2026-06-13T18:21:38.8869160Z   CXX      BtSuggestPieceMessage.lo
+2026-06-13T18:21:39.5952600Z   CXX      BtUnchokeMessage.lo
+2026-06-13T18:21:40.0774030Z   CXX      DefaultBtAnnounce.lo
+2026-06-13T18:21:40.2034900Z   CXX      DefaultBtInteractive.lo
+2026-06-13T18:21:40.4582220Z   CXX      DefaultBtMessageDispatcher.lo
+2026-06-13T18:21:40.8766230Z   CXX      DefaultBtMessageFactory.lo
+2026-06-13T18:21:41.8934190Z   CXX      DefaultBtMessageReceiver.lo
+2026-06-13T18:21:42.6003510Z   CXX      DefaultBtRequestFactory.lo
+2026-06-13T18:21:42.7542630Z   CXX      DefaultExtensionMessageFactory.lo
+2026-06-13T18:21:43.5031880Z   CXX      DefaultPeerStorage.lo
+2026-06-13T18:21:43.5138900Z   CXX      DHTAbstractMessage.lo
+2026-06-13T18:21:44.2784100Z   CXX      DHTAbstractTask.lo
+2026-06-13T18:21:44.8291360Z   CXX      DHTAnnouncePeerMessage.lo
+2026-06-13T18:21:45.1299060Z   CXX      DHTAnnouncePeerReplyMessage.lo
+2026-06-13T18:21:45.7447300Z   CXX      DHTAutoSaveCommand.lo
+2026-06-13T18:21:46.2282140Z   CXX      DHTBucket.lo
+2026-06-13T18:21:46.5546950Z   CXX      DHTBucketRefreshCommand.lo
+2026-06-13T18:21:46.5786680Z   CXX      DHTBucketRefreshTask.lo
+2026-06-13T18:21:47.6963630Z   CXX      DHTBucketTree.lo
+2026-06-13T18:21:47.9242230Z   CXX      DHTConnectionImpl.lo
+2026-06-13T18:21:47.9341060Z   CXX      DHTEntryPointNameResolveCommand.lo
+2026-06-13T18:21:48.6095950Z   CXX      DHTFindNodeMessage.lo
+2026-06-13T18:21:49.0919780Z   CXX      DHTFindNodeReplyMessage.lo
+2026-06-13T18:21:49.3460440Z   CXX      DHTGetPeersCommand.lo
+2026-06-13T18:21:49.9108390Z   CXX      DHTGetPeersMessage.lo
+2026-06-13T18:21:49.9959710Z   CXX      DHTGetPeersReplyMessage.lo
+2026-06-13T18:21:50.5170940Z   CXX      DHTInteractionCommand.lo
+2026-06-13T18:21:50.8969720Z   CXX      DHTMessage.lo
+2026-06-13T18:21:51.4817060Z   CXX      DHTMessageDispatcherImpl.lo
+2026-06-13T18:21:51.4914930Z   CXX      DHTMessageEntry.lo
+2026-06-13T18:21:52.0493760Z   CXX      DHTMessageFactoryImpl.lo
+2026-06-13T18:21:52.1421640Z   CXX      DHTMessageReceiver.lo
+2026-06-13T18:21:52.5363210Z   CXX      DHTMessageTracker.lo
+2026-06-13T18:21:53.1120070Z   CXX      DHTMessageTrackerEntry.lo
+2026-06-13T18:21:53.4423860Z   CXX      DHTNode.lo
+2026-06-13T18:21:54.1029730Z   CXX      DHTNodeLookupEntry.lo
+2026-06-13T18:21:54.5044430Z   CXX      DHTNodeLookupTaskCallback.lo
+2026-06-13T18:21:54.5045140Z   CXX      DHTNodeLookupTask.lo
+2026-06-13T18:21:54.9203830Z   CXX      DHTPeerAnnounceCommand.lo
+2026-06-13T18:21:55.2500070Z   CXX      DHTPeerAnnounceEntry.lo
+2026-06-13T18:21:56.2493170Z   CXX      DHTPeerAnnounceStorage.lo
+2026-06-13T18:21:56.3611090Z   CXX      DHTPeerLookupTask.lo
+2026-06-13T18:21:56.6528340Z   CXX      DHTPeerLookupTaskCallback.lo
+2026-06-13T18:21:57.0722970Z   CXX      DHTPingMessage.lo
+2026-06-13T18:21:58.0632300Z   CXX      DHTPingReplyMessage.lo
+2026-06-13T18:21:58.4239470Z   CXX      DHTPingTask.lo
+2026-06-13T18:21:59.1033170Z   CXX      DHTQueryMessage.lo
+2026-06-13T18:21:59.5891590Z   CXX      DHTRegistry.lo
+2026-06-13T18:21:59.6115490Z   CXX      DHTReplaceNodeTask.lo
+2026-06-13T18:21:59.9632930Z   CXX      DHTResponseMessage.lo
+2026-06-13T18:22:00.4748630Z   CXX      DHTRoutingTable.lo
+2026-06-13T18:22:00.8296350Z   CXX      DHTRoutingTableDeserializer.lo
+2026-06-13T18:22:00.8871990Z   CXX      DHTRoutingTableSerializer.lo
+2026-06-13T18:22:01.2362350Z   CXX      DHTSetup.lo
+2026-06-13T18:22:01.7404370Z   CXX      DHTTaskExecutor.lo
+2026-06-13T18:22:02.2457840Z   CXX      DHTTaskFactoryImpl.lo
+2026-06-13T18:22:02.3003280Z   CXX      DHTTaskQueueImpl.lo
+2026-06-13T18:22:02.9804410Z   CXX      DHTTokenTracker.lo
+2026-06-13T18:22:03.4698600Z   CXX      DHTTokenUpdateCommand.lo
+2026-06-13T18:22:03.7845410Z   CXX      DHTUnknownMessage.lo
+2026-06-13T18:22:03.8968530Z   CXX      ExtensionMessageRegistry.lo
+2026-06-13T18:22:04.3364840Z   CXX      HandshakeExtensionMessage.lo
+2026-06-13T18:22:04.8578710Z   CXX      IndexBtMessage.lo
+2026-06-13T18:22:04.9224780Z   CXX      IndexBtMessageValidator.lo
+2026-06-13T18:22:05.0319840Z   CXX      InitiatorMSEHandshakeCommand.lo
+2026-06-13T18:22:06.1658720Z   CXX      LpdDispatchMessageCommand.lo
+2026-06-13T18:22:06.2431010Z   CXX      LpdMessage.lo
+2026-06-13T18:22:06.3009210Z   CXX      LpdMessageDispatcher.lo
+2026-06-13T18:22:06.7900620Z   CXX      LpdMessageReceiver.lo
+2026-06-13T18:22:07.3199050Z   CXX      LpdReceiveMessageCommand.lo
+2026-06-13T18:22:07.5230940Z   CXX      magnet.lo
+2026-06-13T18:22:07.5344850Z   CXX      MSEHandshake.lo
+2026-06-13T18:22:08.1649200Z   CXX      NameResolveCommand.lo
+2026-06-13T18:22:08.8617490Z   CXX      Peer.lo
+2026-06-13T18:22:08.9267230Z   CXX      PeerAbstractCommand.lo
+2026-06-13T18:22:09.4793160Z   CXX      PeerAddrEntry.lo
+2026-06-13T18:22:10.0860700Z   CXX      PeerChokeCommand.lo
+2026-06-13T18:22:10.4577760Z   CXX      PeerConnection.lo
+2026-06-13T18:22:10.6900300Z   CXX      PeerInitiateConnectionCommand.lo
+2026-06-13T18:22:10.8419290Z   CXX      PeerInteractionCommand.lo
+2026-06-13T18:22:11.6735580Z   CXX      PeerListenCommand.lo
+2026-06-13T18:22:12.1210330Z   CXX      PeerReceiveHandshakeCommand.lo
+2026-06-13T18:22:12.4757300Z   CXX      PeerSessionResource.lo
+2026-06-13T18:22:13.2204170Z   CXX      PriorityPieceSelector.lo
+2026-06-13T18:22:13.7923100Z   CXX      RangeBtMessage.lo
+2026-06-13T18:22:13.8213160Z   CXX      RangeBtMessageValidator.lo
+2026-06-13T18:22:14.0672800Z   CXX      ReceiverMSEHandshakeCommand.lo
+2026-06-13T18:22:14.4944320Z   CXX      RequestSlot.lo
+2026-06-13T18:22:15.0353260Z   CXX      SeedCheckCommand.lo
+2026-06-13T18:22:15.0893450Z   CXX      ShareRatioSeedCriteria.lo
+2026-06-13T18:22:15.5176110Z   CXX      SimpleBtMessage.lo
+2026-06-13T18:22:15.8352770Z   CXX      TimeSeedCriteria.lo
+2026-06-13T18:22:16.2280670Z   CXX      TrackerWatcherCommand.lo
+2026-06-13T18:22:16.3650470Z   CXX      UDPTrackerClient.lo
+2026-06-13T18:22:16.8932670Z   CXX      UDPTrackerRequest.lo
+2026-06-13T18:22:16.9581080Z   CXX      UnionSeedCriteria.lo
+2026-06-13T18:22:17.9521980Z   CXX      UTMetadataDataExtensionMessage.lo
+2026-06-13T18:22:17.9711020Z   CXX      UTMetadataExtensionMessage.lo
+2026-06-13T18:22:18.6104740Z   CXX      UTMetadataPostDownloadHandler.lo
+2026-06-13T18:22:18.7094280Z   CXX      UTMetadataRejectExtensionMessage.lo
+2026-06-13T18:22:19.3455610Z   CXX      UTMetadataRequestExtensionMessage.lo
+2026-06-13T18:22:19.3857330Z   CXX      UTMetadataRequestFactory.lo
+2026-06-13T18:22:19.9389450Z   CXX      UTMetadataRequestTracker.lo
+2026-06-13T18:22:20.3348490Z   CXX      UTPexExtensionMessage.lo
+2026-06-13T18:22:20.7109000Z   CXX      ZeroBtMessage.lo
+2026-06-13T18:22:20.7989180Z   CXX      PollEventPoll.lo
+2026-06-13T18:22:21.1304160Z   CXX      KqueueEventPoll.lo
+2026-06-13T18:22:23.7445600Z   CXXLD    libaria2.la
+2026-06-13T18:22:27.3961280Z   CXXLD    aria2c
+2026-06-13T18:22:27.7818570Z ld: warning: -bind_at_load is deprecated on macOS
+2026-06-13T18:22:28.1502120Z Making all in doc
+2026-06-13T18:22:28.1707050Z Making all in manual-src
+2026-06-13T18:22:28.1917590Z Making all in en
+2026-06-13T18:22:28.2041550Z WARNING: Building only stub man pages. Please install sphinx-build: pip install sphinx
+2026-06-13T18:22:28.2049970Z if [ ! -d "_build/man" ]; then mkdir -p "_build/man"; fi;
+2026-06-13T18:22:28.2158020Z if [ ! -e "_build/man/aria2c.1" ]; then touch "_build/man/aria2c.1"; fi;
+2026-06-13T18:22:28.2296570Z Making all in ru
+2026-06-13T18:22:28.2474120Z WARNING: Building only stub man pages. Please install sphinx-build: pip install sphinx
+2026-06-13T18:22:28.2475340Z if [ ! -d "_build/man" ]; then mkdir -p "_build/man"; fi;
+2026-06-13T18:22:28.2602230Z if [ ! -e "_build/man/aria2c.1" ]; then touch "_build/man/aria2c.1"; fi;
+2026-06-13T18:22:28.2737660Z Making all in pt
+2026-06-13T18:22:28.2883620Z WARNING: Building only stub man pages. Please install sphinx-build: pip install sphinx
+2026-06-13T18:22:28.2885310Z if [ ! -d "_build/man" ]; then mkdir -p "_build/man"; fi;
+2026-06-13T18:22:28.3004870Z if [ ! -e "_build/man/aria2c.1" ]; then touch "_build/man/aria2c.1"; fi;
+2026-06-13T18:22:28.3214940Z make[4]: Nothing to be done for `all-am'.
+2026-06-13T18:22:28.3305580Z make[3]: Nothing to be done for `all-am'.
+2026-06-13T18:22:28.3324910Z Making all in test
+2026-06-13T18:22:28.3517620Z make[2]: Nothing to be done for `all'.
+2026-06-13T18:22:28.3639650Z Warning: rst2html not installed. Placing only a dummy file for README.html
+2026-06-13T18:22:28.3640890Z echo "<!doctype html>" > README.html
+2026-06-13T18:22:28.3716970Z echo "<p>Readme has not been built!.<br>Instead see <a href='README.rst'>README.rst</a></p>" >> README.html

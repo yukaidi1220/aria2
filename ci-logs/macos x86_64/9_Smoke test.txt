@@ -1,0 +1,53 @@
+﻿2026-06-13T18:22:28.5057000Z ##[group]Run out/aria2c --version | tee aria2c-version.txt
+2026-06-13T18:22:28.5058490Z [36;1mout/aria2c --version | tee aria2c-version.txt[0m
+2026-06-13T18:22:28.5059360Z [36;1mgrep -q 'AppleTLS' aria2c-version.txt[0m
+2026-06-13T18:22:28.5060570Z [36;1mgrep -q 'c-ares/' aria2c-version.txt[0m
+2026-06-13T18:22:28.5061200Z [36;1mgrep -q 'nghttp2/' aria2c-version.txt[0m
+2026-06-13T18:22:28.5062160Z [36;1mout/aria2c --help=async-dns-mode | tee async-dns-mode-help.txt[0m
+2026-06-13T18:22:28.5063000Z [36;1mgrep -Eq 'dot|doh' async-dns-mode-help.txt[0m
+2026-06-13T18:22:28.5147540Z shell: /bin/bash -e {0}
+2026-06-13T18:22:28.5148410Z env:
+2026-06-13T18:22:28.5149300Z   PKG_CONFIG_PATH: /Users/runner/work/_temp/static-deps/lib/pkgconfig
+2026-06-13T18:22:28.5150350Z ##[endgroup]
+2026-06-13T18:22:28.5906760Z aria2 version 1.37.0
+2026-06-13T18:22:28.5987660Z Copyright (C) 2006, 2019 Tatsuhiro Tsujikawa
+2026-06-13T18:22:28.6006370Z 
+2026-06-13T18:22:28.6017410Z This program is free software; you can redistribute it and/or modify
+2026-06-13T18:22:28.6020130Z it under the terms of the GNU General Public License as published by
+2026-06-13T18:22:28.6022400Z the Free Software Foundation; either version 2 of the License, or
+2026-06-13T18:22:28.6024850Z (at your option) any later version.
+2026-06-13T18:22:28.6026310Z 
+2026-06-13T18:22:28.6028050Z This program is distributed in the hope that it will be useful,
+2026-06-13T18:22:28.6030340Z but WITHOUT ANY WARRANTY; without even the implied warranty of
+2026-06-13T18:22:28.6033020Z MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+2026-06-13T18:22:28.6035820Z GNU General Public License for more details.
+2026-06-13T18:22:28.6036850Z 
+2026-06-13T18:22:28.6037760Z ** Configuration **
+2026-06-13T18:22:28.6039700Z Enabled Features: Async DNS, BitTorrent, GZip, HTTPS, Message Digest
+2026-06-13T18:22:28.6041740Z Hash Algorithms: sha-1, sha-224, sha-256, sha-384, sha-512, md5, adler32
+2026-06-13T18:22:28.6043740Z Libraries: zlib/1.2.12 AppleTLS c-ares/1.34.5 nghttp2/1.64.0
+2026-06-13T18:22:28.6045580Z Compiler: Apple LLVM 17.0.0 (clang-1700.0.13.5)
+2026-06-13T18:22:28.6048350Z   built by  x86_64-apple-darwin24.6.0
+2026-06-13T18:22:28.6049790Z   on        Jun 13 2026 18:20:06
+2026-06-13T18:22:28.6051580Z System: Darwin 24.6.0 Darwin Kernel Version 24.6.0: Tue Apr 21 20:17:54 PDT 2026; root:xnu-11417.140.69.710.16~1/RELEASE_X86_64 x86_64
+2026-06-13T18:22:28.6053950Z 
+2026-06-13T18:22:28.6055150Z Report bugs to https://github.com/aria2/aria2/issues
+2026-06-13T18:22:28.6057010Z Visit https://aria2.github.io/
+2026-06-13T18:22:28.6282770Z Usage: aria2c [OPTIONS] [URI | MAGNET | TORRENT_FILE | METALINK_FILE]...
+2026-06-13T18:22:28.6287410Z Printing options whose name includes 'async-dns-mode'.
+2026-06-13T18:22:28.6288200Z Options:
+2026-06-13T18:22:28.6288610Z  --async-dns-mode=cares|dot|doh|multi
+2026-06-13T18:22:28.6289670Z                               Select asynchronous DNS resolver backend.
+2026-06-13T18:22:28.6290920Z                               DoT/DoH server names are bootstrapped with
+2026-06-13T18:22:28.6292040Z                               plain c-ares. multi uses explicit udp://
+2026-06-13T18:22:28.6292880Z                               and tcp:// servers for secure bootstrap.
+2026-06-13T18:22:28.6293640Z                               Append #TLS_HOST to set TLS/HTTP names. multi
+2026-06-13T18:22:28.6294700Z                               tries secure DNS before plain fallback.
+2026-06-13T18:22:28.6295770Z                               HTTPS RR discovery is a separate background
+2026-06-13T18:22:28.6296850Z                               lookup and may not use the same fallback flow.
+2026-06-13T18:22:28.6297500Z 
+2026-06-13T18:22:28.6297810Z                               Possible Values: cares, dot, doh, multi
+2026-06-13T18:22:28.6298810Z                               Default: cares
+2026-06-13T18:22:28.6299530Z                               Tags: #advanced
+2026-06-13T18:22:28.6299910Z 
+2026-06-13T18:22:28.6300140Z Refer to man page for more information.

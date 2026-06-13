@@ -1,0 +1,16 @@
+﻿2026-06-13T18:22:28.6840360Z ##[group]Run otool -L out/aria2c
+2026-06-13T18:22:28.6841070Z [36;1motool -L out/aria2c[0m
+2026-06-13T18:22:28.6841850Z [36;1mif otool -L out/aria2c | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)'; then[0m
+2026-06-13T18:22:28.6843340Z [36;1m  echo "macOS artifact still depends on Homebrew absolute library paths."[0m
+2026-06-13T18:22:28.6844470Z [36;1m  exit 1[0m
+2026-06-13T18:22:28.6845050Z [36;1mfi[0m
+2026-06-13T18:22:28.6956060Z shell: /bin/bash -e {0}
+2026-06-13T18:22:28.6956770Z env:
+2026-06-13T18:22:28.6957540Z   PKG_CONFIG_PATH: /Users/runner/work/_temp/static-deps/lib/pkgconfig
+2026-06-13T18:22:28.6958530Z ##[endgroup]
+2026-06-13T18:22:29.8908300Z out/aria2c:
+2026-06-13T18:22:29.8909350Z 	/usr/lib/libz.1.dylib (compatibility version 1.0.0, current version 1.2.12)
+2026-06-13T18:22:29.8911100Z 	/System/Library/Frameworks/Security.framework/Versions/A/Security (compatibility version 1.0.0, current version 61439.120.27)
+2026-06-13T18:22:29.8913180Z 	/System/Library/Frameworks/CoreFoundation.framework/Versions/A/CoreFoundation (compatibility version 150.0.0, current version 3502.1.255)
+2026-06-13T18:22:29.8914940Z 	/usr/lib/libc++.1.dylib (compatibility version 1.0.0, current version 1900.180.0)
+2026-06-13T18:22:29.8916720Z 	/usr/lib/libSystem.B.dylib (compatibility version 1.0.0, current version 1351.0.0)

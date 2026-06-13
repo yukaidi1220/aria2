@@ -1,0 +1,568 @@
+﻿2026-06-13T18:17:15.6262530Z ##[group]Run prefix="$RUNNER_TEMP/static-deps"
+2026-06-13T18:17:15.6262860Z [36;1mprefix="$RUNNER_TEMP/static-deps"[0m
+2026-06-13T18:17:15.6263120Z [36;1mtest -f "$prefix/lib/libcares.a"[0m
+2026-06-13T18:17:15.6263370Z [36;1mtest -f "$prefix/lib/libnghttp2.a"[0m
+2026-06-13T18:17:15.6263610Z [36;1m./configure \[0m
+2026-06-13T18:17:15.6263820Z [36;1m  --without-openssl \[0m
+2026-06-13T18:17:15.6264030Z [36;1m  --without-gnutls \[0m
+2026-06-13T18:17:15.6264230Z [36;1m  --with-appletls \[0m
+2026-06-13T18:17:15.6264430Z [36;1m  --with-libcares \[0m
+2026-06-13T18:17:15.6264620Z [36;1m  --without-libssh2 \[0m
+2026-06-13T18:17:15.6264810Z [36;1m  --with-libnghttp2 \[0m
+2026-06-13T18:17:15.6264990Z [36;1m  --without-sqlite3 \[0m
+2026-06-13T18:17:15.6265170Z [36;1m  --without-libxml2 \[0m
+2026-06-13T18:17:15.6265350Z [36;1m  --without-libexpat \[0m
+2026-06-13T18:17:15.6265550Z [36;1m  --without-libnettle \[0m
+2026-06-13T18:17:15.6265750Z [36;1m  --without-libgmp \[0m
+2026-06-13T18:17:15.6265970Z [36;1m  --without-libgcrypt \[0m
+2026-06-13T18:17:15.6266190Z [36;1m  --disable-nls[0m
+2026-06-13T18:17:15.6296910Z shell: /bin/bash -e {0}
+2026-06-13T18:17:15.6297100Z env:
+2026-06-13T18:17:15.6297350Z   PKG_CONFIG_PATH: /Users/runner/work/_temp/static-deps/lib/pkgconfig
+2026-06-13T18:17:15.6297640Z ##[endgroup]
+2026-06-13T18:17:15.9002700Z checking build system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:17:15.9004570Z checking host system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:17:15.9005110Z checking target system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:17:15.9176360Z checking for a BSD-compatible install... /usr/bin/install -c
+2026-06-13T18:17:15.9272810Z checking whether sleep supports fractional seconds... yes
+2026-06-13T18:17:16.4700590Z checking filesystem timestamp resolution... 2
+2026-06-13T18:17:16.4800400Z checking whether build environment is sane... yes
+2026-06-13T18:17:16.4902680Z checking for a race-free mkdir -p... mkdir -p
+2026-06-13T18:17:16.4905810Z checking for gawk... no
+2026-06-13T18:17:16.4908480Z checking for mawk... no
+2026-06-13T18:17:16.4911040Z checking for nawk... no
+2026-06-13T18:17:16.4913580Z checking for awk... awk
+2026-06-13T18:17:16.5075310Z checking whether make sets $(MAKE)... yes
+2026-06-13T18:17:16.5219970Z checking whether make supports nested variables... yes
+2026-06-13T18:17:16.5343260Z checking xargs -n works... yes
+2026-06-13T18:17:16.5405190Z checking whether UID '501' is supported by ustar format... yes
+2026-06-13T18:17:16.5406230Z checking whether GID '20' is supported by ustar format... yes
+2026-06-13T18:17:16.5833020Z checking how to create a ustar tar archive... gnutar
+2026-06-13T18:17:16.6016450Z checking whether make supports the include directive... yes (GNU style)
+2026-06-13T18:17:16.6020870Z checking for gcc... gcc
+2026-06-13T18:17:16.8218150Z checking whether the C compiler works... yes
+2026-06-13T18:17:16.8218580Z checking for C compiler default output file name... a.out
+2026-06-13T18:17:16.8813830Z checking for suffix of executables... 
+2026-06-13T18:17:16.9399720Z checking whether we are cross compiling... no
+2026-06-13T18:17:16.9755210Z checking for suffix of object files... o
+2026-06-13T18:17:17.0068970Z checking whether the compiler supports GNU C... yes
+2026-06-13T18:17:17.0377370Z checking whether gcc accepts -g... yes
+2026-06-13T18:17:17.1608770Z checking for gcc option to enable C23 features... -std=gnu23
+2026-06-13T18:17:17.2321780Z checking whether gcc -std=gnu23 understands -c and -o together... yes
+2026-06-13T18:17:17.2934590Z checking dependency style of gcc -std=gnu23... gcc3
+2026-06-13T18:17:17.3279600Z checking for stdio.h... yes
+2026-06-13T18:17:17.3652990Z checking for stdlib.h... yes
+2026-06-13T18:17:17.4041480Z checking for string.h... yes
+2026-06-13T18:17:17.4417430Z checking for inttypes.h... yes
+2026-06-13T18:17:17.4793170Z checking for stdint.h... yes
+2026-06-13T18:17:17.5173660Z checking for strings.h... yes
+2026-06-13T18:17:17.5554410Z checking for sys/stat.h... yes
+2026-06-13T18:17:17.5964480Z checking for sys/types.h... yes
+2026-06-13T18:17:17.6361570Z checking for unistd.h... yes
+2026-06-13T18:17:17.6786790Z checking for wchar.h... yes
+2026-06-13T18:17:17.7246870Z checking for minix/config.h... no
+2026-06-13T18:17:17.7866670Z checking whether it is safe to define __EXTENSIONS__... yes
+2026-06-13T18:17:17.8264960Z checking whether _XOPEN_SOURCE should be defined... no
+2026-06-13T18:17:17.8298820Z checking how to print strings... printf
+2026-06-13T18:17:17.9754410Z checking for a sed that does not truncate output... /usr/bin/sed
+2026-06-13T18:17:17.9797070Z checking for grep that handles long lines and -e... /usr/bin/grep
+2026-06-13T18:17:17.9825420Z checking for egrep... /usr/bin/grep -E
+2026-06-13T18:17:17.9838550Z checking for fgrep... /usr/bin/grep -F
+2026-06-13T18:17:18.0071450Z checking for ld used by gcc -std=gnu23... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:17:18.0144420Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:17:18.0258340Z checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+2026-06-13T18:17:18.0700870Z checking the name lister (/usr/bin/nm -B) interface... BSD nm
+2026-06-13T18:17:18.0701270Z checking whether ln -s works... yes
+2026-06-13T18:17:18.0756760Z checking the maximum length of command line arguments... 786432
+2026-06-13T18:17:18.0797560Z checking how to convert aarch64-apple-darwin24.6.0 file names to aarch64-apple-darwin24.6.0 format... func_convert_file_noop
+2026-06-13T18:17:18.0800050Z checking how to convert aarch64-apple-darwin24.6.0 file names to toolchain format... func_convert_file_noop
+2026-06-13T18:17:18.0800750Z checking for /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld option to reload object files... -r
+2026-06-13T18:17:18.0802090Z checking for file... file
+2026-06-13T18:17:18.0806200Z checking for objdump... objdump
+2026-06-13T18:17:18.0809050Z checking how to recognize dependent libraries... pass_all
+2026-06-13T18:17:18.0813200Z checking for dlltool... no
+2026-06-13T18:17:18.0813780Z checking how to associate runtime and link libraries... printf %s\n
+2026-06-13T18:17:18.0817710Z checking for ranlib... ranlib
+2026-06-13T18:17:18.0821400Z checking for ar... ar
+2026-06-13T18:17:18.1321840Z checking for archiver @FILE support... no
+2026-06-13T18:17:18.1325900Z checking for strip... strip
+2026-06-13T18:17:18.4092560Z checking command to parse /usr/bin/nm -B output from gcc -std=gnu23 object... ok
+2026-06-13T18:17:18.4200420Z checking for sysroot... no
+2026-06-13T18:17:18.4289780Z checking for a working dd... /bin/dd
+2026-06-13T18:17:18.4361470Z checking how to truncate binary pipes... /bin/dd bs=4096 count=1
+2026-06-13T18:17:18.4368240Z checking for mt... no
+2026-06-13T18:17:18.4420030Z checking if : is a manifest tool... no
+2026-06-13T18:17:18.4430480Z checking for dsymutil... dsymutil
+2026-06-13T18:17:18.4433270Z checking for nmedit... nmedit
+2026-06-13T18:17:18.4435450Z checking for lipo... lipo
+2026-06-13T18:17:18.4438110Z checking for otool... otool
+2026-06-13T18:17:18.4441240Z checking for otool64... no
+2026-06-13T18:17:18.5011050Z checking for -single_module linker flag... ld: warning: -single_module is obsolete
+2026-06-13T18:17:18.5072230Z no
+2026-06-13T18:17:18.5913720Z checking for -no_fixup_chains linker flag... yes
+2026-06-13T18:17:18.6528770Z checking for -exported_symbols_list linker flag... yes
+2026-06-13T18:17:18.7795660Z checking for -force_load linker flag... yes
+2026-06-13T18:17:18.8199320Z checking for dlfcn.h... yes
+2026-06-13T18:17:18.8255500Z checking for objdir... .libs
+2026-06-13T18:17:18.9541080Z checking if gcc -std=gnu23 supports -fno-rtti -fno-exceptions... yes
+2026-06-13T18:17:18.9541540Z checking for gcc -std=gnu23 option to produce PIC... -fno-common -DPIC
+2026-06-13T18:17:18.9890940Z checking if gcc -std=gnu23 PIC flag -fno-common -DPIC works... yes
+2026-06-13T18:17:19.0250270Z checking if gcc -std=gnu23 static flag -static works... no
+2026-06-13T18:17:19.0745290Z checking if gcc -std=gnu23 supports -c -o file.o... yes
+2026-06-13T18:17:19.0745700Z checking if gcc -std=gnu23 supports -c -o file.o... (cached) yes
+2026-06-13T18:17:19.0746940Z checking whether the gcc -std=gnu23 linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:17:19.1183610Z checking dynamic linker characteristics... darwin24.6.0 dyld
+2026-06-13T18:17:19.1184130Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:17:19.1277970Z checking whether stripping libraries is possible... yes
+2026-06-13T18:17:19.1278450Z checking if libtool supports shared libraries... yes
+2026-06-13T18:17:19.1278730Z checking whether to build shared libraries... yes
+2026-06-13T18:17:19.1279010Z checking whether to build static libraries... no
+2026-06-13T18:17:19.1293340Z checking for g++... g++
+2026-06-13T18:17:19.2848630Z checking whether the compiler supports GNU C++... yes
+2026-06-13T18:17:19.3155450Z checking whether g++ accepts -g... yes
+2026-06-13T18:17:19.3744920Z checking dependency style of g++... gcc3
+2026-06-13T18:17:19.4621800Z checking how to run the C++ preprocessor... g++ -E
+2026-06-13T18:17:19.6775840Z checking for ld used by g++... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:17:19.6848010Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:17:19.6849320Z checking whether the g++ linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:17:19.7159640Z checking for g++ option to produce PIC... -fno-common -DPIC
+2026-06-13T18:17:19.7510860Z checking if g++ PIC flag -fno-common -DPIC works... yes
+2026-06-13T18:17:19.7870080Z checking if g++ static flag -static works... no
+2026-06-13T18:17:19.8347930Z checking if g++ supports -c -o file.o... yes
+2026-06-13T18:17:19.8348310Z checking if g++ supports -c -o file.o... (cached) yes
+2026-06-13T18:17:19.8348950Z checking whether the g++ linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:17:19.8349650Z checking dynamic linker characteristics... darwin24.6.0 dyld
+2026-06-13T18:17:19.8350040Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:17:19.8354500Z checking for gcc... (cached) gcc
+2026-06-13T18:17:19.9744600Z checking whether the compiler supports GNU C... (cached) yes
+2026-06-13T18:17:19.9745180Z checking whether gcc accepts -g... (cached) yes
+2026-06-13T18:17:19.9746340Z checking for gcc option to enable C23 features... (cached) -std=gnu23
+2026-06-13T18:17:19.9749450Z checking whether gcc -std=gnu23 understands -c and -o together... (cached) yes
+2026-06-13T18:17:19.9751520Z checking dependency style of gcc -std=gnu23... (cached) gcc3
+2026-06-13T18:17:19.9755830Z checking for bison... bison -y
+2026-06-13T18:17:20.0406420Z checking dependency style of gcc -std=gnu23... gcc3
+2026-06-13T18:17:20.0407750Z checking for ar... (cached) ar
+2026-06-13T18:17:20.0412420Z checking for sphinx-build... no
+2026-06-13T18:17:20.0415980Z checking for rst2html.py... no
+2026-06-13T18:17:20.0418810Z checking for rst2html... no
+2026-06-13T18:17:20.0421790Z checking for pkg-config... /opt/homebrew/bin/pkg-config
+2026-06-13T18:17:20.0446270Z checking pkg-config is at least version 0.20... yes
+2026-06-13T18:17:20.0790030Z checking whether g++ supports C++11 features by default... yes
+2026-06-13T18:17:20.1419160Z checking whether the c++ compiler supports nullptr... checking whether the C++ compiler supports `override` keyword... yes
+2026-06-13T18:17:20.1682010Z checking for cppunit >= 1.10.2... no
+2026-06-13T18:17:20.1816880Z configure: WARNING: Package 'cppunit' not found
+2026-06-13T18:17:20.1906060Z checking for zlib >= 1.2.3... yes
+2026-06-13T18:17:20.2551490Z checking for gzbuffer... yes
+2026-06-13T18:17:20.3225520Z checking for gzsetparams... yes
+2026-06-13T18:17:20.3234200Z checking whether to enable Mac OS X native SSL/TLS... yes
+2026-06-13T18:17:20.3763950Z checking for main in -lcrypt32... no
+2026-06-13T18:17:20.4464590Z checking for main in -lsecur32... no
+2026-06-13T18:17:20.5161970Z checking for main in -ladvapi32... no
+2026-06-13T18:17:20.5707140Z checking for wincrypt.h... no
+2026-06-13T18:17:20.6295080Z checking for security.h... no
+2026-06-13T18:17:20.6396230Z checking for libnghttp2... yes
+2026-06-13T18:17:20.6550920Z checking for libcares >= 1.16.0... yes
+2026-06-13T18:17:20.7234770Z checking for ares_set_server_state_callback... yes
+2026-06-13T18:17:20.8173590Z checking for size_t... yes
+2026-06-13T18:17:20.8988230Z checking for working alloca.h... yes
+2026-06-13T18:17:20.8988980Z checking for alloca... yes
+2026-06-13T18:17:20.8991570Z checking for egrep... (cached) /usr/bin/grep -E
+2026-06-13T18:17:20.9515310Z checking for argz.h... no
+2026-06-13T18:17:21.0133790Z checking for arpa/inet.h... yes
+2026-06-13T18:17:21.0557680Z checking for fcntl.h... yes
+2026-06-13T18:17:21.0988420Z checking for float.h... yes
+2026-06-13T18:17:21.0989880Z checking for inttypes.h... (cached) yes
+2026-06-13T18:17:21.1418180Z checking for langinfo.h... yes
+2026-06-13T18:17:21.1897720Z checking for libintl.h... no
+2026-06-13T18:17:21.2510580Z checking for limits.h... yes
+2026-06-13T18:17:21.2930060Z checking for locale.h... yes
+2026-06-13T18:17:21.3405170Z checking for malloc.h... no
+2026-06-13T18:17:21.3981060Z checking for netdb.h... yes
+2026-06-13T18:17:21.4410500Z checking for netinet/in.h... yes
+2026-06-13T18:17:21.4843220Z checking for netinet/tcp.h... yes
+2026-06-13T18:17:21.5259370Z checking for poll.h... yes
+2026-06-13T18:17:21.5737660Z checking for port.h... no
+2026-06-13T18:17:21.6273780Z checking for signal.h... yes
+2026-06-13T18:17:21.6693490Z checking for stddef.h... yes
+2026-06-13T18:17:21.6694910Z checking for stdint.h... (cached) yes
+2026-06-13T18:17:21.7171290Z checking for stdio_ext.h... no
+2026-06-13T18:17:21.7171720Z checking for stdlib.h... (cached) yes
+2026-06-13T18:17:21.7240930Z checking for string.h... (cached) yes
+2026-06-13T18:17:21.7298080Z checking for strings.h... (cached) yes
+2026-06-13T18:17:21.7790350Z checking for sys/ioctl.h... yes
+2026-06-13T18:17:21.8209600Z checking for sys/param.h... yes
+2026-06-13T18:17:21.8625900Z checking for sys/resource.h... yes
+2026-06-13T18:17:21.9040610Z checking for sys/signal.h... yes
+2026-06-13T18:17:21.9462150Z checking for sys/socket.h... yes
+2026-06-13T18:17:21.9883160Z checking for sys/time.h... yes
+2026-06-13T18:17:21.9884070Z checking for sys/types.h... (cached) yes
+2026-06-13T18:17:22.0301000Z checking for sys/uio.h... yes
+2026-06-13T18:17:22.0726890Z checking for sys/utsname.h... yes
+2026-06-13T18:17:22.1162490Z checking for termios.h... yes
+2026-06-13T18:17:22.1164110Z checking for unistd.h... (cached) yes
+2026-06-13T18:17:22.1586610Z checking for utime.h... yes
+2026-06-13T18:17:22.1588120Z checking for wchar.h... (cached) yes
+2026-06-13T18:17:22.2004180Z checking for ifaddrs.h... yes
+2026-06-13T18:17:22.2427960Z checking for pwd.h... yes
+2026-06-13T18:17:22.2902600Z checking for _Bool... no
+2026-06-13T18:17:22.3442980Z checking for stdbool.h that conforms to C99 or later... yes
+2026-06-13T18:17:22.3955750Z checking for an ANSI C-conforming const... yes
+2026-06-13T18:17:22.4255080Z checking for inline... inline
+2026-06-13T18:17:22.5151070Z checking for int16_t... yes
+2026-06-13T18:17:22.6193290Z checking for int32_t... yes
+2026-06-13T18:17:22.7329580Z checking for int64_t... yes
+2026-06-13T18:17:22.8380040Z checking for int8_t... yes
+2026-06-13T18:17:22.9410540Z checking for mode_t... yes
+2026-06-13T18:17:23.0451440Z checking for off_t... yes
+2026-06-13T18:17:23.0451860Z checking for size_t... (cached) yes
+2026-06-13T18:17:23.1496960Z checking for ssize_t... yes
+2026-06-13T18:17:23.1497890Z checking for sys/time.h... (cached) yes
+2026-06-13T18:17:23.2116750Z checking for sys/select.h... yes
+2026-06-13T18:17:23.2117670Z checking for sys/socket.h... (cached) yes
+2026-06-13T18:17:23.2591570Z checking for vfork.h... no
+2026-06-13T18:17:23.3099410Z checking whether struct tm is in sys/time.h or time.h... time.h
+2026-06-13T18:17:23.3675740Z checking for uint16_t... yes
+2026-06-13T18:17:23.4108240Z checking for uint32_t... yes
+2026-06-13T18:17:23.7211990Z checking for uint64_t... yes
+2026-06-13T18:17:23.8046250Z checking for uint8_t... yes
+2026-06-13T18:17:23.9611670Z checking for pid_t... yes
+2026-06-13T18:17:24.0054740Z checking for working volatile... yes
+2026-06-13T18:17:24.1019560Z checking for ptrdiff_t... yes
+2026-06-13T18:17:24.2217610Z checking for struct timespec... yes
+2026-06-13T18:17:24.3607910Z checking whether byte ordering is bigendian... no
+2026-06-13T18:17:24.4465670Z checking for gcc -std=gnu23 option to support large files... none needed
+2026-06-13T18:17:24.4466660Z checking whether NLS is requested... no
+2026-06-13T18:17:24.5044940Z checking for msgfmt... /opt/homebrew/bin/msgfmt
+2026-06-13T18:17:24.5049520Z checking for gmsgfmt... /opt/homebrew/bin/msgfmt
+2026-06-13T18:17:24.5408470Z checking for xgettext... /opt/homebrew/bin/xgettext
+2026-06-13T18:17:24.5632530Z checking for msgmerge... /opt/homebrew/bin/msgmerge
+2026-06-13T18:17:24.5871330Z checking for ld used by gcc -std=gnu23... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:17:24.5979230Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:17:24.6270180Z checking for shared library run path origin... done
+2026-06-13T18:17:24.6272430Z checking for egrep -e... (cached) /usr/bin/grep -E
+2026-06-13T18:17:24.7579390Z checking for CFPreferencesCopyAppValue... yes
+2026-06-13T18:17:24.8670980Z checking for CFLocaleCopyCurrent... yes
+2026-06-13T18:17:24.8681590Z checking whether to use NLS... no
+2026-06-13T18:17:24.9164190Z checking for error_at_line... no
+2026-06-13T18:17:25.0394830Z checking for working memcmp... yes
+2026-06-13T18:17:25.1192480Z checking for alarm... yes
+2026-06-13T18:17:25.2018080Z checking for vprintf... yes
+2026-06-13T18:17:25.2779280Z checking for fork... yes
+2026-06-13T18:17:25.3527810Z checking for vfork... yes
+2026-06-13T18:17:25.5104420Z checking for working mktime... no
+2026-06-13T18:17:25.5825060Z checking types of arguments for select... int,fd_set *,struct timeval *
+2026-06-13T18:17:25.7513640Z checking whether lstat correctly handles trailing slash... no
+2026-06-13T18:17:25.8522110Z checking whether stat accepts an empty string... no
+2026-06-13T18:17:25.9248010Z checking for strftime... yes
+2026-06-13T18:17:26.0035840Z checking for working fork... yes
+2026-06-13T18:17:26.0036740Z checking for working vfork... (cached) yes
+2026-06-13T18:17:26.0929280Z checking for working strtod... yes
+2026-06-13T18:17:26.1642080Z checking for __argz_count... no
+2026-06-13T18:17:26.2482350Z checking for __argz_next... no
+2026-06-13T18:17:26.3391150Z checking for __argz_stringify... no
+2026-06-13T18:17:26.4275820Z checking for atexit... yes
+2026-06-13T18:17:26.4906710Z checking for ftruncate... yes
+2026-06-13T18:17:26.5771480Z checking for getcwd... yes
+2026-06-13T18:17:26.6675550Z checking for getentropy... yes
+2026-06-13T18:17:26.7467930Z checking for gethostbyaddr... yes
+2026-06-13T18:17:26.8579620Z checking for gethostbyname... yes
+2026-06-13T18:17:26.9457260Z checking for getifaddrs... yes
+2026-06-13T18:17:27.0171020Z checking for getpagesize... yes
+2026-06-13T18:17:27.0855810Z checking for memchr... yes
+2026-06-13T18:17:27.1490240Z checking for memmove... yes
+2026-06-13T18:17:27.2117380Z checking for mempcpy... no
+2026-06-13T18:17:27.2981460Z checking for memset... yes
+2026-06-13T18:17:27.3801210Z checking for mkdir... yes
+2026-06-13T18:17:27.4429410Z checking for mmap... yes
+2026-06-13T18:17:27.5218540Z checking for munmap... yes
+2026-06-13T18:17:27.5849480Z checking for nl_langinfo... yes
+2026-06-13T18:17:27.6475890Z checking for posix_fadvise... no
+2026-06-13T18:17:27.7674800Z checking for posix_memalign... yes
+2026-06-13T18:17:27.8535660Z checking for pow... yes
+2026-06-13T18:17:27.9395220Z checking for putenv... yes
+2026-06-13T18:17:28.0135090Z checking for rmdir... yes
+2026-06-13T18:17:28.0854360Z checking for select... yes
+2026-06-13T18:17:28.1561480Z checking for setlocale... yes
+2026-06-13T18:17:28.2267830Z checking for sigaction... yes
+2026-06-13T18:17:28.2975240Z checking for sleep... yes
+2026-06-13T18:17:28.3667430Z checking for socket... yes
+2026-06-13T18:17:28.4608080Z checking for stpcpy... yes
+2026-06-13T18:17:28.5472220Z checking for strcasecmp... yes
+2026-06-13T18:17:28.6176990Z checking for strchr... yes
+2026-06-13T18:17:28.6960490Z checking for strcspn... yes
+2026-06-13T18:17:28.7690640Z checking for strdup... yes
+2026-06-13T18:17:28.8317930Z checking for strerror... yes
+2026-06-13T18:17:28.8953090Z checking for strncasecmp... yes
+2026-06-13T18:17:28.9590490Z checking for strstr... yes
+2026-06-13T18:17:29.0455170Z checking for strtol... yes
+2026-06-13T18:17:29.1090480Z checking for strtoul... yes
+2026-06-13T18:17:29.2174690Z checking for strtoull... yes
+2026-06-13T18:17:29.2944010Z checking for tzset... yes
+2026-06-13T18:17:29.3603420Z checking for unsetenv... yes
+2026-06-13T18:17:29.4453520Z checking for usleep... yes
+2026-06-13T18:17:29.5216330Z checking for utime... yes
+2026-06-13T18:17:29.5846370Z checking for utimes... yes
+2026-06-13T18:17:29.6937800Z checking for epoll_create... no
+2026-06-13T18:17:29.7581720Z checking for posix_fallocate... no
+2026-06-13T18:17:29.8232150Z checking for fallocate... no
+2026-06-13T18:17:29.9759660Z checking for asctime_r... yes
+2026-06-13T18:17:30.0466430Z checking for localtime_r... yes
+2026-06-13T18:17:30.1135700Z checking for basename... yes
+2026-06-13T18:17:30.1796710Z checking for gai_strerror... yes
+2026-06-13T18:17:30.2433290Z checking for getaddrinfo... yes
+2026-06-13T18:17:30.3303530Z checking for gettimeofday... yes
+2026-06-13T18:17:30.3941330Z checking for strptime... yes
+2026-06-13T18:17:30.4630610Z checking for daemon... yes
+2026-06-13T18:17:30.5545780Z checking for poll... yes
+2026-06-13T18:17:30.6249550Z checking for timegm... yes
+2026-06-13T18:17:30.6945930Z checking for port_associate... no
+2026-06-13T18:17:30.7870790Z checking for kqueue... yes
+2026-06-13T18:17:30.8364810Z checking whether struct kevent.udata is intptr_t... no
+2026-06-13T18:17:30.8886350Z checking for struct sockaddr_in.sin_len... yes
+2026-06-13T18:17:30.9364050Z checking for struct sockaddr_in6.sin6_len... yes
+2026-06-13T18:17:30.9749450Z checking whether struct option.name is assignable from const char*... yes
+2026-06-13T18:17:31.0535660Z checking that generated files are newer than configure... done
+2026-06-13T18:17:31.0545190Z configure: creating ./config.status
+2026-06-13T18:17:31.7666190Z config.status: creating Makefile
+2026-06-13T18:17:31.7830590Z config.status: creating src/Makefile
+2026-06-13T18:17:31.8200370Z config.status: creating src/libaria2.pc
+2026-06-13T18:17:31.8393420Z config.status: creating src/includes/Makefile
+2026-06-13T18:17:31.8594360Z config.status: creating test/Makefile
+2026-06-13T18:17:31.8876750Z config.status: creating po/Makefile.in
+2026-06-13T18:17:31.9064070Z config.status: creating lib/Makefile
+2026-06-13T18:17:31.9262850Z config.status: creating doc/Makefile
+2026-06-13T18:17:31.9497280Z config.status: creating doc/manual-src/Makefile
+2026-06-13T18:17:31.9706590Z config.status: creating doc/manual-src/en/Makefile
+2026-06-13T18:17:31.9913920Z config.status: creating doc/manual-src/en/conf.py
+2026-06-13T18:17:32.0117110Z config.status: creating doc/manual-src/ru/Makefile
+2026-06-13T18:17:32.0322300Z config.status: creating doc/manual-src/ru/conf.py
+2026-06-13T18:17:32.0527700Z config.status: creating doc/manual-src/pt/Makefile
+2026-06-13T18:17:32.0748300Z config.status: creating doc/manual-src/pt/conf.py
+2026-06-13T18:17:32.0952490Z config.status: creating deps/Makefile
+2026-06-13T18:17:32.1156070Z config.status: creating config.h
+2026-06-13T18:17:32.1490360Z config.status: executing depfiles commands
+2026-06-13T18:17:35.1701090Z config.status: executing libtool commands
+2026-06-13T18:17:35.2023060Z config.status: executing po-directories commands
+2026-06-13T18:17:35.2120890Z config.status: creating po/POTFILES
+2026-06-13T18:17:35.2164780Z config.status: creating po/Makefile
+2026-06-13T18:17:35.2241420Z === configuring in deps/wslay (/Users/runner/work/aria2/aria2/deps/wslay)
+2026-06-13T18:17:35.2287860Z configure: running /bin/sh ./configure --disable-option-checking '--prefix=/usr/local'  '--without-openssl' '--without-gnutls' '--with-appletls' '--with-libcares' '--without-libssh2' '--with-libnghttp2' '--without-sqlite3' '--without-libxml2' '--without-libexpat' '--without-libnettle' '--without-libgmp' '--without-libgcrypt' '--disable-nls' 'PKG_CONFIG_PATH=/Users/runner/work/_temp/static-deps/lib/pkgconfig' --cache-file=/dev/null --srcdir=.
+2026-06-13T18:17:35.4173350Z checking build system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:17:35.4173930Z checking host system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:17:35.4190420Z checking how to print strings... printf
+2026-06-13T18:17:35.4199490Z checking for gcc... gcc
+2026-06-13T18:17:35.6634360Z checking whether the C compiler works... yes
+2026-06-13T18:17:35.6634840Z checking for C compiler default output file name... a.out
+2026-06-13T18:17:35.7298190Z checking for suffix of executables... 
+2026-06-13T18:17:35.7947480Z checking whether we are cross compiling... no
+2026-06-13T18:17:35.8347150Z checking for suffix of object files... o
+2026-06-13T18:17:35.8659780Z checking whether the compiler supports GNU C... yes
+2026-06-13T18:17:35.8971230Z checking whether gcc accepts -g... yes
+2026-06-13T18:17:36.0237850Z checking for gcc option to enable C23 features... -std=gnu23
+2026-06-13T18:17:36.0905370Z checking whether gcc -std=gnu23 understands -c and -o together... yes
+2026-06-13T18:17:36.2425550Z checking for a sed that does not truncate output... /usr/bin/sed
+2026-06-13T18:17:36.2467900Z checking for grep that handles long lines and -e... /usr/bin/grep
+2026-06-13T18:17:36.2486760Z checking for egrep... /usr/bin/grep -E
+2026-06-13T18:17:36.2506660Z checking for fgrep... /usr/bin/grep -F
+2026-06-13T18:17:36.2737260Z checking for ld used by gcc -std=gnu23... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:17:36.2808440Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:17:36.2922510Z checking for BSD- or MS-compatible name lister (nm)... /usr/bin/nm -B
+2026-06-13T18:17:36.3363540Z checking the name lister (/usr/bin/nm -B) interface... BSD nm
+2026-06-13T18:17:36.3364100Z checking whether ln -s works... yes
+2026-06-13T18:17:36.3420360Z checking the maximum length of command line arguments... 786432
+2026-06-13T18:17:36.3462320Z checking how to convert aarch64-apple-darwin24.6.0 file names to aarch64-apple-darwin24.6.0 format... func_convert_file_noop
+2026-06-13T18:17:36.3462990Z checking how to convert aarch64-apple-darwin24.6.0 file names to toolchain format... func_convert_file_noop
+2026-06-13T18:17:36.3463770Z checking for /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld option to reload object files... -r
+2026-06-13T18:17:36.3467110Z checking for file... file
+2026-06-13T18:17:36.3471470Z checking for objdump... objdump
+2026-06-13T18:17:36.3474120Z checking how to recognize dependent libraries... pass_all
+2026-06-13T18:17:36.3478280Z checking for dlltool... no
+2026-06-13T18:17:36.3478920Z checking how to associate runtime and link libraries... printf %s\n
+2026-06-13T18:17:36.3482850Z checking for ranlib... ranlib
+2026-06-13T18:17:36.3486730Z checking for ar... ar
+2026-06-13T18:17:36.3919400Z checking for archiver @FILE support... no
+2026-06-13T18:17:36.3923590Z checking for strip... strip
+2026-06-13T18:17:36.3927460Z checking for gawk... no
+2026-06-13T18:17:36.3930120Z checking for mawk... no
+2026-06-13T18:17:36.3932800Z checking for nawk... no
+2026-06-13T18:17:36.3935380Z checking for awk... awk
+2026-06-13T18:17:36.6622410Z checking command to parse /usr/bin/nm -B output from gcc -std=gnu23 object... ok
+2026-06-13T18:17:36.6718270Z checking for sysroot... no
+2026-06-13T18:17:36.6802120Z checking for a working dd... /bin/dd
+2026-06-13T18:17:36.6870380Z checking how to truncate binary pipes... /bin/dd bs=4096 count=1
+2026-06-13T18:17:36.6877650Z checking for mt... no
+2026-06-13T18:17:36.6933170Z checking if : is a manifest tool... no
+2026-06-13T18:17:36.6944090Z checking for dsymutil... dsymutil
+2026-06-13T18:17:36.6946740Z checking for nmedit... nmedit
+2026-06-13T18:17:36.6949360Z checking for lipo... lipo
+2026-06-13T18:17:36.6951900Z checking for otool... otool
+2026-06-13T18:17:36.6954370Z checking for otool64... no
+2026-06-13T18:17:36.7579810Z checking for -single_module linker flag... ld: warning: -single_module is obsolete
+2026-06-13T18:17:36.7647400Z no
+2026-06-13T18:17:36.8482980Z checking for -no_fixup_chains linker flag... yes
+2026-06-13T18:17:36.9111920Z checking for -exported_symbols_list linker flag... yes
+2026-06-13T18:17:37.0435440Z checking for -force_load linker flag... yes
+2026-06-13T18:17:37.0790350Z checking for stdio.h... yes
+2026-06-13T18:17:37.1166200Z checking for stdlib.h... yes
+2026-06-13T18:17:37.1543550Z checking for string.h... yes
+2026-06-13T18:17:37.1920380Z checking for inttypes.h... yes
+2026-06-13T18:17:37.2305990Z checking for stdint.h... yes
+2026-06-13T18:17:37.2682520Z checking for strings.h... yes
+2026-06-13T18:17:37.3065520Z checking for sys/stat.h... yes
+2026-06-13T18:17:37.3464860Z checking for sys/types.h... yes
+2026-06-13T18:17:37.3861370Z checking for unistd.h... yes
+2026-06-13T18:17:37.4263110Z checking for dlfcn.h... yes
+2026-06-13T18:17:37.4314270Z checking for objdir... .libs
+2026-06-13T18:17:37.5591260Z checking if gcc -std=gnu23 supports -fno-rtti -fno-exceptions... yes
+2026-06-13T18:17:37.5591700Z checking for gcc -std=gnu23 option to produce PIC... -fno-common -DPIC
+2026-06-13T18:17:37.5939220Z checking if gcc -std=gnu23 PIC flag -fno-common -DPIC works... yes
+2026-06-13T18:17:37.6293730Z checking if gcc -std=gnu23 static flag -static works... no
+2026-06-13T18:17:37.6774620Z checking if gcc -std=gnu23 supports -c -o file.o... yes
+2026-06-13T18:17:37.6775010Z checking if gcc -std=gnu23 supports -c -o file.o... (cached) yes
+2026-06-13T18:17:37.6776030Z checking whether the gcc -std=gnu23 linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:17:37.7209910Z checking dynamic linker characteristics... darwin24.6.0 dyld
+2026-06-13T18:17:37.7210390Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:17:37.7304060Z checking whether stripping libraries is possible... yes
+2026-06-13T18:17:37.7304410Z checking if libtool supports shared libraries... yes
+2026-06-13T18:17:37.7304690Z checking whether to build shared libraries... yes
+2026-06-13T18:17:37.7304960Z checking whether to build static libraries... yes
+2026-06-13T18:17:37.7308660Z checking target system type... aarch64-apple-darwin24.6.0
+2026-06-13T18:17:37.7443920Z checking for a BSD-compatible install... /usr/bin/install -c
+2026-06-13T18:17:37.7526850Z checking whether sleep supports fractional seconds... yes
+2026-06-13T18:17:38.6469360Z checking filesystem timestamp resolution... 2
+2026-06-13T18:17:38.6576370Z checking whether build environment is sane... yes
+2026-06-13T18:17:38.6752620Z checking for a race-free mkdir -p... mkdir -p
+2026-06-13T18:17:38.6962260Z checking whether make sets $(MAKE)... yes
+2026-06-13T18:17:38.7204470Z checking whether make supports the include directive... yes (GNU style)
+2026-06-13T18:17:38.7305120Z checking whether make supports nested variables... yes
+2026-06-13T18:17:38.7435040Z checking xargs -n works... yes
+2026-06-13T18:17:38.7500540Z checking whether UID '501' is supported by ustar format... yes
+2026-06-13T18:17:38.7501020Z checking whether GID '20' is supported by ustar format... yes
+2026-06-13T18:17:38.7767760Z checking how to create a ustar tar archive... gnutar
+2026-06-13T18:17:38.8398990Z checking dependency style of gcc -std=gnu23... gcc3
+2026-06-13T18:17:38.8400800Z checking for gcc... (cached) gcc
+2026-06-13T18:17:38.9970020Z checking whether the compiler supports GNU C... (cached) yes
+2026-06-13T18:17:38.9970400Z checking whether gcc accepts -g... (cached) yes
+2026-06-13T18:17:38.9971880Z checking for gcc option to enable C23 features... (cached) -std=gnu23
+2026-06-13T18:17:38.9975210Z checking whether gcc -std=gnu23 understands -c and -o together... (cached) yes
+2026-06-13T18:17:38.9980360Z checking for g++... g++
+2026-06-13T18:17:39.1624150Z checking whether the compiler supports GNU C++... yes
+2026-06-13T18:17:39.1949420Z checking whether g++ accepts -g... yes
+2026-06-13T18:17:39.2863100Z checking how to run the C++ preprocessor... g++ -E
+2026-06-13T18:17:39.4962360Z checking for ld used by g++... /Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld
+2026-06-13T18:17:39.5035110Z checking if the linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) is GNU ld... no
+2026-06-13T18:17:39.5036170Z checking whether the g++ linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:17:39.5351570Z checking for g++ option to produce PIC... -fno-common -DPIC
+2026-06-13T18:17:39.5711170Z checking if g++ PIC flag -fno-common -DPIC works... yes
+2026-06-13T18:17:39.6076220Z checking if g++ static flag -static works... no
+2026-06-13T18:17:39.6558930Z checking if g++ supports -c -o file.o... yes
+2026-06-13T18:17:39.6559310Z checking if g++ supports -c -o file.o... (cached) yes
+2026-06-13T18:17:39.6560010Z checking whether the g++ linker (/Applications/Xcode_16.4.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld) supports shared libraries... yes
+2026-06-13T18:17:39.6560680Z checking dynamic linker characteristics... darwin24.6.0 dyld
+2026-06-13T18:17:39.6561170Z checking how to hardcode library paths into programs... immediate
+2026-06-13T18:17:39.7243520Z checking dependency style of g++... gcc3
+2026-06-13T18:17:39.7243910Z checking whether ln -s works... yes
+2026-06-13T18:17:39.7266510Z checking whether make sets $(MAKE)... (cached) yes
+2026-06-13T18:17:39.7269370Z checking for pkg-config... /opt/homebrew/bin/pkg-config
+2026-06-13T18:17:39.7294630Z checking pkg-config is at least version 0.20... yes
+2026-06-13T18:17:39.7298620Z checking for sphinx-build... no
+2026-06-13T18:17:39.7387280Z checking for nettle >= 2.4... yes
+2026-06-13T18:17:39.7865030Z checking for CU_initialize_registry in -lcunit... no
+2026-06-13T18:17:39.8412180Z checking for arpa/inet.h... yes
+2026-06-13T18:17:39.8814250Z checking for netinet/in.h... yes
+2026-06-13T18:17:39.9215160Z checking for stddef.h... yes
+2026-06-13T18:17:39.9216270Z checking for stdint.h... (cached) yes
+2026-06-13T18:17:39.9217660Z checking for stdlib.h... (cached) yes
+2026-06-13T18:17:39.9218850Z checking for string.h... (cached) yes
+2026-06-13T18:17:39.9220160Z checking for unistd.h... (cached) yes
+2026-06-13T18:17:40.0089480Z checking for size_t... yes
+2026-06-13T18:17:40.1091580Z checking for ssize_t... yes
+2026-06-13T18:17:40.1642940Z checking for uint8_t... yes
+2026-06-13T18:17:40.2048090Z checking for uint16_t... yes
+2026-06-13T18:17:40.2452360Z checking for uint32_t... yes
+2026-06-13T18:17:40.2862540Z checking for uint64_t... yes
+2026-06-13T18:17:40.3717840Z checking for ptrdiff_t... yes
+2026-06-13T18:17:40.4992880Z checking whether byte ordering is bigendian... no
+2026-06-13T18:17:40.6242990Z checking for memmove... yes
+2026-06-13T18:17:40.7081260Z checking for memset... yes
+2026-06-13T18:17:40.7934420Z checking for ntohl... yes
+2026-06-13T18:17:40.8565890Z checking for ntohs... yes
+2026-06-13T18:17:40.9198110Z checking for htons... yes
+2026-06-13T18:17:40.9485190Z checking that generated files are newer than configure... done
+2026-06-13T18:17:40.9485930Z configure: creating ./config.status
+2026-06-13T18:17:41.6569070Z config.status: creating Makefile
+2026-06-13T18:17:41.7010400Z config.status: creating lib/Makefile
+2026-06-13T18:17:41.7213060Z config.status: creating lib/libwslay.pc
+2026-06-13T18:17:41.7403800Z config.status: creating lib/includes/Makefile
+2026-06-13T18:17:41.7594510Z config.status: creating lib/includes/wslay/wslayver.h
+2026-06-13T18:17:41.7782230Z config.status: creating tests/Makefile
+2026-06-13T18:17:41.7993320Z config.status: creating config.h
+2026-06-13T18:17:41.8254350Z config.status: executing libtool commands
+2026-06-13T18:17:41.8563900Z config.status: executing depfiles commands
+2026-06-13T18:17:41.9475820Z configure: summary of build options:
+2026-06-13T18:17:41.9476170Z 
+2026-06-13T18:17:41.9477090Z     version:        1.1.1 shared 1:1:1
+2026-06-13T18:17:41.9477340Z     Host type:      aarch64-apple-darwin24.6.0
+2026-06-13T18:17:41.9477660Z     Install prefix: /usr/local
+2026-06-13T18:17:41.9477860Z     C compiler:     gcc -std=gnu23
+2026-06-13T18:17:41.9478080Z     CFlags:         -g -O2
+2026-06-13T18:17:41.9478280Z     Library types:  Shared=yes, Static=yes
+2026-06-13T18:17:41.9478470Z     CUnit:          no
+2026-06-13T18:17:41.9478620Z     Nettle:         yes
+2026-06-13T18:17:41.9478780Z     Build examples: no
+2026-06-13T18:17:41.9478880Z 
+2026-06-13T18:17:41.9933200Z configure: summary of build options:
+2026-06-13T18:17:41.9933490Z 
+2026-06-13T18:17:41.9933590Z Build:          aarch64-apple-darwin24.6.0
+2026-06-13T18:17:41.9933840Z Host:           aarch64-apple-darwin24.6.0
+2026-06-13T18:17:42.0126450Z Target:         aarch64-apple-darwin24.6.0
+2026-06-13T18:17:42.0126690Z Install prefix: /usr/local
+2026-06-13T18:17:42.0126960Z CC:             gcc -std=gnu23
+2026-06-13T18:17:42.0127140Z CXX:            g++
+2026-06-13T18:17:42.0127300Z CPP:            
+2026-06-13T18:17:42.0134790Z CXXFLAGS:       -g -O2
+2026-06-13T18:17:42.0134960Z CFLAGS:         -g -O2
+2026-06-13T18:17:42.0135170Z CPPFLAGS:       
+2026-06-13T18:17:42.0135310Z LDFLAGS:        
+2026-06-13T18:17:42.0135450Z LIBS:           
+2026-06-13T18:17:42.0135590Z DEFS:           -DHAVE_CONFIG_H
+2026-06-13T18:17:42.0135760Z CXX1XCXXFLAGS:  
+2026-06-13T18:17:42.0135910Z EXTRACXXFLAGS:   -pipe
+2026-06-13T18:17:42.0136160Z EXTRACFLAGS:     -pipe
+2026-06-13T18:17:42.0136310Z EXTRACPPFLAGS:  
+2026-06-13T18:17:42.0136510Z EXTRALDFLAGS:   
+2026-06-13T18:17:42.0136640Z EXTRALIBS:      
+2026-06-13T18:17:42.0136770Z WARNCXXFLAGS:   
+2026-06-13T18:17:42.0136920Z LibUV:          no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0137200Z SQLite3:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0137380Z SSL Support:    yes
+2026-06-13T18:17:42.0137630Z AppleTLS:       yes (LDFLAGS='-framework CoreFoundation -framework Security')
+2026-06-13T18:17:42.0137940Z WinTLS:         no (LIBS='')
+2026-06-13T18:17:42.0138120Z GnuTLS:         no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0138350Z OpenSSL:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0138530Z CA Bundle:      
+2026-06-13T18:17:42.0138680Z LibNettle:      no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0138880Z LibGmp:         no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0139070Z LibGcrypt:      no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0139370Z LibXML2:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0139560Z LibExpat:       no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0140010Z LibCares:       yes (CFLAGS='-I/Users/runner/work/_temp/static-deps/include' LIBS='-L/Users/runner/work/_temp/static-deps/lib -lcares')
+2026-06-13T18:17:42.0140490Z Zlib:           yes (CFLAGS='' LIBS='-lz')
+2026-06-13T18:17:42.0140760Z Libssh2:        no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0141220Z Libnghttp2:     yes (CFLAGS='-I/Users/runner/work/_temp/static-deps/include' LIBS='-L/Users/runner/work/_temp/static-deps/lib -lnghttp2')
+2026-06-13T18:17:42.0141730Z Libngtcp2:      no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0141930Z Libnghttp3:     no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0142140Z Libngtcp2 crypto ossl: no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0142390Z HTTP/3:         no
+2026-06-13T18:17:42.0142540Z Tcmalloc:       no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0144540Z Jemalloc:       no (CFLAGS='' LIBS='')
+2026-06-13T18:17:42.0144790Z Epoll:          no
+2026-06-13T18:17:42.0144940Z Bittorrent:     yes
+2026-06-13T18:17:42.0145090Z Metalink:       no
+2026-06-13T18:17:42.0145230Z XML-RPC:        no
+2026-06-13T18:17:42.0145450Z Message Digest: apple
+2026-06-13T18:17:42.0146090Z WebSocket:      yes (CFLAGS='-I$(top_builddir)/deps/wslay/lib/includes -I$(top_srcdir)/deps/wslay/lib/includes' LIBS='$(top_builddir)/deps/wslay/lib/libwslay.la')
+2026-06-13T18:17:42.0146710Z Libaria2:       no (shared=yes static=no)
+2026-06-13T18:17:42.0147060Z bash_completion dir: ${datarootdir}/doc/${PACKAGE_TARNAME}/bash_completion
+2026-06-13T18:17:42.0147350Z Static build:   no
+2026-06-13T18:17:42.0147440Z 

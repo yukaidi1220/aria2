@@ -165,6 +165,7 @@ public:
   bool execute() CXX11_OVERRIDE
   {
     if (getPieceStorage() && getSegments().empty()) {
+      getSegmentMan()->getSegmentWithIndex(getCuid(), 0);
       refreshSegments();
     }
     return executeInternal();
