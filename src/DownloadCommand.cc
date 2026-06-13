@@ -102,9 +102,11 @@ DownloadCommand::DownloadCommand(
     getSegmentMan()->registerPeerStat(peerStat_);
   }
 
-  streamFilter_ = make_unique<SinkStreamFilter>(
-      getPieceStorage()->getWrDiskCache(), pieceHashValidationEnabled_);
-  streamFilter_->init();
+  if (getPieceStorage()) {
+    streamFilter_ = make_unique<SinkStreamFilter>(
+        getPieceStorage()->getWrDiskCache(), pieceHashValidationEnabled_);
+    streamFilter_->init();
+  }
   sinkFilterOnly_ = true;
   if (getSocketRecvBuffer()) {
     checkSocketRecvBuffer();
