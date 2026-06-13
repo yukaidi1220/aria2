@@ -222,7 +222,9 @@ int DownloadEngine::run(bool oneshot)
     }
     executeCommand(routineCommands_, Command::STATUS_ALL);
     afterEachIteration();
-    if (!noWait_ && oneshot && !didRefresh) {
+    bool wantsAllPass =
+        refreshInterval_ <= std::chrono::milliseconds(0);
+    if (!noWait_ && oneshot && !didRefresh && !wantsAllPass) {
       return 1;
     }
   }
