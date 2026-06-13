@@ -51,11 +51,15 @@ jobs:
       run: autoreconf -i
 
     - name: Configure
-      run: ./configure --without-gnutls --with-openssl --with-libnghttp2
+      run: |
+        export CPPFLAGS="-fsanitize=address,undefined -fsanitize-recover=undefined -g3 $CPPFLAGS"
+        export LDFLAGS="-fsanitize=address,undefined $LDFLAGS"
+        ./configure --without-gnutls --with-openssl --with-libnghttp2
 
     - name: Build and test
       run: |
         set -o pipefail
+        export ASAN_OPTIONS="detect_leaks=0:handle_segv=0:handle_sigbus=0:handle_abort=0"
         make -j"$(nproc)" check || {
           status=$?
           echo 'make check failed; printing available test logs.'
