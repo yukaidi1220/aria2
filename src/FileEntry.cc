@@ -112,22 +112,23 @@ std::vector<std::string> FileEntry::getUris() const
 }
 
 namespace {
-std::string getHostKey(const Request& request)
+std::string createServerKey(const std::string& protocol,
+                            const std::string& host)
 {
-  return util::toLower(request.getHost());
+  return util::toLower(protocol) + "://" + util::toLower(host);
 }
 
-std::string getHostKey(const std::string& host)
+std::string createServerKey(const Request& request)
 {
-  return util::toLower(host);
+  return createServerKey(request.getProtocol(), request.getHost());
 }
 
 template <typename InputIterator, typename OutputIterator>
-OutputIterator enumerateInFlightHosts(InputIterator first, InputIterator last,
-                                      OutputIterator out)
+OutputIterator enumerateInFlightServers(InputIterator first, InputIterator last,
+                                        OutputIterator out)
 {
   for (; first != last; ++first) {
-    auto key = getHostKey(**first);
+    auto key = createServerKey(**first);
     if (!key.empty()) {
       *out++ = key;
     }
@@ -140,13 +141,13 @@ std::shared_ptr<Request> FileEntry::getRequestWithInFlightServers(
     URISelector* selector, bool uriReuse,
     const std::vector<std::pair<size_t, std::string>>& usedHosts,
     const std::string& referer, const std::string& method,
-    const std::vector<std::string>& inFlightHosts)
+    const std::vector<std::string>& inFlightServers)
 {
   std::shared_ptr<Request> req;
 
   for (int g = 0; g < 2; ++g) {
     std::vector<std::string> pending;
-    std::vector<std::string> ignoreHost;
+    std::vector<std::string> ignoreServer;
     while (1) {
       std::string uri = selector->select(this, usedHosts);
       if (uri.empty()) {
@@ -154,12 +155,12 @@ std::shared_ptr<Request> FileEntry::getRequestWithInFlightServers(
       }
       req = std::make_shared<Request>();
       if (req->setUri(uri)) {
-        auto hostKey = getHostKey(*req);
-        if (std::count(std::begin(inFlightHosts),
-                       std::end(inFlightHosts),
-                       hostKey) >= maxConnectionPerServer_) {
+        auto serverKey = createServerKey(*req);
+        if (std::count(std::begin(inFlightServers),
+                       std::end(inFlightServers),
+                       serverKey) >= maxConnectionPerServer_) {
           pending.push_back(uri);
-          ignoreHost.push_back(std::move(hostKey));
+          ignoreServer.push_back(std::move(serverKey));
           req.reset();
           continue;
         }
@@ -174,7 +175,7 @@ std::shared_ptr<Request> FileEntry::getRequestWithInFlightServers(
           }
           if (protocolInUse) {
             pending.push_back(uri);
-            ignoreHost.push_back(std::move(hostKey));
+            ignoreServer.push_back(std::move(serverKey));
             req.reset();
             continue;
           }
@@ -198,7 +199,7 @@ std::shared_ptr<Request> FileEntry::getRequestWithInFlightServers(
     uris_.insert(std::begin(uris_), std::begin(pending), std::end(pending));
     if (g == 0 && uriReuse && !req && uris_.size() == pending.size()) {
       // Reuse URIs other than ones in pending
-      reuseUri(ignoreHost);
+      reuseUri(ignoreServer);
       continue;
     }
 
@@ -214,12 +215,12 @@ std::shared_ptr<Request> FileEntry::getRequest(
 {
   std::shared_ptr<Request> req;
   if (requestPool_.empty()) {
-    std::vector<std::string> inFlightHosts;
-    enumerateInFlightHosts(std::begin(inFlightRequests_),
-                           std::end(inFlightRequests_),
-                           std::back_inserter(inFlightHosts));
+    std::vector<std::string> inFlightServers;
+    enumerateInFlightServers(std::begin(inFlightRequests_),
+                             std::end(inFlightRequests_),
+                             std::back_inserter(inFlightServers));
     return getRequestWithInFlightServers(selector, uriReuse, usedHosts, referer,
-                                         method, inFlightHosts);
+                                         method, inFlightServers);
   }
 
   // Skip Request object if it is still
@@ -234,15 +235,15 @@ std::shared_ptr<Request> FileEntry::getRequest(
   }
   if (i == std::end(requestPool_)) {
     // all requests are sleeping; try to another URI
-    std::vector<std::string> inFlightHosts;
-    enumerateInFlightHosts(std::begin(inFlightRequests_),
-                           std::end(inFlightRequests_),
-                           std::back_inserter(inFlightHosts));
-    enumerateInFlightHosts(std::begin(requestPool_), std::end(requestPool_),
-                           std::back_inserter(inFlightHosts));
+    std::vector<std::string> inFlightServers;
+    enumerateInFlightServers(std::begin(inFlightRequests_),
+                             std::end(inFlightRequests_),
+                             std::back_inserter(inFlightServers));
+    enumerateInFlightServers(std::begin(requestPool_), std::end(requestPool_),
+                             std::back_inserter(inFlightServers));
 
     req = getRequestWithInFlightServers(selector, uriReuse, usedHosts, referer,
-                                        method, inFlightHosts);
+                                        method, inFlightServers);
     if (!req || req->getUri() == (*std::begin(requestPool_))->getUri()) {
       i = std::begin(requestPool_);
     }
@@ -302,9 +303,9 @@ std::shared_ptr<Request> FileEntry::findFasterRequest(
   if (lastFasterReplace_.difference(global::wallclock()) < startupIdleTime) {
     return nullptr;
   }
-  std::vector<std::string> inFlightHosts;
-  enumerateInFlightHosts(inFlightRequests_.begin(), inFlightRequests_.end(),
-                         std::back_inserter(inFlightHosts));
+  std::vector<std::string> inFlightServers;
+  enumerateInFlightServers(inFlightRequests_.begin(), inFlightRequests_.end(),
+                           std::back_inserter(inFlightServers));
   const std::shared_ptr<PeerStat>& basestat = base->getPeerStat();
   A2_LOG_DEBUG("Search faster server using ServerStat.");
   // Use first 10 good URIs to introduce some randomness.
@@ -320,8 +321,8 @@ std::shared_ptr<Request> FileEntry::findFasterRequest(
     }
     std::string host = uri::getFieldString(us, USR_HOST, (*i).c_str());
     std::string protocol = uri::getFieldString(us, USR_SCHEME, (*i).c_str());
-    if (std::count(inFlightHosts.begin(), inFlightHosts.end(),
-                   getHostKey(host)) >=
+    if (std::count(inFlightServers.begin(), inFlightServers.end(),
+                   createServerKey(protocol, host)) >=
         maxConnectionPerServer_) {
       A2_LOG_DEBUG(fmt("%s has already used %d times, not considered.",
                        (*i).c_str(), maxConnectionPerServer_));
@@ -444,7 +445,7 @@ void FileEntry::reuseUri(const std::vector<std::string>& ignore)
 {
   if (A2_LOG_DEBUG_ENABLED) {
     for (const auto& i : ignore) {
-      A2_LOG_DEBUG(fmt("ignore host=%s", i.c_str()));
+      A2_LOG_DEBUG(fmt("ignore server=%s", i.c_str()));
     }
   }
   std::deque<std::string> uris = spentUris_;
@@ -472,7 +473,8 @@ void FileEntry::reuseUri(const std::vector<std::string>& ignore)
     uri_split_result us;
     if (uri_split(&us, (*i).c_str()) == 0 &&
         std::find(ignore.begin(), ignore.end(),
-                  getHostKey(
+                  createServerKey(
+                      uri::getFieldString(us, USR_SCHEME, (*i).c_str()),
                       uri::getFieldString(us, USR_HOST, (*i).c_str()))) ==
             ignore.end()) {
       if (i != insertionPoint) {
