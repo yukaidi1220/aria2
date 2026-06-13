@@ -62,8 +62,12 @@ jobs:
         make -j"$(nproc)" check || {
           status=$?
           echo 'make check failed; printing available test logs.'
-          find . -name test-suite.log -print -exec sed -n '1,240p' {} \;
-          find test -maxdepth 2 -name '*.log' -print -exec sed -n '1,200p' {} \;
+          find . -name test-suite.log -print -exec sed -n '1,500p' {} \;
+          echo '=== aria2c.log TAIL (last 200 lines) ==='
+          if [ -f test/aria2c.log ]; then tail -n 200 test/aria2c.log; fi
+          echo '=== aria2c.log HEAD (first 200 lines) ==='
+          if [ -f test/aria2c.log ]; then head -n 200 test/aria2c.log; fi
+          find test/test_outdir -name '*.log' -print -exec sed -n '1,200p' {} \; 2>/dev/null
           exit "$status"
         }
 
