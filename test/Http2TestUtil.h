@@ -12,7 +12,6 @@
 #  include <cstring>
 #  include <iterator>
 #  include <limits>
-#  include <map>
 #  include <string>
 #  include <vector>
 
@@ -267,21 +266,29 @@ public:
   void submitResponseHeaders(int32_t streamId,
                              const Http2HeaderBlock& headers)
   {
-    // Use raw HEADERS frame to bypass nghttp2 server-side state
-    // management.  This allows sending multiple HEADERS frames on the
-    // same stream (e.g. 103 Early Hints followed by a 200 response).
-    auto encoded = hpackEncode(headers);
-    appendHeadersFrame(streamId, encoded, NGHTTP2_FLAG_END_HEADERS);
+    std::vector<nghttp2_nv> nva;
+    nva.reserve(headers.size());
+    std::transform(std::begin(headers), std::end(headers),
+                   std::back_inserter(nva), makeNV);
+
+    assertNghttp2Success(nghttp2_submit_headers(
+        session_, NGHTTP2_FLAG_NONE, streamId, nullptr, nva.data(),
+        nva.size(), nullptr));
+    assertNghttp2Success(nghttp2_session_send(session_));
+    CPPUNIT_ASSERT(!callbackFailed_);
   }
 
   void submitResponseData(int32_t streamId, const std::string& body)
   {
-    // Use raw DATA frames to bypass nghttp2 server-side data provider
-    // issues.
-    if (!body.empty()) {
-      appendDataFrame(streamId, body, NGHTTP2_FLAG_NONE);
-    }
-    appendDataFrame(streamId, "", NGHTTP2_FLAG_END_STREAM);
+    body_ = body;
+    bodyOffset_ = 0;
+    nghttp2_data_provider dataProvider;
+    dataProvider.source.ptr = this;
+    dataProvider.read_callback = readCallback;
+    assertNghttp2Success(nghttp2_submit_data(
+        session_, NGHTTP2_FLAG_NONE, streamId, &dataProvider));
+    assertNghttp2Success(nghttp2_session_send(session_));
+    CPPUNIT_ASSERT(!callbackFailed_);
   }
 
   void submitResponseDataNoEndStream(int32_t streamId, const std::string& body)
@@ -352,79 +359,6 @@ private:
       *dataFlags |= NGHTTP2_DATA_FLAG_EOF;
     }
     return static_cast<ssize_t>(chunkLength);
-  }
-
-  // Encode HPACK integer with the given prefix bit width.
-  static void hpackEncodeInt(std::string& out, uint32_t value,
-                             uint8_t prefixBits, uint8_t pattern)
-  {
-    uint8_t maxPrefix = (1u << prefixBits) - 1;
-    if (value < maxPrefix) {
-      out.push_back(static_cast<char>(pattern | value));
-    }
-    else {
-      out.push_back(static_cast<char>(pattern | maxPrefix));
-      value -= maxPrefix;
-      while (value >= 128) {
-        out.push_back(static_cast<char>((value & 0x7f) | 0x80));
-        value >>= 7;
-      }
-      out.push_back(static_cast<char>(value));
-    }
-  }
-
-  // Minimal HPACK encoder (literal without indexing, no Huffman).
-  static std::string hpackEncode(const Http2HeaderBlock& headers)
-  {
-    // Common HPACK static table name indices.
-    static const std::map<std::string, uint32_t> staticNameIndex = {
-        {":authority", 1},    {":method", 2},
-        {":path", 4},         {":scheme", 6},
-        {":status", 8},       {"accept", 19},
-        {"content-type", 31}, {"user-agent", 42}};
-
-    std::string encoded;
-    for (const auto& header : headers) {
-      if (header.name == ":status" && header.value == "200") {
-        // Indexed Header Field: :status 200 (static index 8)
-        encoded.push_back('\x88');
-        continue;
-      }
-      auto it = staticNameIndex.find(header.name);
-      if (it != staticNameIndex.end()) {
-        // Literal Header Field without Indexing — Indexed Name
-        hpackEncodeInt(encoded, it->second, 4, 0x0f);
-      }
-      else {
-        // Literal Header Field without Indexing — New Name
-        encoded.push_back('\x00');
-        hpackEncodeInt(encoded, static_cast<uint32_t>(header.name.size()),
-                       7, 0x00);
-        encoded.append(header.name);
-      }
-      hpackEncodeInt(encoded, static_cast<uint32_t>(header.value.size()),
-                     7, 0x00);
-      encoded.append(header.value);
-    }
-    return encoded;
-  }
-
-  void appendHeadersFrame(int32_t streamId, const std::string& headerBlock,
-                          uint8_t flags)
-  {
-    auto length = headerBlock.size();
-    CPPUNIT_ASSERT(length <= 0xffffffu);
-    auto sid = static_cast<uint32_t>(streamId) & 0x7fffffffu;
-    outbound_.push_back(static_cast<char>((length >> 16) & 0xffu));
-    outbound_.push_back(static_cast<char>((length >> 8) & 0xffu));
-    outbound_.push_back(static_cast<char>(length & 0xffu));
-    outbound_.push_back(static_cast<char>(NGHTTP2_HEADERS));
-    outbound_.push_back(static_cast<char>(flags));
-    outbound_.push_back(static_cast<char>((sid >> 24) & 0xffu));
-    outbound_.push_back(static_cast<char>((sid >> 16) & 0xffu));
-    outbound_.push_back(static_cast<char>((sid >> 8) & 0xffu));
-    outbound_.push_back(static_cast<char>(sid & 0xffu));
-    outbound_.append(headerBlock);
   }
 
   void appendDataFrame(int32_t streamId, const std::string& body, uint8_t flags)
