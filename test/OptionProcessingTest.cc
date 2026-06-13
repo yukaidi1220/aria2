@@ -162,7 +162,7 @@ void OptionProcessingTest::testLoadsAria2ConfFromProgramDirByDefault()
   std::vector<std::string> uris;
 
   auto rv =
-      option_processing(option, false, uris, arraySize(argv), argv, KeyVals{});
+      option_processing(option, false, uris, 1, argv, KeyVals{});
 
   CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
   CPPUNIT_ASSERT_EQUAL(std::string("4"), option.get(PREF_SPLIT));
