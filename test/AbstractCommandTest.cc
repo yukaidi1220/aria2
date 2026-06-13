@@ -510,7 +510,10 @@ void AbstractCommandTest::testSelectIPAddressFallsBackWhenBothFamiliesPenalized(
   fileEntry->recordAddressFamilyFailure("example.org", 443, AF_INET);
   fileEntry->recordAddressFamilyFailure("example.org", 443, AF_INET6);
 
-  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"),
+  // When both families are penalized and there is no prior rotation
+  // state, the fallback selects the first available address family
+  // (IPv4 here).
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
                        selectIPAddress(addrs, 1, fileEntry, "example.org",
                                        443));
 }

@@ -67,7 +67,7 @@ bool Range::operator!=(const Range& range) const { return !(*this == range); }
 
 int64_t Range::getContentLength() const
 {
-  if (endByte >= startByte) {
+  if (endByte >= startByte && (startByte > 0 || endByte > 0)) {
     return endByte - startByte + 1;
   }
   else {

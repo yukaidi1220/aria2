@@ -128,6 +128,10 @@ void OptionProcessingTest::testLoadsAria2ConfFromCurrentDirByDefault()
   File(confPath).remove();
   writeFile(confPath, "split=4\n");
   ScopedCurrentDir cwd(dir);
+  // After changing directory, option_processing uses getcwd() which
+  // returns an absolute path, so build the expected path from the
+  // actual current directory.
+  auto absConfPath = util::applyDir(File::getCurrentDir(), "aria2.conf");
 
   Option option;
   std::vector<std::string> uris;
@@ -136,17 +140,23 @@ void OptionProcessingTest::testLoadsAria2ConfFromCurrentDirByDefault()
 
   CPPUNIT_ASSERT_EQUAL(error_code::FINISHED, rv);
   CPPUNIT_ASSERT_EQUAL(std::string("4"), option.get(PREF_SPLIT));
-  CPPUNIT_ASSERT_EQUAL(confPath, option.get(PREF_CONF_PATH));
+  CPPUNIT_ASSERT_EQUAL(absConfPath, option.get(PREF_CONF_PATH));
   File(confPath).remove();
 }
 
 #ifndef __MINGW32__
 void OptionProcessingTest::testLoadsAria2ConfFromProgramDirByDefault()
 {
+  // Compute absolute paths BEFORE changing directory, so that
+  // getProgramDir() returns an absolute path that option_processing
+  // can resolve regardless of the current working directory.
+  auto origCwd = File::getCurrentDir();
   auto currentDir =
-      testFile("aria2_OptionProcessingTest_empty_current_dir");
+      util::applyDir(origCwd,
+                     testFile("aria2_OptionProcessingTest_empty_current_dir"));
   auto programDir =
-      testFile("aria2_OptionProcessingTest_program_dir");
+      util::applyDir(origCwd,
+                     testFile("aria2_OptionProcessingTest_program_dir"));
   auto currentConfPath = util::applyDir(currentDir, "aria2.conf");
   auto confPath = util::applyDir(programDir, "aria2.conf");
   File(currentConfPath).remove();

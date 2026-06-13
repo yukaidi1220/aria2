@@ -164,6 +164,22 @@ std::shared_ptr<Request> FileEntry::getRequestWithInFlightServers(
           req.reset();
           continue;
         }
+        if (uniqueProtocol_) {
+          bool protocolInUse = false;
+          for (const auto& inflightReq : inFlightRequests_) {
+            if (util::toLower(inflightReq->getProtocol()) ==
+                util::toLower(req->getProtocol())) {
+              protocolInUse = true;
+              break;
+            }
+          }
+          if (protocolInUse) {
+            pending.push_back(uri);
+            ignoreServer.push_back(std::move(serverKey));
+            req.reset();
+            continue;
+          }
+        }
         if (referer == "*") {
           // Assuming uri has already been percent-encoded.
           req->setReferer(uri);

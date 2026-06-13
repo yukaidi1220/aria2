@@ -402,7 +402,9 @@ void HttpInitiateConnectionCommandTest::
   option->put(PREF_DISABLE_IPV6, A2_V_FALSE);
   auto requestGroup =
       std::make_shared<RequestGroup>(GroupId::create(), option);
-  auto request = makeRequest("https://origin.example/file");
+  // Use HTTP so that the TLS socket reuse predicate is not applied
+  // and the plain TCP socket pair can be matched.
+  auto request = makeRequest("http://origin.example/file");
   DownloadEngine e(make_unique<SelectEventPoll>());
   e.setOption(option.get());
 

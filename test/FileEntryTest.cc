@@ -65,6 +65,7 @@ std::shared_ptr<FileEntry> createFileEntry()
   fileEntry->setUris(std::vector<std::string>{"http://localhost/aria2.zip",
                                               "ftp://localhost/aria2.zip",
                                               "http://mirror/aria2.zip"});
+  fileEntry->setMaxConnectionPerServer(1);
   return fileEntry;
 }
 } // namespace
@@ -134,6 +135,7 @@ void FileEntryTest::testGetRequest()
 void FileEntryTest::testGetRequest_limitsSameProtocolHost()
 {
   auto fileEntry = std::make_shared<FileEntry>();
+  fileEntry->setMaxConnectionPerServer(1);
   fileEntry->setUris(std::vector<std::string>{"http://example.org/aria2.zip",
                                               "http://example.org/aria2.zip?2"});
   InorderURISelector selector{};
