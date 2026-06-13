@@ -222,8 +222,7 @@ int DownloadEngine::run(bool oneshot)
     }
     executeCommand(routineCommands_, Command::STATUS_ALL);
     afterEachIteration();
-    if (!noWait_ && oneshot &&
-        (!didRefresh || refreshInterval_ > std::chrono::milliseconds(0))) {
+    if (!noWait_ && oneshot && !didRefresh) {
       return 1;
     }
   }
