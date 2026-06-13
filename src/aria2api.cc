@@ -146,7 +146,13 @@ Session* sessionNew(const KeyVals& options, const SessionConfig& config)
 
 int sessionFinal(Session* session)
 {
-  error_code::Value rv = session->context->reqinfo->getResult();
+  if (!session) {
+    return error_code::UNKNOWN_ERROR;
+  }
+  error_code::Value rv = error_code::UNKNOWN_ERROR;
+  if (session->context && session->context->reqinfo) {
+    rv = session->context->reqinfo->getResult();
+  }
   delete session;
   return rv;
 }

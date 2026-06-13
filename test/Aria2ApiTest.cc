@@ -35,9 +35,16 @@ public:
     SessionConfig config;
     KeyVals options = {{"no-conf", "true"}};
     session_ = sessionNew(options, config);
+    CPPUNIT_ASSERT_MESSAGE("sessionNew() returned null", session_ != nullptr);
   }
 
-  void tearDown() { sessionFinal(session_); }
+  void tearDown()
+  {
+    if (session_) {
+      sessionFinal(session_);
+      session_ = nullptr;
+    }
+  }
 
   void testAddUri();
   void testAddMetalink();

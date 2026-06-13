@@ -98,11 +98,15 @@ DownloadCommand::DownloadCommand(
 
   peerStat_ = req->initPeerStat();
   peerStat_->downloadStart();
-  getSegmentMan()->registerPeerStat(peerStat_);
+  if (getSegmentMan()) {
+    getSegmentMan()->registerPeerStat(peerStat_);
+  }
 
-  streamFilter_ = make_unique<SinkStreamFilter>(
-      getPieceStorage()->getWrDiskCache(), pieceHashValidationEnabled_);
-  streamFilter_->init();
+  if (getPieceStorage()) {
+    streamFilter_ = make_unique<SinkStreamFilter>(
+        getPieceStorage()->getWrDiskCache(), pieceHashValidationEnabled_);
+    streamFilter_->init();
+  }
   sinkFilterOnly_ = true;
   if (getSocketRecvBuffer()) {
     checkSocketRecvBuffer();
@@ -112,7 +116,9 @@ DownloadCommand::DownloadCommand(
 DownloadCommand::~DownloadCommand()
 {
   peerStat_->downloadStop();
-  getSegmentMan()->updateFastestPeerStat(peerStat_);
+  if (getSegmentMan()) {
+    getSegmentMan()->updateFastestPeerStat(peerStat_);
+  }
 }
 
 namespace {

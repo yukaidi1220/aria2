@@ -1,6 +1,7 @@
 #include "common.h"
 
 #include <iostream>
+#include <exception>
 
 #include <cppunit/CompilerOutputter.h>
 #include <cppunit/extensions/TestFactoryRegistry.h>
@@ -47,7 +48,20 @@ int main(int argc, char* argv[])
       new CppUnit::CompilerOutputter(&runner.result(), std::cerr));
 
   // Run the tests.
-  bool successfull = runner.run();
+  bool successfull;
+  try {
+    successfull = runner.run();
+  }
+  catch (const std::exception& e) {
+    std::cerr << "FATAL: unhandled exception during test execution: "
+              << e.what() << std::endl;
+    return 1;
+  }
+  catch (...) {
+    std::cerr << "FATAL: unknown unhandled exception during test execution"
+              << std::endl;
+    return 1;
+  }
 
   return successfull ? 0 : 1;
 }
