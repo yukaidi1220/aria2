@@ -157,7 +157,7 @@ void OptionProcessingTest::testLoadsAria2ConfFromProgramDirByDefault()
   auto programPath = util::applyDir(programDir, "fake-aria2");
   std::vector<char> arg0(programPath.begin(), programPath.end());
   arg0.push_back('\0');
-  char* argv[] = {arg0.data()};
+  char* argv[] = {arg0.data(), nullptr};
   Option option;
   std::vector<std::string> uris;
 
