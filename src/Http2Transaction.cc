@@ -120,6 +120,11 @@ std::unique_ptr<HttpResponse> Http2Transaction::createHttpResponse() const
   if (streamId_ == 0) {
     return nullptr;
   }
+  auto event = connection_.findResponseEvent(streamId_);
+  if (event && event->headersComplete &&
+      (event->status < 100 || event->status > 999)) {
+    throw DL_ABORT_EX("HTTP/2 response has invalid status code");
+  }
   return connection_.createHttpResponse(streamId_);
 }
 
@@ -147,6 +152,9 @@ std::unique_ptr<HttpResponse> Http2Transaction::popHttpResponse()
   auto event = connection_.findResponseEvent(streamId_);
   if (!event || !event->streamClosed) {
     return nullptr;
+  }
+  if (event->status < 100 || event->status > 999) {
+    throw DL_ABORT_EX("HTTP/2 response has invalid status code");
   }
   auto response = connection_.popHttpResponse(streamId_);
   if (response) {

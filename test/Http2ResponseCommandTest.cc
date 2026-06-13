@@ -162,7 +162,13 @@ public:
 
   using Http2DownloadCommand::executeInternal;
 
-  bool execute() CXX11_OVERRIDE { return executeInternal(); }
+  bool execute() CXX11_OVERRIDE
+  {
+    if (getPieceStorage() && getSegments().empty()) {
+      refreshSegments();
+    }
+    return executeInternal();
+  }
 
   bool requeued() const { return requeued_; }
 

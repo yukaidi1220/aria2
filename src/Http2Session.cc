@@ -146,7 +146,8 @@ struct Http2Session::Impl {
   static bool isResponseHeaders(const nghttp2_frame* frame)
   {
     return frame->hd.type == NGHTTP2_HEADERS &&
-           frame->headers.cat == NGHTTP2_HCAT_RESPONSE;
+           (frame->headers.cat == NGHTTP2_HCAT_RESPONSE ||
+            frame->headers.cat == NGHTTP2_HCAT_HEADERS);
   }
 
   static bool isInformationalResponse(const Http2ResponseEvent& response)

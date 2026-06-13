@@ -213,6 +213,13 @@ bool Http2DownloadCommand::executeInternal()
     return true;
   }
 
+  if (!exchange_->hasActiveStream(streamId_)) {
+    pendingBody_.clear();
+    exchange_->popResponseEvent(streamId_);
+    poolIdleConnection();
+    return true;
+  }
+
   auto& socket = getSocket();
   if (socket) {
     setReadCheckSocketIf(socket, exchange_->wantRead());
