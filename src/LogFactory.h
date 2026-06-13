@@ -114,6 +114,11 @@ public:
   static void release();
 
   static void reconfigure();
+
+  /**
+   * Returns true if network log mode is enabled for file output.
+   */
+  static bool isNetworkLogEnabled() { return networkLogEnabled_; }
 };
 
 #define A2_LOG_DEBUG_ENABLED                                                   \

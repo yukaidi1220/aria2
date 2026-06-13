@@ -273,7 +273,9 @@ DownloadCommand::ProcessDataResult DownloadCommand::processData(
       // If segment->getLength() == 0, the server doesn't provide
       // content length, but the client detected that download
       // completed.
-      A2_LOG_INFO(fmt(MSG_SEGMENT_DOWNLOAD_COMPLETED, getCuid()));
+      if (!LogFactory::isNetworkLogEnabled()) {
+        A2_LOG_INFO(fmt(MSG_SEGMENT_DOWNLOAD_COMPLETED, getCuid()));
+      }
 
       {
         const std::string& expectedPieceHash =
