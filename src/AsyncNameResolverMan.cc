@@ -154,7 +154,7 @@ AsyncNameResolverMan::ResolverMode resolverModeFromOption(const Option* option)
     return AsyncNameResolverMan::RESOLVER_MULTI;
   }
 #endif // ENABLE_SSL
-  abort();
+  return AsyncNameResolverMan::RESOLVER_CARES;
 }
 
 #ifdef ENABLE_SSL

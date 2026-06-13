@@ -191,6 +191,9 @@ DownloadCommand::ProcessDataResult DownloadCommand::processData(
     SegmentCompletionMode segmentCompletionMode)
 {
   consumed = 0;
+  if (getSegments().empty()) {
+    return ProcessDataResult::NEED_MORE_DATA;
+  }
   const std::shared_ptr<DiskAdaptor>& diskAdaptor =
       getPieceStorage()->getDiskAdaptor();
   std::shared_ptr<Segment> segment = getSegments().front();
