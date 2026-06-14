@@ -87,7 +87,7 @@ void Http2TransactionPump::clearSentOutboundData()
 
 bool Http2TransactionPump::canReadInboundData() const
 {
-  return connection_.hasResponseBodySpace(2 * MAX_HTTP2_TRANSPORT_READ_SIZE);
+  return connection_.hasResponseBodySpace(MAX_HTTP2_TRANSPORT_READ_SIZE);
 }
 
 bool Http2TransactionPump::flushOutboundData()

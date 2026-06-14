@@ -196,7 +196,12 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
 
   auto state = exchange_->getState(streamId_);
-  if (state.errorCode != 0) {
+  // When skipping a response body (e.g., for redirects or error pages),
+  // the server may send fewer bytes than the declared Content-Length.
+  // nghttp2 detects this as a content-length mismatch and sends RST_STREAM
+  // with NGHTTP2_PROTOCOL_ERROR. This is acceptable when skipping.
+  if (state.errorCode != 0 &&
+      state.errorCode != NGHTTP2_PROTOCOL_ERROR) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
 
@@ -213,7 +218,8 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
 
   state = exchange_->getState(streamId_);
-  if (state.errorCode != 0) {
+  if (state.errorCode != 0 &&
+      state.errorCode != NGHTTP2_PROTOCOL_ERROR) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
   if (state.streamClosed) {
