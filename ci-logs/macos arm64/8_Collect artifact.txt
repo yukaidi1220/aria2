@@ -1,9 +1,0 @@
-﻿2026-06-13T18:19:03.9571080Z ##[group]Run mkdir -p out
-2026-06-13T18:19:03.9571420Z [36;1mmkdir -p out[0m
-2026-06-13T18:19:03.9571640Z [36;1mcp src/aria2c out/aria2c[0m
-2026-06-13T18:19:03.9571960Z [36;1mcodesign --force --sign - out/aria2c[0m
-2026-06-13T18:19:03.9756260Z shell: /bin/bash -e {0}
-2026-06-13T18:19:03.9756530Z env:
-2026-06-13T18:19:03.9758560Z   PKG_CONFIG_PATH: /Users/runner/work/_temp/static-deps/lib/pkgconfig
-2026-06-13T18:19:03.9759010Z ##[endgroup]
-2026-06-13T18:19:04.0379350Z out/aria2c: replacing existing signature

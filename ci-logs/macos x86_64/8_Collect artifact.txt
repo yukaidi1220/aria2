@@ -1,8 +1,0 @@
-﻿2026-06-13T18:22:28.3892310Z ##[group]Run mkdir -p out
-2026-06-13T18:22:28.3893100Z [36;1mmkdir -p out[0m
-2026-06-13T18:22:28.3893820Z [36;1mcp src/aria2c out/aria2c[0m
-2026-06-13T18:22:28.3894560Z [36;1mcodesign --force --sign - out/aria2c[0m
-2026-06-13T18:22:28.3970730Z shell: /bin/bash -e {0}
-2026-06-13T18:22:28.3971300Z env:
-2026-06-13T18:22:28.3972000Z   PKG_CONFIG_PATH: /Users/runner/work/_temp/static-deps/lib/pkgconfig
-2026-06-13T18:22:28.3972640Z ##[endgroup]

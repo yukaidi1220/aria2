@@ -150,11 +150,15 @@ std::unique_ptr<HttpResponse> Http2Transaction::popHttpResponse()
     return nullptr;
   }
   auto event = connection_.findResponseEvent(streamId_);
-  if (!event || !event->streamClosed) {
+  if (!event) {
     return nullptr;
   }
-  if (event->status < 100 || event->status > 999) {
+  if (event->headersComplete &&
+      (event->status < 100 || event->status > 999)) {
     throw DL_ABORT_EX("HTTP/2 response has invalid status code");
+  }
+  if (!event->streamClosed) {
+    return nullptr;
   }
   auto response = connection_.popHttpResponse(streamId_);
   if (response) {

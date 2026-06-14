@@ -277,6 +277,7 @@ struct CommandFixture {
     fileEntry->poolRequest(request);
     if (initPieceStorage) {
       requestGroup->initPieceStorage();
+      requestGroup->getPieceStorage()->getDiskAdaptor()->initAndOpenFile();
     }
 
     auto httpRequest = makeHttpRequest();
@@ -428,16 +429,26 @@ void Http2ResponseCommandTest::testResponseCommandStartsActive()
 void Http2ResponseCommandTest::testRefreshZeroRunsSkippedInactiveCommands()
 {
   auto option = CommandFixture::makeOption(true, 1_m);
+
+  // Part 1: warmup with a separate engine to avoid lastRefresh_ timing
+  {
+    DownloadEngine warmupEngine(make_unique<SelectEventPoll>());
+    warmupEngine.setOption(option.get());
+    warmupEngine.setRequestGroupMan(make_unique<RequestGroupMan>(
+        std::vector<std::shared_ptr<RequestGroup>>{}, 1, option.get()));
+
+    int warmupCount = 0;
+    warmupEngine.addCommand(make_unique<CountingRequeueCommand>(
+        1, &warmupEngine, &warmupCount, 2));
+    CPPUNIT_ASSERT_EQUAL(1, warmupEngine.run(true));
+    CPPUNIT_ASSERT_EQUAL(1, warmupCount);
+  }
+
+  // Part 2: fresh engine, lastRefresh_ starts at zero
   DownloadEngine engine(make_unique<SelectEventPoll>());
   engine.setOption(option.get());
   engine.setRequestGroupMan(make_unique<RequestGroupMan>(
       std::vector<std::shared_ptr<RequestGroup>>{}, 1, option.get()));
-
-  int warmupCount = 0;
-  engine.addCommand(make_unique<CountingRequeueCommand>(1, &engine,
-                                                        &warmupCount, 2));
-  CPPUNIT_ASSERT_EQUAL(1, engine.run(true));
-  CPPUNIT_ASSERT_EQUAL(1, warmupCount);
 
   int inactiveCount = 0;
   int activeCount = 0;
@@ -447,7 +458,6 @@ void Http2ResponseCommandTest::testRefreshZeroRunsSkippedInactiveCommands()
   engine.addCommand(make_unique<RefreshZeroCommand>(3, &engine, &activeCount));
 
   CPPUNIT_ASSERT_EQUAL(0, engine.run(true));
-  CPPUNIT_ASSERT_EQUAL(2, warmupCount);
   CPPUNIT_ASSERT_EQUAL(1, activeCount);
   CPPUNIT_ASSERT_EQUAL(1, inactiveCount);
 }

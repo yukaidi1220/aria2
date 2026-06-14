@@ -356,19 +356,38 @@ private:
 
   void appendDataFrame(int32_t streamId, const std::string& body, uint8_t flags)
   {
-    auto length = body.size();
-    CPPUNIT_ASSERT(length <= 0xffffffu);
+    CPPUNIT_ASSERT(body.size() <= 0xffffffu);
     auto sid = static_cast<uint32_t>(streamId) & 0x7fffffffu;
-    outbound_.push_back(static_cast<char>((length >> 16) & 0xffu));
-    outbound_.push_back(static_cast<char>((length >> 8) & 0xffu));
-    outbound_.push_back(static_cast<char>(length & 0xffu));
-    outbound_.push_back(static_cast<char>(NGHTTP2_DATA));
-    outbound_.push_back(static_cast<char>(flags));
-    outbound_.push_back(static_cast<char>((sid >> 24) & 0xffu));
-    outbound_.push_back(static_cast<char>((sid >> 16) & 0xffu));
-    outbound_.push_back(static_cast<char>((sid >> 8) & 0xffu));
-    outbound_.push_back(static_cast<char>(sid & 0xffu));
-    outbound_.append(body);
+    const size_t maxPayload = 16384;
+    if (body.empty()) {
+      outbound_.push_back(0);
+      outbound_.push_back(0);
+      outbound_.push_back(0);
+      outbound_.push_back(static_cast<char>(NGHTTP2_DATA));
+      outbound_.push_back(static_cast<char>(flags));
+      outbound_.push_back(static_cast<char>((sid >> 24) & 0xffu));
+      outbound_.push_back(static_cast<char>((sid >> 16) & 0xffu));
+      outbound_.push_back(static_cast<char>((sid >> 8) & 0xffu));
+      outbound_.push_back(static_cast<char>(sid & 0xffu));
+      return;
+    }
+    size_t offset = 0;
+    while (offset < body.size()) {
+      size_t chunkLen = std::min(maxPayload, body.size() - offset);
+      bool isLast = (offset + chunkLen >= body.size());
+      uint8_t frameFlags = isLast ? flags : NGHTTP2_FLAG_NONE;
+      outbound_.push_back(static_cast<char>((chunkLen >> 16) & 0xffu));
+      outbound_.push_back(static_cast<char>((chunkLen >> 8) & 0xffu));
+      outbound_.push_back(static_cast<char>(chunkLen & 0xffu));
+      outbound_.push_back(static_cast<char>(NGHTTP2_DATA));
+      outbound_.push_back(static_cast<char>(frameFlags));
+      outbound_.push_back(static_cast<char>((sid >> 24) & 0xffu));
+      outbound_.push_back(static_cast<char>((sid >> 16) & 0xffu));
+      outbound_.push_back(static_cast<char>((sid >> 8) & 0xffu));
+      outbound_.push_back(static_cast<char>(sid & 0xffu));
+      outbound_.append(body.data() + offset, chunkLen);
+      offset += chunkLen;
+    }
   }
 };
 
