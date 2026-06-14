@@ -125,6 +125,11 @@ std::unique_ptr<HttpResponse> Http2Transaction::createHttpResponse() const
       (event->status < 100 || event->status > 999)) {
     throw DL_ABORT_EX("HTTP/2 response has invalid status code");
   }
+  // If the stream was closed but headers were never completed, nghttp2
+  // rejected the response internally (e.g., malformed pseudo-headers).
+  if (event && !event->headersComplete && event->streamClosed) {
+    throw DL_ABORT_EX("HTTP/2 response is malformed");
+  }
   return connection_.createHttpResponse(streamId_);
 }
 
@@ -156,6 +161,12 @@ std::unique_ptr<HttpResponse> Http2Transaction::popHttpResponse()
   if (event->headersComplete &&
       (event->status < 100 || event->status > 999)) {
     throw DL_ABORT_EX("HTTP/2 response has invalid status code");
+  }
+  // If the stream was closed but headers were never completed, nghttp2
+  // rejected the response internally (e.g., malformed pseudo-headers).
+  // Throw without popping the event to preserve the active stream state.
+  if (!event->headersComplete && event->streamClosed) {
+    throw DL_ABORT_EX("HTTP/2 response is malformed");
   }
   if (!event->streamClosed) {
     return nullptr;

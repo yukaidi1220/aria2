@@ -182,6 +182,20 @@ bool Http2DownloadCommand::executeInternal()
       return true;
     }
     if (result == ProcessDataResult::REQUEUED) {
+      if (!pendingBody_.empty()) {
+        // The command was requeued for retry (e.g., the next segment is
+        // busy), but there is still buffered body data that cannot be
+        // written. Cancel the stream so the retry starts fresh.
+        pendingBody_.clear();
+        if (state.streamClosed) {
+          exchange_->popResponseEvent(streamId_);
+        }
+        else {
+          exchange_->cancelStream(streamId_);
+        }
+        poolIdleConnection();
+        return true;
+      }
       continue;
     }
     if (consumed == 0) {
