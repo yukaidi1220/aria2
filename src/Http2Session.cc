@@ -240,10 +240,13 @@ struct Http2Session::Impl {
           response.headersComplete = true;
         }
         if (frame->hd.flags & NGHTTP2_FLAG_END_STREAM) {
-          response.streamClosed = true;
-          response.errorCode = NGHTTP2_NO_ERROR;
-          response.body.close(NGHTTP2_NO_ERROR);
+          response.remoteEndStream = true;
         }
+      }
+      else if (frame->hd.type == NGHTTP2_DATA &&
+               (frame->hd.flags & NGHTTP2_FLAG_END_STREAM)) {
+        auto& response = impl->getResponse(frame->hd.stream_id);
+        response.remoteEndStream = true;
       }
     }
     catch (...) {

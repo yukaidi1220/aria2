@@ -165,15 +165,24 @@ bool Http2DownloadCommand::executeInternal()
     pendingBody_.erase(0, consumed);
     if (result == ProcessDataResult::DONE) {
       if (!pendingBody_.empty()) {
-        pendingBody_.clear();
-        if (state.streamClosed) {
-          exchange_->popResponseEvent(streamId_);
+        if (getRequestGroup()->downloadFinished()) {
+          // Download is complete but there is still buffered body data
+          // from the server. Cancel the stream and finish.
+          pendingBody_.clear();
+          if (state.streamClosed) {
+            exchange_->popResponseEvent(streamId_);
+          }
+          else {
+            exchange_->cancelStream(streamId_);
+          }
+          poolIdleConnection();
+          return true;
         }
-        else {
-          exchange_->cancelStream(streamId_);
-        }
-        poolIdleConnection();
-        return true;
+        // The segment was completed but the download is not finished.
+        // prepareForNextSegment() returned true (via base class
+        // prepareForRetry), meaning we should retry. Continue the loop
+        // to process the remaining body data for the next segment.
+        continue;
       }
       if (state.streamClosed) {
         exchange_->popResponseEvent(streamId_);

@@ -55,6 +55,7 @@ struct Http2TransactionState {
   bool responseAvailable = false;
   bool headersComplete = false;
   bool streamClosed = false;
+  bool remoteEndStream = false;
   size_t bodyLength = 0;
   uint32_t errorCode = 0;
 };

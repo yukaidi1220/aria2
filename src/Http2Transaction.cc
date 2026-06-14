@@ -94,6 +94,7 @@ Http2TransactionState Http2Transaction::getState() const
   state.responseAvailable = true;
   state.headersComplete = event->headersComplete;
   state.streamClosed = event->streamClosed;
+  state.remoteEndStream = event->remoteEndStream;
   state.bodyLength = event->body.size();
   state.errorCode = event->errorCode;
   return state;

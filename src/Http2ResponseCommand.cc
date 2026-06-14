@@ -201,8 +201,7 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   // the server may send fewer or more bytes than the declared
   // Content-Length. nghttp2 detects this as a content-length mismatch and
   // sends RST_STREAM with NGHTTP2_PROTOCOL_ERROR. We tolerate this error
-  // here and let the pop loop below determine whether the body was too long
-  // (by checking skippedBodyLength_ against expectedSkipBodyLength_).
+  // here and let the checks below determine whether the body was too long.
   if (state.errorCode != 0 &&
       state.errorCode != NGHTTP2_PROTOCOL_ERROR) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
@@ -221,17 +220,16 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
 
   state = exchange_->getState(streamId_);
-  // After draining the body queue, distinguish between body-longer and
-  // body-shorter cases. When body was longer than Content-Length, nghttp2
-  // delivers data up to Content-Length before raising PROTOCOL_ERROR, so
-  // skippedBodyLength_ == expectedSkipBodyLength_. When body was shorter,
-  // nghttp2 delivers all available data, so skippedBodyLength_ <
-  // expectedSkipBodyLength_. Only tolerate PROTOCOL_ERROR in the latter
-  // case (truncated body is acceptable when skipping).
+  // After draining the body queue, detect body-longer vs body-shorter.
+  // When body exceeds Content-Length, nghttp2's per-chunk content-length
+  // check fires before END_STREAM is received, so remoteEndStream is false.
+  // When body is shorter, END_STREAM arrives first (remoteEndStream is true)
+  // and nghttp2's end-of-stream check detects the mismatch. We tolerate
+  // PROTOCOL_ERROR only when the server properly sent END_STREAM (truncated
+  // body is acceptable when skipping).
   if (state.errorCode != 0 &&
       (state.errorCode != NGHTTP2_PROTOCOL_ERROR ||
-       (expectedSkipBodyLengthKnown_ &&
-        skippedBodyLength_ >= expectedSkipBodyLength_))) {
+       !state.remoteEndStream)) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
   if (state.streamClosed) {
