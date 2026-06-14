@@ -198,16 +198,13 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
 
   auto state = exchange_->getState(streamId_);
   // When skipping a response body (e.g., for redirects or error pages),
-  // the server may send fewer bytes than the declared Content-Length.
-  // nghttp2 detects this at END_STREAM as a content-length mismatch and
-  // sends RST_STREAM with NGHTTP2_PROTOCOL_ERROR. This is acceptable when
-  // skipping, but only when some body data was actually delivered.
-  // If no data was delivered (skippedBodyLength_ == 0), the PROTOCOL_ERROR
-  // means nghttp2 rejected the body because it exceeded Content-Length
-  // (data is rejected before the on_data_chunk callback fires).
+  // the server may send fewer or more bytes than the declared
+  // Content-Length. nghttp2 detects this as a content-length mismatch and
+  // sends RST_STREAM with NGHTTP2_PROTOCOL_ERROR. We tolerate this error
+  // here and let the pop loop below determine whether the body was too long
+  // (by checking skippedBodyLength_ against expectedSkipBodyLength_).
   if (state.errorCode != 0 &&
-      (state.errorCode != NGHTTP2_PROTOCOL_ERROR ||
-       skippedBodyLength_ == 0)) {
+      state.errorCode != NGHTTP2_PROTOCOL_ERROR) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
 
@@ -224,9 +221,17 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
 
   state = exchange_->getState(streamId_);
+  // After draining the body queue, distinguish between body-longer and
+  // body-shorter cases. When body was longer than Content-Length, nghttp2
+  // delivers data up to Content-Length before raising PROTOCOL_ERROR, so
+  // skippedBodyLength_ == expectedSkipBodyLength_. When body was shorter,
+  // nghttp2 delivers all available data, so skippedBodyLength_ <
+  // expectedSkipBodyLength_. Only tolerate PROTOCOL_ERROR in the latter
+  // case (truncated body is acceptable when skipping).
   if (state.errorCode != 0 &&
       (state.errorCode != NGHTTP2_PROTOCOL_ERROR ||
-       skippedBodyLength_ == 0)) {
+       (expectedSkipBodyLengthKnown_ &&
+        skippedBodyLength_ >= expectedSkipBodyLength_))) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
   if (state.streamClosed) {
