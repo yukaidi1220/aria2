@@ -50,6 +50,7 @@
 #  include "StreamFilter.h"
 #  include "a2functional.h"
 
+#  include <nghttp2/nghttp2.h>
 #  include <utility>
 
 namespace aria2 {
