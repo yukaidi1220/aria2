@@ -87,12 +87,17 @@ jobs:
     - name: Build
       run: make -j"$(nproc)"
 
+    - name: Build test binary
+      run: make -C test aria2c
+
     - name: Test
       run: |
+        set -o pipefail
         cd test
         # Run the test binary directly so output is visible in CI logs
-        ./aria2c --verbose 2>&1 | tee aria2c.log || {
-          status=${PIPESTATUS[0]}
+        ./aria2c 2>&1 | tee aria2c.log
+        status=${PIPESTATUS[0]}
+        if [ "$status" -ne 0 ]; then
           echo "aria2c test failed with exit code $status"
           echo '=== test-suite.log ==='
           find . -name test-suite.log -print -exec sed -n '1,500p' {} \;
@@ -106,7 +111,7 @@ jobs:
               ./aria2c 2>&1 | tail -200
           fi
           exit "$status"
-        }
+        fi
 
     - name: Collect artifact
       run: |
