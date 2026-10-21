@@ -121,15 +121,19 @@ void FileEntryTest::testGetRequest()
   CPPUNIT_ASSERT_EQUAL(std::string("http"), req2nd->getProtocol());
 
   auto req3rd = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT_EQUAL(std::string("localhost"), req3rd->getHost());
-  CPPUNIT_ASSERT_EQUAL(std::string("ftp"), req3rd->getProtocol());
+  // ftp://localhost shares its host key with the in-flight http request and
+  // maxConnectionPerServer is 1, so it is held back and mirror is used first.
+  CPPUNIT_ASSERT_EQUAL(std::string("mirror"), req3rd->getHost());
+  CPPUNIT_ASSERT_EQUAL(std::string("http"), req3rd->getProtocol());
 
   auto req4th = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT_EQUAL(std::string("mirror"), req4th->getHost());
-  CPPUNIT_ASSERT_EQUAL(std::string("http"), req4th->getProtocol());
+  CPPUNIT_ASSERT(!req4th);
 
-  auto req5th = fileEntry->getRequest(&selector, true, usedHosts);
-  CPPUNIT_ASSERT(!req5th);
+  CPPUNIT_ASSERT_EQUAL((size_t)2, fileEntry->getRemainingUris().size());
+  CPPUNIT_ASSERT_EQUAL(std::string("ftp://localhost/aria2.zip"),
+                       fileEntry->getRemainingUris()[0]);
+  CPPUNIT_ASSERT_EQUAL(std::string("http://mirror/aria2.zip"),
+                       fileEntry->getRemainingUris()[1]);
 }
 
 void FileEntryTest::testGetRequest_limitsSameProtocolHost()
