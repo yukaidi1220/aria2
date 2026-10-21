@@ -170,7 +170,7 @@ void FileEntryTest::testFindFasterRequestUsesProtocolHostLimit()
   fileEntry->setMaxConnectionPerServer(1);
   fileEntry->setUris(std::vector<std::string>{
       "http://example.org/base", "http://example.org/fast-http",
-      "ftp://example.org/fast-ftp"});
+      "ftp://ftp.example.org/fast-ftp"});
 
   InorderURISelector selector{};
   std::vector<std::pair<size_t, std::string>> usedHosts;
@@ -181,7 +181,7 @@ void FileEntryTest::testFindFasterRequestUsesProtocolHostLimit()
   auto fastHttp = std::make_shared<ServerStat>("example.org", "http");
   fastHttp->setDownloadSpeed(100_k);
   serverStatMan->add(fastHttp);
-  auto fastFtp = std::make_shared<ServerStat>("example.org", "ftp");
+  auto fastFtp = std::make_shared<ServerStat>("ftp.example.org", "ftp");
   fastFtp->setDownloadSpeed(100_k);
   serverStatMan->add(fastFtp);
 
@@ -189,7 +189,7 @@ void FileEntryTest::testFindFasterRequestUsesProtocolHostLimit()
 
   auto faster = fileEntry->findFasterRequest(base, usedHosts, serverStatMan);
   CPPUNIT_ASSERT(faster);
-  CPPUNIT_ASSERT_EQUAL(std::string("ftp://example.org/fast-ftp"),
+  CPPUNIT_ASSERT_EQUAL(std::string("ftp://ftp.example.org/fast-ftp"),
                        faster->getUri());
 }
 
@@ -276,7 +276,7 @@ void FileEntryTest::testReuseUri()
   }
   CPPUNIT_ASSERT_EQUAL((size_t)0, fileEntry->getRemainingUris().size());
   ignore.clear();
-  ignore.push_back("http://mirror");
+  ignore.push_back("mirror");
   fileEntry->reuseUri(ignore);
   CPPUNIT_ASSERT_EQUAL((size_t)1, fileEntry->getRemainingUris().size());
   uris = fileEntry->getRemainingUris();
