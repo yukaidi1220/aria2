@@ -1,6 +1,6 @@
-# aria2c 命令行帮助中文草稿
+# aria2c 命令行帮助中文说明
 
-> 状态：当前分支草稿。本文只整理命令行/配置项说明，不修改源码。
+> 状态：按当前分支源码整理的中文说明。本文偏“参数字典 + 实现边界”；如果想先看产品化使用指南，请读 [README.zh-CN.md](README.zh-CN.md)。
 >
 > 主要来源：`src/OptionHandlerFactory.cc::OptionHandlerFactory::createOptionHandlers()`、`src/usage_text.h`、`doc/manual-src/en/aria2c.rst`。新增网络能力额外核对了 `src/TLSSNIHostMapping.cc`、`src/HostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/AsyncNameResolverMan.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc`、`src/AsyncServiceBindingResolver.cc`、`src/HttpsServiceBindingCache.cc`、`src/DnsMessage.cc`、`src/ServiceBindingSelector.cc`、`src/AltSvcParser.cc`、`src/HttpProtocol.cc`、`src/Http2HeaderBlock.cc`、`src/Http2Session.cc`、`src/HttpRequestCommand.cc`、`src/HttpInitiateConnectionCommand.cc`、`src/HttpSkipResponseCommand.cc`、`src/DownloadEngine.cc`、`src/RequestGroup.cc`、`src/download_helper.cc` 等实现文件。
 
@@ -33,7 +33,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 启动日志来源：
 
 - `src/Context.cc::logStartupOptions()` 会在日志里打印关键选项最终值和来源，例如 `Option: async-dns=true (source=command)`。
-- 当前记录的是关键网络和下载参数：`no-conf`、`conf-path`、`conf-precedence`、`async-dns`、`async-dns-mode`、`async-dns-server`、`disable-ipv6`、`enable-http2`、`enable-doh-http2`、`enable-http3`、`enable-https-rr`、`split`、`max-connection-per-server`、`min-split-size`。
+- 当前记录的是关键网络和下载参数：`no-conf`、`conf-path`、`conf-precedence`、`async-dns`、`async-dns-mode`、`async-dns-server`、`disable-ipv6`、`enable-http2`、`enable-doh-http2`、`enable-http3`、`enable-https-rr`、`tls-handshake-failover`、`split`、`max-connection-per-server`、`min-split-size`。
 - 来源含义是 `command`、`conf`、`default` 或 `runtime`。`runtime` 表示默认层里的值已经不同于 option handler 的编译期默认值，通常来自程序运行期或嵌入调用写入的 option。
 - 这不是全量 option provenance。要排查网络行为，先看这些关键项；RPC 运行期修改等更细粒度来源日志仍属于后续增强项。
 
@@ -42,6 +42,8 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 - 命令行里连续给出多个 HTTP/FTP 等 URL 时，默认会作为同一个下载项的多个 URI 进入同一个 `RequestGroup`，通常表示同一个文件的多个镜像源，而不是多个独立下载。源码落点是 `src/download_helper.cc::createRequestGroupForUri()`：在未启用 `--force-sequential=true` 时，流式协议 URL 会先被 `splitURI()` 合并成一组，再创建一个 `RequestGroup`。
 - 要把多个 URL 当成多个独立下载，常用做法是使用 `--force-sequential=true`，或在 `--input-file` 中按 aria2 输入文件格式分成多个下载项。每个独立下载项会有自己的 `RequestGroup`。
 - 这个边界会影响 HTTP/2 复用：当前 active/idle H2 连接复用只在同一个 `RequestGroup` 内发生。命令行多个镜像 URL 如果属于同一个下载项，才可能命中该复用；多个独立下载项之间不会因为同 origin 就共享 H2 连接。
+- 文件大小未知时，`RequestGroup::createNextCommand()` 通常只创建 1 个请求先去拿响应和长度；拿到长度并确认可分片后，`split` 才有机会展开更多 Range 请求。
+- 第一个镜像 URL 如果发生 `DlAbortEx` 这类当前 URL 不可恢复错误，`AbstractCommand::onAbort()` 会移除当前 URI 并 `tryReserved()` 尝试后续 URI；如果是 `DlRetryEx` 这类可重试错误，则当前 `Request` 会进入 pool 并受 `max-tries` / `retry-wait` 控制，默认可能先重试当前 URL，再轮到后续镜像。
 
 ## 2. 新增/重点网络能力
 
@@ -67,6 +69,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | 选项 | 注册/构建门槛 | 源码实现解释 | 关键边界 |
 | --- | --- | --- | --- |
 | `--tls-sni-host=<HOST\|TARGET:SNI[,TARGET:SNI]...>` | `DefaultOptionHandler`，HTTP/HTTPS/Advanced | `HttpTLSHandshakeParams.cc` 先算 logical verify host，再由 `TLSSNIHostMapping.cc` 解析单值或映射，最后 `SocketCore::tlsHandshake()` 调 `TLSSession::setSNIHostname()` | 只改 TLS SNI；命中 override 时要求 TLS 后端声明 `supportsSNIHostnameOverride()` |
+| `--tls-handshake-failover[=true\|false]` | `ENABLE_SSL` 构建为布尔项，默认 `true`；无 SSL 构建为 unsupported（默认 `false`，`=true` 拒绝） | `HttpRequestCommand.cc` 的 `tryRetryTLSHandshakeWithNextAddress()` 在 TLS 握手失败（含证书校验失败）时标记坏 IP、记录地址族惩罚，并重建 `InitiateConnectionCommand`；换族与否由 `HttpTLSHandshakeParams.cc::decideTlsAddressFailover()` 决定 | 证书校验开启时只换到另一地址族且只换一次（对端族近期也失败就中止报错），每次重试仍完整校验证书；IPv6 侧只认 global unicast 地址；证书校验关闭时保持“换任意其他已解析地址”的原行为；不校验证书不等于接受无效证书之外的语义变化 |
 | `--hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>` | `DefaultOptionHandler`，HTTP/HTTPS/Advanced | `HostMapping.cc` 校验一边主机一边 IP；`AbstractCommand::resolveHostname()` 用 `HOST:IPADDR` 填 aria2 DNS cache；`getLogicalHostForRequest()` 用 `IPADDR:HOST` 改 HTTP/TLS 逻辑主机 | 进程内映射，不是系统 hosts；代理侧解析不走这里 |
 | `--async-dns[=true\|false]` | 仅 `ENABLE_ASYNC_DNS` 构建注册；非 Android 默认 `true`，Android 默认 `false` | 开启后走 `AsyncNameResolverMan`；按 mode 创建 c-ares、DoT 或 DoH resolver | 无异步 DNS 构建时没有此选项；设为 `false` 时不会校验或启动 DoT/DoH/multi resolver 配置，下载域名解析回到 hosts/cache 后的同步 `getaddrinfo` 路径 |
 | `--async-dns-mode=<cares\|dot\|doh\|multi>` | `ENABLE_SSL` 下允许 `cares\|dot\|doh\|multi`；无 SSL 只允许 `cares` | `resolverModeFromOption()` 选择后端；DoT/DoH 在 `validateAsyncNameResolverConfig()` 和具体 resolver 创建时校验 server；`multi` 由 `createResolvers()` 按阶段展开 secure、显式 plain、系统 c-ares resolver slot | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 这两个别名；`multi` 有 secure server 时 plain DNS 只用于 secure server bootstrap 或明确 fallback |
@@ -525,6 +528,28 @@ Alt-Svc 源码状态：
 - 没有异步 DNS 的构建不存在 `--async-dns-mode=doh|dot` 这条路；无 SSL 构建即使有异步 DNS 也只接受 `cares`。旧系统兼容文档里要把这点写死，别让用户以为 DoH/DoT 会自动降级成普通 DNS。
 - Alt-Svc parser 和 HTTPS/SVCB TYPE65 parser 属于跨平台纯解析能力；HTTPS RR 后台 discovery/cache 和直连 HTTPS 的 cached SVCB connect target/port 选择同样不依赖新 Windows API。当前没有 H3 运行时下载路径，SVCB endpoint failure cache 只是内存短期避让，不是 XP/Win7 上“自动禁用 H3/SVCB”的独立产品线分支。
 
+### 2.11 TLS 握手失败换地址族重试 / `--tls-handshake-failover`
+
+默认 `--tls-handshake-failover=true`。TLS 握手失败（包括证书校验失败）时，aria2 不再直接中止，而是换一个已解析地址重试：
+
+- 失败地址会被 `markBadIPAddress()` 标记为坏地址，失败地址族会在 `FileEntry` 记一次惩罚（首次 30 秒，连续失败翻倍，上限 300 秒），后续选址优先另一地址族。
+- 证书校验开启（默认）时，只换到**另一地址族**：IPv4 握手失败换 IPv6，IPv6 失败换 IPv4；并且只换一次——对端族近期也失败过就直接报错，不会在地址列表里循环。
+- 每次重试仍完整执行证书校验，因此不存在“接受无效证书”的路径；两族都失败时，最终报出的仍是最后一次 TLS 错误。
+- 证书校验关闭（`--check-certificate=false`）时保持原行为：换该 host 的任意其他已解析地址重试，没有其他地址才报错。
+- 前提是该 host 的 DNS cache 里已有另一地址族的 good 地址（async DNS 的 A/AAAA 并发解析通常会在此期间补齐）；只有单一族地址时行为与原来一致。IPv6 侧只认 global unicast 地址：对端族只有 ULA/link-local 等非公网 scope 地址时按“对端族不可用”处理，直接报 TLS 错误，不会拿去重试。
+- 代理请求、以及 `--tls-sni-host` override 改变了证书校验主机时，不尝试换地址（network 日志会说明原因）。
+- 想完全恢复“握手失败即中止”的上游行为，设 `--tls-handshake-failover=false`；无 SSL 构建该选项为 unsupported：默认 `false`，`=true`（含空值）会在参数阶段被拒绝。
+
+典型场景：IPv4 通路上有中间设备对 TLS 做 RST 或注入证书，导致 IPv4 握手/证书校验失败，而同一 host 的 IPv6 地址不受影响；反之 IPv6 被干扰时也会回退 IPv4。
+
+network 日志（每条路径都有，关键字 `TLS handshake failed for`）：
+
+- 换族重试：`CUID#N - TLS handshake failed for <ip>:<port> (family=IPv4), retrying with the other address family (IPv6)`
+- 同族换地址重试（仅 `--check-certificate=false`）：`... (family=IPv4), retrying another resolved address`
+- 不重试及原因：`... (family=IPv4); not retrying with another address: no usable address of the other address family (IPv6)` / `... the other address family (IPv6) also failed recently` / `... no other resolved address left to try` / `... failed address family is not selectable`
+- 未尝试换地址及原因：`...; not retrying with another address: disabled by --tls-handshake-failover=false` / `... proxy request` / `... address failover is not available for this request` / `... SNI override changes the verification host`
+- 配套日志：`DNS: CUID#N - marking bad address host=... ip=... family=IPv4`、`Option: tls-handshake-failover=true (source=conf)`（启动日志）、重试成功后的 `TLS: connected remote=...`。
+
 ## 3. 选项总览
 
 ### 3.1 Basic Options
@@ -560,14 +585,14 @@ Alt-Svc 源码状态：
 | `--proxy-method=<METHOD>` | `get` | 代理请求方式：`get` 或 `tunnel`。 |
 | `--connect-timeout=<SEC>` | `30` | 建连超时。 |
 | `-t, --timeout=<SEC>` | `60` | 读写超时。 |
-| `--lowest-speed-limit=<SPEED>` | `0` | 低于速度阈值持续超时则断开。 |
+| `--lowest-speed-limit=<SPEED>` | `0` | 下载启动后速度低于阈值会重试该连接；当前分支在文件大小已知时会尝试补足 stream 并发。 |
 | `-m, --max-tries=<N>` | `5` | 最大尝试次数；`0` 表示无限。 |
 | `--retry-wait=<SEC>` | `2` | 重试间隔秒数。 |
 | `--max-file-not-found=<NUM>` | `0` | 404/文件不存在达到次数后失败。 |
 | `--checksum=<TYPE>=<DIGEST>` | 无 | 指定整文件校验值，例如 `sha-256=...`。 |
 | `-o, --out=<FILE>` | 原文件名 | 输出文件名。 |
 | `--remote-time [true\|false]` | `false` | 使用远端文件时间戳。 |
-| `--reuse-uri [true\|false]` | `true` | 没有未用 URI 时复用已用 URI。 |
+| `--reuse-uri [true\|false]` | `true` | 没有未用 URI 时复用没有错误记录的已用 URI；不控制 302 复用。 |
 | `--server-stat-of=<FILE>` | 无 | 保存 server 性能统计。 |
 | `--server-stat-if=<FILE>` | 无 | 读取 server 性能统计。 |
 | `--server-stat-timeout=<SEC>` | `86400` | server 性能统计过期时间。 |
@@ -575,7 +600,7 @@ Alt-Svc 源码状态：
 | `-x, --max-connection-per-server=<NUM>` | `64` | 每 URL `protocol + hostname` server 最大连接数；当前允许范围 `1..1024`，不按解析 IP 绕过。 |
 | `-k, --min-split-size=<SIZE>` | `2M` | 小于 `2*SIZE` 的范围不继续拆分。 |
 | `--stream-piece-selector=<SELECTOR>` | `default` | piece 选择：`default`、`inorder`、`random`、`geom`。 |
-| `--uri-selector=<SELECTOR>` | `feedback` | URI 选择：`inorder`、`feedback`、`adaptive`。 |
+| `--uri-selector=<SELECTOR>` | `feedback` | 镜像 URI 选择：`inorder` 按顺序，`feedback` 参考历史速度/错误，`adaptive` 偏动态反馈。 |
 | `--dry-run [true\|false]` | `false` | 只检查远端资源，不实际下载。 |
 | `--netrc-path=<FILE>` | `~/.netrc` | netrc 文件路径。 |
 | `-n, --no-netrc [true\|false]` | `false` | 禁用 netrc。 |
@@ -588,6 +613,7 @@ Alt-Svc 源码状态：
 | `--certificate=<FILE>` | 无 | 客户端证书。AppleTLS 可用 Keychain SHA-1 指纹。 |
 | `--private-key=<FILE>` | 无 | 客户端私钥。 |
 | `--check-certificate [true\|false]` | `true` | 校验证书。 |
+| `--tls-handshake-failover [true\|false]` | `true`（SSL 构建；无 SSL 构建默认 `false` 且拒绝 `true`） | TLS 握手/证书校验失败时换地址（优先换地址族）重试，详见 2.11。 |
 | `--min-tls-version=<VERSION>` | `TLSv1.2` | 最低 TLS 版本。 |
 | `--tls-sni-host=<HOST\|TARGET:SNI[,TARGET:SNI]...>` | 无 | FakeSNI / SNI 映射，详见 2.1。 |
 | `--enable-ech [true\|false]` | `false` | 启用 required ECH；必须配 `--ech-config-base64`。 |
@@ -792,20 +818,20 @@ Alt-Svc 源码状态：
 
 ## 4. 源码注册但 manual/usage 差异较大的选项
 
-这些选项在 `OptionHandlerFactory.cc` 或 `usage_text.h` 里能看到，但英文 manual 未必有独立完整章节，主线程后续最好再核对：
+这些选项在 `OptionHandlerFactory.cc` 或 `usage_text.h` 里能看到，但英文 manual 未必有独立完整章节，后续发布前最好再核对：
 
 | 选项 | 来源 | 当前判断 |
 | --- | --- | --- |
 | `--dns-timeout=<SEC>` | `OptionHandlerFactory.cc`，`NO_DESCRIPTION` | 注册为数字项，默认 `30`，范围 `1..60`；manual 未列出独立说明。 |
 | `--startup-idle-time=<SEC>` | `OptionHandlerFactory.cc` | 注册为数字项；manual 未列出独立说明。 |
-| `--select-least-used-host [true\|false]` | `OptionHandlerFactory.cc` | 注册项；需主线程确认当前 URI/host 选择语义是否仍暴露给用户。 |
+| `--select-least-used-host [true\|false]` | `OptionHandlerFactory.cc` | 注册项；需要确认当前 URI/host 选择语义是否仍作为正式用户选项公开。 |
 | `--max-http-pipelining=<NUM>` | `OptionHandlerFactory.cc` | 注册项，和 HTTP/1.1 pipelining 相关；manual 未在当前提取列表中出现。 |
 | `--dht-listen-addr=<ADDR>` | `OptionHandlerFactory.cc`，`NO_DESCRIPTION` | IPv4 DHT 绑定地址；manual 只详细列了 IPv6 的 `--dht-listen-addr6`。 |
 | `--bt-keep-alive-interval=<SEC>` | `OptionHandlerFactory.cc` | 注册项，默认 `120`。 |
 | `--bt-request-timeout=<SEC>` | `OptionHandlerFactory.cc` | 注册项。 |
 | `--bt-timeout=<SEC>` | `OptionHandlerFactory.cc`，`NO_DESCRIPTION` | 注册项，默认 `60`。 |
 | `--peer-connection-timeout=<SEC>` | `OptionHandlerFactory.cc` | 注册项。 |
-| `--enable-direct-io [true\|false]` | `usage_text.h` 仅有 `TEXT_ENABLE_DIRECT_IO` | 当前未在 `OptionHandlerFactory.cc` 看到注册，不应当作为可用选项写进正式 help，需主线程确认是否死文案。 |
+| `--enable-direct-io [true\|false]` | `usage_text.h` 仅有 `TEXT_ENABLE_DIRECT_IO` | 当前未在 `OptionHandlerFactory.cc` 看到注册，不应当作为可用选项写进正式 help；需要确认是否为遗留文案。 |
 | `--metalink-servers=<NUM_SERVERS>` | `usage_text.h` 旧文案 | 当前 `OptionHandlerFactory.cc` 没看到对应注册，manual 当前提取列表也没有独立 option。 |
 
 ## 5. 常用配置示例
@@ -878,7 +904,58 @@ aria2c -s 32 -x 32 -k 2M --file-allocation=none https://example.com/big.bin
 
 用户常用命令里的 `-s 32 -x 32 --min-split-size=2M` 表示“最多拆 32、同 hostname 最多 32、范围小于 4M 不再拆”。如果文件本身只有几 MB，或者服务端不支持 Range，看不到 32 条连接是正常行为。
 
-### 5.6 双栈 DNS 和连接竞速
+### 5.6 多 URL 镜像和失败切换
+
+```console
+aria2c https://bad.example/file https://mirror.example/file
+aria2c --force-sequential=true https://bad.example/file https://mirror.example/file
+```
+
+默认情况下，第一条命令里的两个 URL 更像“同一个文件的两个镜像”，不是两个独立下载任务。它们会进入同一个 `RequestGroup`，共享分片、连接数、URI 选择和 H2 复用边界。
+
+失败切换要分错误类型：
+
+- 如果第一个 URL 是当前 URL 不可恢复错误，例如默认 404、认证失败、部分不重试 HTTP 错误，`AbstractCommand` 会记录该 URI 的错误、从候选里移除同 URI，并尝试 reserved/后续 URI。只要还有第二个 URL，通常会继续尝试。
+- 如果第一个 URL 是可重试错误，例如连接超时、网络问题、部分 5xx 或 `lowest-speed-limit` 触发，当前 `Request` 会增加 try count 并回到 request pool。默认 `max-tries=5`，因此可能先重试第一个 URL，之后才切到第二个 URL。
+- 如果设置 `max-tries=0`，表示无限尝试。遇到“能连但不响应、很慢、反复超时”的首个 URL 时，后续镜像可能长时间没有机会启动。
+- 如果是任务级 `DownloadFailureException`，源码会把当前 `RequestGroup` 标记为 halt，这不是普通镜像失败切换。
+
+希望首个镜像坏了就尽快试下一个，可以使用更保守的镜像配置：
+
+```ini
+uri-selector=inorder
+reuse-uri=false
+max-tries=1
+retry-wait=0
+```
+
+这套配置适合“URL 列表按优先级排列，坏一个就试下一个”的场景；不适合需要长期复用多个稳定镜像做多源提速的场景。
+
+### 5.7 低速重试和补并发
+
+```ini
+lowest-speed-limit=20K
+max-tries=3
+retry-wait=0
+split=16
+max-connection-per-server=16
+```
+
+`lowest-speed-limit` 不是全局限速器，而是“当前连接太慢就重试”的保护线。源码里 `DownloadCommand::checkLowestDownloadSpeed()` 会在下载启动超过启动空闲时间后计算当前连接速度，低于阈值时抛出 `TOO_SLOW_DOWNLOAD_SPEED`。
+
+当前分支对这条路径做了补强：
+
+- 取消当前 CUID 持有的 segment，把未完成范围还给调度器。
+- 已知文件大小时，通过 `RequestGroup::createNextCommandToFillStreamConcurrency()` 尝试补充新的 request command，把 stream command 数补到 `min(总 piece 数, split)`。
+- 再创建当前 CUID 的替代 `CreateRequestCommand`。
+
+边界：
+
+- 文件大小未知时不会补并发，因为还不能安全切分 Range。
+- 它只针对 `TOO_SLOW_DOWNLOAD_SPEED`，不会改变所有 timeout/HTTP 错误的 retry 行为。
+- 它不会强行把一个正在下载的 Range 从中间切成两段；后续 Range 如何分配仍由 segment/piece 调度决定。
+
+### 5.8 双栈 DNS 和连接竞速
 
 ```console
 aria2c --async-dns=true --disable-ipv6=false --console-log-level=network https://example.com/file
@@ -889,14 +966,14 @@ aria2c --async-dns=true --disable-ipv6=false -s 16 -x 16 --console-log-level=net
 如果解析结果同时包含 IPv4 和仅限本地/非公网 scope 的 IPv6（例如 ULA `fc00::/7`、link-local `fe80::/10` 或 site-local `fec0::/10`），主连接会优先 IPv4，避免“IPv4 能出公网、IPv6 只在局域网里有地址”的机器把首连押到 IPv6 黑洞；IPv4 主连接的备份连接也会跳过这类非公网 IPv6。
 真正让同一下载任务长期同时使用 IPv4/IPv6 多条连接，还需要 DNS cache 里已有两族地址、文件可分片、`--split>=2`，并且同一 URL `protocol + hostname` 的 `--max-connection-per-server` 足够大，例如第二条命令里的 `-x 16`。不同 IP 不能绕过这个上限。backup connection 是主/备份竞速，胜者接管 socket，不能等同于长期两条下载流。
 
-### 5.7 网络调试日志
+### 5.9 网络调试日志
 
 ```console
 aria2c --log=- --log-level=network --console-log-level=network https://example.com/file
 aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,dot://dns.example.org --log=- --log-level=network --console-log-level=network https://example.com/file
 ```
 
-调试 DNS/fallback 时，重点搜 `DNS: CUID#`、`query plan`、`falling back`、`selected host=`、`TLS: connected remote=` 和 `Response status:`。如果开启 DoH over H2，还应能搜到 `DNS: DoH using HTTP/2`；如果 `--enable-https-rr=false`，不应出现新的 HTTPS RR/TYPE65 查询。
+调试 DNS/fallback 时，重点搜 `DNS: CUID#`、`query plan`、`falling back`、`selected host=`、`TLS: connected remote=` 和 `Response status:`。排查 TLS 握手/证书失败换地址族时，重点搜 `TLS handshake failed for`（换族重试、不重试原因）和 `marking bad address`。排查下载调度时，再搜 `Pooling request URI=`、`Trying reserved/pooled request`、`Slow download retry scheduled`、`HTTP2:` / `H2`。如果开启 DoH over H2，还应能搜到 `DNS: DoH using HTTP/2`；如果 `--enable-https-rr=false`，不应出现新的 HTTPS RR/TYPE65 查询。
 
 ## 6. 待补齐/确认
 

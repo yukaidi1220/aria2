@@ -1178,6 +1178,9 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
 
     if (rv == TLS_ERR_ERROR) {
       // Damn those error.
+      // NOTE: HttpRequestCommand::isTLSHandshakeFailure() matches this
+      // message prefix to decide whether a failed TLS handshake may be
+      // retried with another address. Keep the prefix stable.
       throw DL_ABORT_EX(fmt("SSL/TLS handshake failure: %s",
                             handshakeError.empty()
                                 ? tlsSession_->getLastErrorString().c_str()

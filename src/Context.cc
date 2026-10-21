@@ -110,6 +110,7 @@ void logStartupOptions(const Option* option)
   logStartupOption(option, PREF_ENABLE_HTTP_PIPELINING, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTP3, parser.get());
   logStartupOption(option, PREF_ENABLE_HTTPS_RR, parser.get());
+  logStartupOption(option, PREF_TLS_HANDSHAKE_FAILOVER, parser.get());
   logStartupOption(option, PREF_CONSOLE_LOG_LEVEL, parser.get());
   logStartupOption(option, PREF_SPLIT, parser.get());
   logStartupOption(option, PREF_MAX_CONNECTION_PER_SERVER, parser.get());

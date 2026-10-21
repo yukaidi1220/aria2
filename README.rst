@@ -26,6 +26,10 @@ See the `aria2 Online Manual
 translation <https://aria2.github.io/manual/pt/html/>`_) to learn
 how to use aria2.
 
+This fork also keeps a Simplified Chinese guide for the current branch in
+``docs/README.zh-CN.md`` and a detailed option reference in
+``docs/command-line-help.zh-CN.md``.
+
 Features
 --------
 

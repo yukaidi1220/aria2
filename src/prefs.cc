@@ -444,6 +444,8 @@ PrefPtr PREF_CA_CERTIFICATE = makePref("ca-certificate");
 // value: true | false
 PrefPtr PREF_CHECK_CERTIFICATE = makePref("check-certificate");
 // value: true | false
+PrefPtr PREF_TLS_HANDSHAKE_FAILOVER = makePref("tls-handshake-failover");
+// value: true | false
 PrefPtr PREF_USE_HEAD = makePref("use-head");
 // value: true | false
 PrefPtr PREF_HTTP_AUTH_CHALLENGE = makePref("http-auth-challenge");

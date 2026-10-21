@@ -397,6 +397,8 @@ extern PrefPtr PREF_CA_CERTIFICATE;
 // value: true | false
 extern PrefPtr PREF_CHECK_CERTIFICATE;
 // value: true | false
+extern PrefPtr PREF_TLS_HANDSHAKE_FAILOVER;
+// value: true | false
 extern PrefPtr PREF_USE_HEAD;
 // value: true | false
 extern PrefPtr PREF_HTTP_AUTH_CHALLENGE;

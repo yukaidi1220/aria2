@@ -104,6 +104,7 @@ _aria2c()
                      '--enable-http2',
                      '--enable-doh-http2',
                      '--enable-https-rr',
+                     '--tls-handshake-failover',
                      '--min-tls-version',
                      '--console-log-level']:
         opt = opts[long_opt]

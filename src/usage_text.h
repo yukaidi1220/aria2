@@ -565,6 +565,18 @@
     "                              address. SNI must be a DNS hostname, not an\n" \
     "                              IP address. Mappings are looked up using the\n" \
     "                              current request host after redirects.")
+#define TEXT_TLS_HANDSHAKE_FAILOVER                                      \
+  _(" --tls-handshake-failover[=true|false]\n"                            \
+    "                              Retry a failed TLS handshake (including a\n" \
+    "                              certificate verification failure) with another\n" \
+    "                              resolved address of the same host. When\n" \
+    "                              certificate verification is enabled, the retry\n" \
+    "                              only switches to the other address family (IPv4\n" \
+    "                              failed, try IPv6, and vice versa), and only when\n" \
+    "                              that family has not also failed recently. Every\n" \
+    "                              retry still verifies the peer certificate, so an\n" \
+    "                              invalid certificate is never accepted. Default:\n" \
+    "                              true. Builds without SSL reject true.")
 #define TEXT_ENABLE_ECH                                                 \
   _(" --enable-ech[=true|false] Enable Encrypted ClientHello for HTTPS when\n" \
     "                              --ech-config-base64 is also set. ECH is\n" \

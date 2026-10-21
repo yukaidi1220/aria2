@@ -480,6 +480,50 @@ HTTP Specific Options
   If the first request is redirected to ``redirect.example``, the redirected
   HTTPS request uses ``redirect-front.example`` as the SNI hostname.
 
+.. option:: --tls-handshake-failover [true|false]
+
+  Retry a failed TLS handshake, including a certificate verification failure,
+  with another resolved address of the same host.  Default: ``true`` in SSL
+  builds; builds without SSL default to ``false``.
+
+  The failed address is marked as a bad address and its address family is
+  penalized (30 seconds for the first failure, doubling up to 300 seconds), so
+  the next address selection prefers the other address family.
+
+  When certificate verification is enabled (the default), the retry only
+  switches to the other address family (IPv4 failed, try IPv6, and vice
+  versa), and only once: if the other family has also failed recently, the
+  download aborts with the TLS error instead of looping through addresses.
+  Every retry still verifies the peer certificate, so this never accepts an
+  invalid certificate; when both families fail, the last TLS error is
+  reported.
+
+  When :option:`--check-certificate` is ``false``, aria2 keeps the previous
+  behavior of retrying any other resolved address of the same host, and only
+  fails when no other address remains.
+
+  The failover requires a good cached address of the other address family for
+  the same host; with only one address family the behavior is unchanged.  For
+  IPv6, only a global unicast address counts as usable: if the other family
+  only has scoped addresses (ULA, link-local, and so on), aria2 aborts with
+  the TLS error instead of retrying.  Address failover is not attempted for
+  proxy requests, and not attempted when :option:`--tls-sni-host` overrides
+  change the certificate verification hostname.  Set
+  ``--tls-handshake-failover=false`` to abort on the first TLS handshake
+  failure.  Builds without SSL treat ``true`` as unsupported during option
+  parsing.
+
+  Example:
+
+  .. code-block:: console
+
+    $ aria2c --console-log-level=network https://example.com/file
+
+  With ``network`` logging, a family failover shows up as
+  ``marking bad address ... family=IPv4`` followed by
+  ``TLS handshake failed for <ip>:<port>, retrying with the other address
+  family``.
+
 .. option:: --enable-ech [true|false]
 
   Enable required Encrypted ClientHello (ECH) for HTTPS requests when

@@ -220,6 +220,57 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
   CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
                        option.get(PREF_ENABLE_HTTPS_RR));
 #endif // !ENABLE_ASYNC_DNS
+
+  Option tlsFailoverDefaultOption;
+  parser.parseDefaultValues(tlsFailoverDefaultOption);
+#ifdef ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE),
+                       tlsFailoverDefaultOption.get(PREF_TLS_HANDSHAKE_FAILOVER));
+#else  // !ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       tlsFailoverDefaultOption.get(PREF_TLS_HANDSHAKE_FAILOVER));
+#endif // !ENABLE_SSL
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_TLS_HANDSHAKE_FAILOVER->k,
+                                        A2_V_FALSE));
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       option.get(PREF_TLS_HANDSHAKE_FAILOVER));
+
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_TLS_HANDSHAKE_FAILOVER->k,
+                                        A2_V_TRUE));
+#ifdef ENABLE_SSL
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE),
+                       option.get(PREF_TLS_HANDSHAKE_FAILOVER));
+#else  // !ENABLE_SSL
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_FALSE),
+                       option.get(PREF_TLS_HANDSHAKE_FAILOVER));
+#endif // !ENABLE_SSL
+
+  // Optional boolean argument: omitted value means true.
+  options.clear();
+  options.push_back(KeyVals::value_type(PREF_TLS_HANDSHAKE_FAILOVER->k, ""));
+#ifdef ENABLE_SSL
+  parser.parse(option, options);
+  CPPUNIT_ASSERT_EQUAL(std::string(A2_V_TRUE),
+                       option.get(PREF_TLS_HANDSHAKE_FAILOVER));
+#else  // !ENABLE_SSL
+  CPPUNIT_ASSERT_THROW(parser.parse(option, options), Exception);
+#endif // !ENABLE_SSL
+
+  auto tlsFailoverHandler = parser.find(PREF_TLS_HANDSHAKE_FAILOVER);
+  CPPUNIT_ASSERT(tlsFailoverHandler);
+#ifdef ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string("true, false"),
+                       tlsFailoverHandler->createPossibleValuesString());
+#else  // !ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string("false"),
+                       tlsFailoverHandler->createPossibleValuesString());
+#endif // !ENABLE_SSL
 }
 
 void OptionHandlerTest::testNumberOptionHandler()

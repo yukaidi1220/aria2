@@ -54,6 +54,33 @@ std::vector<std::string> createHttpAlpnProtocols(const Option* option);
 TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
                                                 const Option* option);
 
+// How a failed TLS handshake should be retried.
+enum TlsAddressFailover {
+  // Rethrow the TLS error and abort this request.
+  TLS_ADDRESS_FAILOVER_ABORT,
+  // Retry with an address of the other address family (IPv4 failed,
+  // try IPv6, and vice versa).
+  TLS_ADDRESS_FAILOVER_OTHER_FAMILY,
+  // Retry with any other resolved address of the same host.
+  TLS_ADDRESS_FAILOVER_ANY_ADDRESS,
+};
+
+// Decides how to retry after the TLS handshake on |failedFamily| failed.
+//
+// When |verifyPeer| is false (certificate verification disabled), any other
+// resolved address of the same host may be retried. When |verifyPeer| is
+// true, a handshake or certificate failure may be caused by interference
+// that only affects one address family (for example a middlebox that
+// resets or hijacks TLS on IPv4 while IPv6 still works), so the retry
+// switches to the other address family only, and only once: if the other
+// family has also failed recently, the request aborts instead of looping
+// through addresses. Every retry still verifies the peer certificate, so
+// this never accepts an invalid certificate.
+TlsAddressFailover decideTlsAddressFailover(int failedFamily, bool verifyPeer,
+                                            bool hasOppositeFamilyAddress,
+                                            bool oppositeFamilyPenalized,
+                                            bool hasAnyOtherAddress);
+
 } // namespace aria2
 
 #endif // ENABLE_SSL

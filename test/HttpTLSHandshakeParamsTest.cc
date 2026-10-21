@@ -10,6 +10,7 @@
 #include "HttpProtocol.h"
 #include "Option.h"
 #include "Request.h"
+#include "a2netcompat.h"
 #include "prefs.h"
 
 namespace aria2 {
@@ -32,6 +33,10 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testHostsMappingControlsVerifyHost);
   CPPUNIT_TEST(testExplicitSNIOverridesMappedVerifyHost);
   CPPUNIT_TEST(testMappedSNIRequestHostBeatsDefaultHost);
+  CPPUNIT_TEST(testTlsAddressFailoverSwitchesFamilyWhenVerifying);
+  CPPUNIT_TEST(testTlsAddressFailoverAbortsWhenOtherFamilyUnavailable);
+  CPPUNIT_TEST(testTlsAddressFailoverAnyAddressWhenNotVerifying);
+  CPPUNIT_TEST(testTlsAddressFailoverAbortsUnknownFamily);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -51,6 +56,10 @@ public:
   void testHostsMappingControlsVerifyHost();
   void testExplicitSNIOverridesMappedVerifyHost();
   void testMappedSNIRequestHostBeatsDefaultHost();
+  void testTlsAddressFailoverSwitchesFamilyWhenVerifying();
+  void testTlsAddressFailoverAbortsWhenOtherFamilyUnavailable();
+  void testTlsAddressFailoverAnyAddressWhenNotVerifying();
+  void testTlsAddressFailoverAbortsUnknownFamily();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpTLSHandshakeParamsTest);
@@ -290,6 +299,60 @@ void HttpTLSHandshakeParamsTest::testMappedSNIRequestHostBeatsDefaultHost()
   CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
   CPPUNIT_ASSERT(params.alpnProtocols.empty());
   CPPUNIT_ASSERT(params.sniHostOverridden);
+}
+
+void HttpTLSHandshakeParamsTest::
+    testTlsAddressFailoverSwitchesFamilyWhenVerifying()
+{
+  // IPv4 handshake failed, IPv6 address cached and not penalized: switch
+  // to the other address family.
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_OTHER_FAMILY,
+                       decideTlsAddressFailover(AF_INET, true, true, false,
+                                                true));
+  // IPv6 handshake failed, IPv4 address cached: switch the other way.
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_OTHER_FAMILY,
+                       decideTlsAddressFailover(AF_INET6, true, true, false,
+                                                true));
+}
+
+void HttpTLSHandshakeParamsTest::
+    testTlsAddressFailoverAbortsWhenOtherFamilyUnavailable()
+{
+  // No cached address of the other address family.
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ABORT,
+                       decideTlsAddressFailover(AF_INET, true, false, false,
+                                                true));
+  // Other family already failed recently (both families failed): abort
+  // instead of looping through addresses.
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ABORT,
+                       decideTlsAddressFailover(AF_INET, true, true, true,
+                                                true));
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ABORT,
+                       decideTlsAddressFailover(AF_INET6, true, true, true,
+                                                true));
+}
+
+void HttpTLSHandshakeParamsTest::
+    testTlsAddressFailoverAnyAddressWhenNotVerifying()
+{
+  // Certificate verification disabled: any other resolved address of the
+  // same host may be retried, regardless of family penalty state.
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ANY_ADDRESS,
+                       decideTlsAddressFailover(AF_INET, false, false, false,
+                                                true));
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ANY_ADDRESS,
+                       decideTlsAddressFailover(AF_INET6, false, true, true,
+                                                true));
+  // ... but not when no other address remains.
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ABORT,
+                       decideTlsAddressFailover(AF_INET, false, false, false,
+                                                false));
+}
+
+void HttpTLSHandshakeParamsTest::testTlsAddressFailoverAbortsUnknownFamily()
+{
+  CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ABORT,
+                       decideTlsAddressFailover(0, true, true, false, true));
 }
 
 } // namespace aria2

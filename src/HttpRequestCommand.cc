@@ -35,11 +35,13 @@
 #include "HttpRequestCommand.h"
 
 #include <algorithm>
+#include <iterator>
 
 #include "Request.h"
 #include "DownloadEngine.h"
 #include "RequestGroup.h"
 #include "RequestGroupMan.h"
+#include "FileEntry.h"
 #include "HttpResponseCommand.h"
 #ifdef HAVE_LIBNGHTTP2
 #  include "Http2ConnectionContext.h"
@@ -102,6 +104,10 @@ constexpr uint32_t HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL = 60;
 
 bool isTLSHandshakeFailure(const RecoverableException& e)
 {
+  // Only SocketCore::tlsConnect() failures carry this prefix. Other TLS
+  // errors (for example "TLS ECH was not accepted") are configuration
+  // level failures: they intentionally do not go through address failover
+  // and are reported by the download abort path instead.
   return util::startsWith(std::string(e.what()), "SSL/TLS handshake failure:");
 }
 
@@ -135,41 +141,136 @@ bool markHttpsServiceBindingEndpointFailed(
   return true;
 }
 
+const char* addressFamilyName(int family)
+{
+  if (family == AF_INET) {
+    return "IPv4";
+  }
+  if (family == AF_INET6) {
+    return "IPv6";
+  }
+  return "unknown";
+}
+
 bool tryRetryTLSHandshakeWithNextAddress(
     const std::shared_ptr<Request>& req,
     const std::shared_ptr<Option>& option, DownloadEngine* e, cuid_t cuid,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup)
 {
-  if (req->getProtocol() != "https" ||
-      option->getAsBool(PREF_CHECK_CERTIFICATE) ||
-      req->getConnectedAddr().empty()) {
+  if (req->getProtocol() != "https" || req->getConnectedAddr().empty()) {
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - TLS handshake failed; not retrying with another "
+                       "address: no connected address to fail over from",
+                       cuid));
     return false;
   }
   auto tlsParams = createHttpTLSHandshakeParams(req.get(), option.get());
   if (tlsParams.sniHost != tlsParams.verifyHost) {
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - TLS handshake failed for %s:%u; not retrying with "
+                       "another address: SNI override changes the verification "
+                       "host",
+                       cuid, req->getConnectedAddr().c_str(),
+                       static_cast<unsigned int>(req->getConnectedPort())));
     return false;
   }
 
   const auto& connectedAddr = req->getConnectedAddr();
+  const auto& connectedHostname = req->getConnectedHostname();
   const auto connectedPort = req->getConnectedPort();
-  e->markBadIPAddress(cuid, req->getConnectedHostname(), connectedAddr,
-                      connectedPort);
-  if (e->findCachedIPAddress(req->getConnectedHostname(),
-                             connectedPort)
-          .empty()) {
-    if (getMappedAddresses(req->getConnectedHostname(), option.get())
-        .empty()) {
-      e->removeCachedIPAddress(req->getConnectedHostname(), connectedPort);
-      markHttpsServiceBindingEndpointFailed(
-          req, e, req->getConnectedHostname(), connectedPort);
+  auto failedFamily = getNumericAddressFamily(connectedAddr);
+  auto oppositeFamily = failedFamily == AF_INET ? AF_INET6 : AF_INET;
+  auto verifyPeer = option->getAsBool(PREF_CHECK_CERTIFICATE);
+
+  // Mark the failed address as bad before querying the cache again:
+  // findCachedIPAddress() only returns good addresses, so the queries below
+  // must not see the address that just failed.
+  e->markBadIPAddress(cuid, connectedHostname, connectedAddr, connectedPort);
+
+  // For IPv6, only a global unicast address counts as usable: scoped
+  // addresses (ULA, link-local, ...) are deliberately not used as download
+  // targets, so an opposite family which only has scoped IPv6 addresses is
+  // treated as unavailable and the request aborts with the TLS error.
+  auto hasOppositeFamilyAddress = [&]() {
+    if (oppositeFamily != AF_INET6) {
+      return !e->findCachedIPAddress(connectedHostname, connectedPort,
+                                     oppositeFamily)
+                  .empty();
     }
+    std::vector<std::string> v6Addrs;
+    e->findAllCachedIPAddresses(std::back_inserter(v6Addrs), connectedHostname,
+                                connectedPort, AF_INET6);
+    return std::find_if(std::begin(v6Addrs), std::end(v6Addrs),
+                        [](const std::string& addr) {
+                          return isIPv6GlobalUnicastAddress(addr);
+                        }) != std::end(v6Addrs);
+  }();
+  auto oppositeFamilyPenalized =
+      fileEntry && fileEntry->isAddressFamilyPenalized(connectedHostname,
+                                                       connectedPort,
+                                                       oppositeFamily);
+  auto hasAnyOtherAddress =
+      !e->findCachedIPAddress(connectedHostname, connectedPort).empty();
+
+  auto failover = decideTlsAddressFailover(
+      failedFamily, verifyPeer, hasOppositeFamilyAddress,
+      oppositeFamilyPenalized, hasAnyOtherAddress);
+
+  if (failover == TLS_ADDRESS_FAILOVER_ABORT) {
+    if (!hasAnyOtherAddress &&
+        getMappedAddresses(connectedHostname, option.get()).empty()) {
+      e->removeCachedIPAddress(connectedHostname, connectedPort);
+      markHttpsServiceBindingEndpointFailed(req, e, connectedHostname,
+                                            connectedPort);
+    }
+    std::string reason;
+    if (!verifyPeer) {
+      reason = "no other resolved address left to try";
+    }
+    else if (failedFamily != AF_INET && failedFamily != AF_INET6) {
+      reason = "failed address family is not selectable";
+    }
+    else if (!hasOppositeFamilyAddress) {
+      reason = fmt("no usable address of the other address family (%s)",
+                   addressFamilyName(oppositeFamily));
+    }
+    else {
+      reason = fmt("the other address family (%s) also failed recently",
+                   addressFamilyName(oppositeFamily));
+    }
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - TLS handshake failed for %s:%u (family=%s); not "
+                       "retrying with another address: %s",
+                       cuid, connectedAddr.c_str(),
+                       static_cast<unsigned int>(connectedPort),
+                       addressFamilyName(failedFamily), reason.c_str()));
     return false;
   }
 
-  A2_LOG_NETWORK(fmt("CUID#%" PRId64
-                     " - TLS handshake failed for %s:%u, retrying another "
-                     "resolved address",
-                     cuid, connectedAddr.c_str(), connectedPort));
+  if (fileEntry && (failedFamily == AF_INET || failedFamily == AF_INET6)) {
+    // Penalize the failed address family so the next address selection
+    // prefers the other family.
+    fileEntry->recordAddressFamilyFailure(connectedHostname, connectedPort,
+                                          failedFamily);
+  }
+
+  if (failover == TLS_ADDRESS_FAILOVER_OTHER_FAMILY) {
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - TLS handshake failed for %s:%u (family=%s), "
+                       "retrying with the other address family (%s)",
+                       cuid, connectedAddr.c_str(),
+                       static_cast<unsigned int>(connectedPort),
+                       addressFamilyName(failedFamily),
+                       addressFamilyName(oppositeFamily)));
+  }
+  else {
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - TLS handshake failed for %s:%u (family=%s), "
+                       "retrying another resolved address",
+                       cuid, connectedAddr.c_str(),
+                       static_cast<unsigned int>(connectedPort),
+                       addressFamilyName(failedFamily)));
+  }
   e->setNoWait(true);
   e->addCommand(
       InitiateConnectionCommandFactory::createInitiateConnectionCommand(
@@ -197,12 +298,39 @@ bool HttpRequestCommand::executeInternal()
         }
       }
       catch (RecoverableException& e) {
-        if (retryTLSHandshakeWithNextAddress_ && !proxyRequest_ &&
-            isTLSHandshakeFailure(e) &&
-            tryRetryTLSHandshakeWithNextAddress(
-                getRequest(), getOption(), getDownloadEngine(), getCuid(),
-                getFileEntry(), getRequestGroup())) {
-          return true;
+        if (isTLSHandshakeFailure(e)) {
+          if (retryTLSHandshakeWithNextAddress_ && !proxyRequest_ &&
+              getOption()->getAsBool(PREF_TLS_HANDSHAKE_FAILOVER)) {
+            if (tryRetryTLSHandshakeWithNextAddress(
+                    getRequest(), getOption(), getDownloadEngine(), getCuid(),
+                    getFileEntry(), getRequestGroup())) {
+              return true;
+            }
+            // tryRetryTLSHandshakeWithNextAddress() already logged why no
+            // address failover was possible.
+          }
+          else {
+            std::string reason;
+            if (!retryTLSHandshakeWithNextAddress_) {
+              reason = "address failover is not available for this request";
+            }
+            else if (proxyRequest_) {
+              reason = "proxy request";
+            }
+            else {
+              reason = "disabled by --tls-handshake-failover=false";
+            }
+            auto addrForLog = getRequest()->getConnectedAddr().empty()
+                                  ? getRequest()->getHost()
+                                  : getRequest()->getConnectedAddr();
+            A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                               " - TLS handshake failed for %s:%u; not retrying "
+                               "with another address: %s",
+                               getCuid(), addrForLog.c_str(),
+                               static_cast<unsigned int>(
+                                   getRequest()->getConnectedPort()),
+                               reason.c_str()));
+          }
         }
         throw;
       }

@@ -185,6 +185,28 @@ TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
   return params;
 }
 
+TlsAddressFailover decideTlsAddressFailover(int failedFamily, bool verifyPeer,
+                                            bool hasOppositeFamilyAddress,
+                                            bool oppositeFamilyPenalized,
+                                            bool hasAnyOtherAddress)
+{
+  if (!verifyPeer) {
+    // Certificate verification is disabled: keep retrying any other
+    // resolved address of the same host.
+    return hasAnyOtherAddress ? TLS_ADDRESS_FAILOVER_ANY_ADDRESS
+                              : TLS_ADDRESS_FAILOVER_ABORT;
+  }
+  if (failedFamily != AF_INET && failedFamily != AF_INET6) {
+    return TLS_ADDRESS_FAILOVER_ABORT;
+  }
+  if (!hasOppositeFamilyAddress || oppositeFamilyPenalized) {
+    // No usable address of the other address family, or that family has
+    // also failed recently: abort instead of looping through addresses.
+    return TLS_ADDRESS_FAILOVER_ABORT;
+  }
+  return TLS_ADDRESS_FAILOVER_OTHER_FAMILY;
+}
+
 } // namespace aria2
 
 #endif // ENABLE_SSL
