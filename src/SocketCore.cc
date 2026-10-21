@@ -1170,8 +1170,8 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
 
       auto peerInfo = ss.str();
 
-      A2_LOG_DEBUG(fmt("Securely connected to %s with %s", peerInfo.c_str(),
-                       tlsVersion.c_str()));
+      A2_LOG_NETWORK(fmt("Securely connected to %s with %s", peerInfo.c_str(),
+                         tlsVersion.c_str()));
       auto selectedAlpn = tlsSession_->getSelectedAlpnProtocol();
       A2_LOG_NETWORK(formatTlsConnectedLog(
           formatEndpointForLog(peerEndpoint), params.sniHost, params.verifyHost,
