@@ -271,6 +271,25 @@ void OptionHandlerTest::testUnsupportedFeatureOptionParser()
   CPPUNIT_ASSERT_EQUAL(std::string("false"),
                        tlsFailoverHandler->createPossibleValuesString());
 #endif // !ENABLE_SSL
+
+  // parseDefaultValues() must not throw for any handler default, and the
+  // customized defaults must be in effect.
+  Option customizedDefaults;
+  parser.parseDefaultValues(customizedDefaults);
+  CPPUNIT_ASSERT_EQUAL(std::string(V_ADAPTIVE),
+                       customizedDefaults.get(PREF_URI_SELECTOR));
+  CPPUNIT_ASSERT_EQUAL(std::string("10"),
+                       customizedDefaults.get(PREF_MAX_FILE_NOT_FOUND));
+#ifdef ENABLE_ASYNC_DNS
+#  ifdef ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string(V_MULTI),
+                       customizedDefaults.get(PREF_ASYNC_DNS_MODE));
+#  else  // !ENABLE_SSL
+  CPPUNIT_ASSERT_EQUAL(std::string(V_CARES),
+                       customizedDefaults.get(PREF_ASYNC_DNS_MODE));
+#  endif // !ENABLE_SSL
+  CPPUNIT_ASSERT(!customizedDefaults.get(PREF_ASYNC_DNS_SERVER).empty());
+#endif // ENABLE_ASYNC_DNS
 }
 
 void OptionHandlerTest::testNumberOptionHandler()

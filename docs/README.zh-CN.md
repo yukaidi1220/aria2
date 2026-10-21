@@ -13,6 +13,7 @@
 - IPv6 默认启用：`disable-ipv6=false`，但旧系统或 IPv6 不通时仍可显式关闭。
 - HTTP/2 仍是实验能力：普通下载由 `enable-http2` 控制；DoH 可用独立的 `enable-doh-http2` 只让 DNS over HTTPS 尝试 H2。
 - HTTPS RR / SVCB 默认关闭：只有 `enable-https-rr=true` 才会后台查询 TYPE65 并消费缓存。
+- 默认值按常用场景定制：SSL 构建下 `async-dns-mode=multi` 并内置公共 DNS 列表、`uri-selector=adaptive`、`max-file-not-found=10`、`tls-handshake-failover=true` 等已是默认值；配置文件里只需要写与默认不同的项。
 - 下载调度更清楚：`split`、`min-split-size`、`piece-length`、`max-connection-per-server` 各管各的，不要混成一个“每个请求固定多大”。
 - 低速重试更积极：`lowest-speed-limit` 触发后，已知文件大小时会尝试补足当前下载的 stream 并发上限。
 
@@ -59,6 +60,7 @@ enable-http-pipelining=false
 - DoH URL 建议带上路径，例如 `https://120.53.53.53/dns-query`。只写 `https://120.53.53.53` 时，HTTP 路径会是 `/`，很多 DoH 服务不会接受。
 - `enable-doh-http2=true` 不会给普通 HTTPS 下载启用 H2。
 - 构建没有 nghttp2 时，H2 相关开关为 true 会在参数阶段被拒绝。
+- `async-dns-mode=multi` 和一组公共 DNS 列表（`dot://dot.360.cn,dot://dot.pub,https://dns.alidns.com/dns-query,tcp://180.184.1.1,udp://119.29.29.29`）已经是默认值；这里写出来只是为了用另一组 server。配置里给了 `async-dns-server` 就整体覆盖默认列表，想回到系统 DNS 用 `async-dns-mode=cares`。
 
 ### 2.3 secure DNS 优先，多阶段 fallback
 
@@ -137,8 +139,8 @@ aria2c --force-sequential=true https://a.example/file https://b.example/file
 多 URL 选择由 `uri-selector` 决定：
 
 - `inorder`：按剩余 URI 顺序选择。
-- `feedback`：默认值，优先参考 server 统计和已用 host。
-- `adaptive`：更偏向动态反馈选择。
+- `feedback`：优先参考 server 统计和已用 host。
+- `adaptive`：默认值，更偏向动态反馈选择。
 
 `reuse-uri=true` 的含义是：没有未用 URI 时，可以把已经用过且没有错误记录的 URI 再放回候选。它不是“302 复用开关”，也不是“强制同一个 URL 一直用到底”。
 

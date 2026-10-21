@@ -197,7 +197,7 @@ HTTP/FTP/SFTP Options
   attempt is counted toward :option:`--max-tries`, so it should be
   configured too.
 
-  Default: ``0``
+  Default: ``10``
 
 .. option:: -m, --max-tries=<N>
 
@@ -382,7 +382,7 @@ HTTP/FTP/SFTP Options
   yet, and if each of them has already been tested, returns mirrors
   which has to be tested again. Otherwise, it doesn't select anymore
   mirrors. Like ``feedback``, it uses a performance profile of servers.
-  Default: ``feedback``
+  Default: ``adaptive``
 
 HTTP Specific Options
 ~~~~~~~~~~~~~~~~~~~~~
@@ -1490,7 +1490,8 @@ Advanced Options
   for later connection decisions, and a cached direct HTTPS endpoint can change
   the TCP connect target/port and narrow TLS ALPN. Discovery results do not yet
   automatically configure ECH or HTTP/3 behavior.
-  Default: ``cares``
+  Default: ``multi`` in SSL builds; ``cares`` in builds without SSL/TLS
+  support.
 
 .. option:: --async-dns-server=<SERVER>[,...]
 
@@ -1522,6 +1523,13 @@ Advanced Options
   ``multi`` resolves download hostnames through secure DNS first, then falls
   back to explicit plain DNS servers and finally system c-ares DNS if every
   secure resolver fails.
+
+  This build ships with a default list of public DNS servers
+  (``dot://dot.360.cn,dot://dot.pub,https://dns.alidns.com/dns-query,tcp://180.184.1.1,udp://119.29.29.29``),
+  so secure DNS is used out of the box in ``multi`` mode. Any value given in
+  a configuration file or on the command line replaces this default. Builds
+  without SSL/TLS support, or ``cares`` mode, reject the secure entries and
+  keep the system resolver configuration.
 
 .. option:: --auto-file-renaming [true|false]
 

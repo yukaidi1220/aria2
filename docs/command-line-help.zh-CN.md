@@ -73,8 +73,8 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 | `--tls-handshake-failover[=true\|false]` | `ENABLE_SSL` 构建为布尔项，默认 `true`；无 SSL 构建为 unsupported（默认 `false`，`=true` 拒绝） | `HttpRequestCommand.cc` 的 `tryRetryTLSHandshakeWithNextAddress()` 在 TLS 握手失败（含证书校验失败）时标记坏 IP、记录地址族惩罚，并重建 `InitiateConnectionCommand`；换族与否由 `HttpTLSHandshakeParams.cc::decideTlsAddressFailover()` 决定 | 证书校验开启时只换到另一地址族且只换一次（对端族近期也失败就中止报错），每次重试仍完整校验证书；IPv6 侧只认 global unicast 地址；证书校验关闭时保持“换任意其他已解析地址”的原行为；不校验证书不等于接受无效证书之外的语义变化 |
 | `--hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>` | `DefaultOptionHandler`，HTTP/HTTPS/Advanced | `HostMapping.cc` 校验一边主机一边 IP；`AbstractCommand::resolveHostname()` 用 `HOST:IPADDR` 填 aria2 DNS cache；`getLogicalHostForRequest()` 用 `IPADDR:HOST` 改 HTTP/TLS 逻辑主机 | 进程内映射，不是系统 hosts；代理侧解析不走这里 |
 | `--async-dns[=true\|false]` | 仅 `ENABLE_ASYNC_DNS` 构建注册；非 Android 默认 `true`，Android 默认 `false` | 开启后走 `AsyncNameResolverMan`；按 mode 创建 c-ares、DoT 或 DoH resolver | 无异步 DNS 构建时没有此选项；设为 `false` 时不会校验或启动 DoT/DoH/multi resolver 配置，下载域名解析回到 hosts/cache 后的同步 `getaddrinfo` 路径 |
-| `--async-dns-mode=<cares\|dot\|doh\|multi>` | `ENABLE_SSL` 下允许 `cares\|dot\|doh\|multi`；无 SSL 只允许 `cares` | `resolverModeFromOption()` 选择后端；DoT/DoH 在 `validateAsyncNameResolverConfig()` 和具体 resolver 创建时校验 server；`multi` 由 `createResolvers()` 按阶段展开 secure、显式 plain、系统 c-ares resolver slot | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 这两个别名；`multi` 有 secure server 时 plain DNS 只用于 secure server bootstrap 或明确 fallback |
-| `--async-dns-server=<SERVER>[,...]` | 仅 `ENABLE_ASYNC_DNS` 构建注册 | c-ares 直接传 server 列表；DoT/DoH 由 `AsyncDnsServerConfig.cc` 解析，域名 server 先 plain c-ares bootstrap，数值地址或域名都可加 `#TLS_HOST` 作为 TLS/HTTP 名称 hint；`multi` 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST[:PORT][#TLS_HOST]` 是 DoT，HTTPS URL 是 DoH | `multi` secure 全失败后先用显式 plain server fallback，没有显式 plain 或显式 plain 也失败时再用系统 c-ares fallback；plain server 只接受数值 IP，域名请写成 `dot://` 或 HTTPS DoH |
+| `--async-dns-mode=<cares\|dot\|doh\|multi>` | `ENABLE_SSL` 下允许 `cares\|dot\|doh\|multi`，默认 `multi`；无 SSL 只允许 `cares`（默认也是 `cares`） | `resolverModeFromOption()` 选择后端；DoT/DoH 在 `validateAsyncNameResolverConfig()` 和具体 resolver 创建时校验 server；`multi` 由 `createResolvers()` 按阶段展开 secure、显式 plain、系统 c-ares resolver slot | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 这两个别名；`multi` 有 secure server 时 plain DNS 只用于 secure server bootstrap 或明确 fallback |
+| `--async-dns-server=<SERVER>[,...]` | 仅 `ENABLE_ASYNC_DNS` 构建注册；有内置公共 DNS 默认列表（`dot://dot.360.cn,dot://dot.pub,https://dns.alidns.com/dns-query,tcp://180.184.1.1,udp://119.29.29.29`），配置/命令行给了值就整体覆盖 | c-ares 直接传 server 列表；DoT/DoH 由 `AsyncDnsServerConfig.cc` 解析，域名 server 先 plain c-ares bootstrap，数值地址或域名都可加 `#TLS_HOST` 作为 TLS/HTTP 名称 hint；`multi` 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST[:PORT][#TLS_HOST]` 是 DoT，HTTPS URL 是 DoH | `multi` secure 全失败后先用显式 plain server fallback，没有显式 plain 或显式 plain 也失败时再用系统 c-ares fallback；plain server 只接受数值 IP，域名请写成 `dot://` 或 HTTPS DoH；cares 模式遇到含 `dot://`/`https://` 的列表会拒绝并保持系统 resolver，不报错 |
 | `--disable-ipv6[=true\|false]` | 默认 `false`，包括 32-bit MinGW | `configureAsyncNameResolverMan()` 用它关闭 AAAA 查询；连接层 `getBackupConnectionDelay()` 用它决定是否把 opposite-family 备份连接延迟降到 `0ms` | 这是 aria2 解析/连接选择开关，不是系统 IPv6 总开关；旧系统 IPv6 不稳时仍可显式设为 `true` |
 | `--enable-http2[=true\|false]` | 有 `HAVE_LIBNGHTTP2` 时为布尔项，否则 `UnsupportedFeatureOptionHandler` | `createHttpAlpnProtocols()` 写入 `h2,http/1.1`；TLS 后由 `HttpProtocol.cc` 判定 H2；请求交给 `Http2Session` / `Http2MultiplexExchange` | 仅 HTTPS；与 HTTP/1.1 pipelining 互斥；TLS 后端无 ALPN 时回 HTTP/1.1 |
 | `--enable-doh-http2[=true\|false]` | 有 `HAVE_LIBNGHTTP2` 时为布尔项，否则 `UnsupportedFeatureOptionHandler` | 只影响 DoH resolver 的 TLS ALPN；`AsyncNameResolverMan` 和 HTTPS RR discovery 中的 DoH 可在 `--enable-http2=false` 时仍尝试 `h2,http/1.1` | 不启用普通 HTTPS 下载 H2；仍受 `--enable-http-pipelining=false` 和 TLS ALPN 约束 |
@@ -216,7 +216,8 @@ URL hostname
 注册路径：
 
 - `src/OptionHandlerFactory.cc` 在 `ENABLE_ASYNC_DNS` 下注册 `--async-dns`、`--async-dns-mode`、`--async-dns-server`。
-- `--async-dns-mode` 在 `ENABLE_SSL` 下允许 `cares|dot|doh|multi`；无 SSL 构建只允许 `cares`。
+- `--async-dns-mode` 在 `ENABLE_SSL` 下允许 `cares|dot|doh|multi`，默认 `multi`；无 SSL 构建只允许 `cares`，默认也是 `cares`（默认值不能写 `multi`，否则 `parseDefaultValues()` 解析默认值时会因取值不合法直接失败）。
+- `--async-dns-server` 有内置公共 DNS 默认列表（`dot://dot.360.cn,dot://dot.pub,https://dns.alidns.com/dns-query,tcp://180.184.1.1,udp://119.29.29.29`）；配置文件或命令行给了值就整体覆盖它，不给就在 `multi` 下直接走 secure-first。
 - `src/AsyncNameResolverMan.cc::resolverModeFromOption()` 选择后端。
 - `src/AsyncNameResolverMan.cc::validateAsyncNameResolverConfig()` 在解析期校验后端配置；DoT/DoH 模式没有 server 会直接失败。
 - `src/AsyncNameResolverMan.cc::createResolver()` 创建单后端 resolver；`createResolvers()` 在 `multi` 模式下按阶段展开 resolver slot：主阶段只跑 DoT/DoH，失败后才进入显式 plain DNS，再失败才进入系统 c-ares。
@@ -279,6 +280,7 @@ aria2c --async-dns=true --async-dns-mode=multi --async-dns-server=udp://1.1.1.1,
 - DoH 使用 `--async-dns=true --async-dns-mode=doh --async-dns-server=...`。
 - DoT 使用 `--async-dns=true --async-dns-mode=dot --async-dns-server=...`。
 - DoT/DoH 优先、plain DNS 只做 bootstrap 或 fallback 使用 `--async-dns=true --async-dns-mode=multi --async-dns-server=...`。
+- 由于 `multi` 和公共 DNS 列表已是默认值，不写 `--async-dns-mode` / `--async-dns-server` 时默认就是 DoT/DoH 优先；想换成自己的 server 列表才需要显式写 `--async-dns-server=...`，想完全回到系统 DNS 用 `--async-dns-mode=cares`。
 - 如果后续要增加别名，也应在 `OptionHandlerFactory.cc` 注册并同步 `usage_text.h`，不能只在文档里写。
 
 `#TLS_HOST` hint：
@@ -612,7 +614,7 @@ network 日志（每条路径都有，关键字 `TLS handshake failed for`）：
 | `--lowest-speed-limit=<SPEED>` | `0` | 下载启动后速度低于阈值会重试该连接；当前分支在文件大小已知时会尝试补足 stream 并发。 |
 | `-m, --max-tries=<N>` | `5` | 最大尝试次数；`0` 表示无限。 |
 | `--retry-wait=<SEC>` | `2` | 重试间隔秒数。 |
-| `--max-file-not-found=<NUM>` | `0` | 404/文件不存在达到次数后失败。 |
+| `--max-file-not-found=<NUM>` | `10` | 404/文件不存在达到次数后失败。 |
 | `--checksum=<TYPE>=<DIGEST>` | 无 | 指定整文件校验值，例如 `sha-256=...`。 |
 | `-o, --out=<FILE>` | 原文件名 | 输出文件名。 |
 | `--remote-time [true\|false]` | `false` | 使用远端文件时间戳。 |
@@ -624,7 +626,7 @@ network 日志（每条路径都有，关键字 `TLS handshake failed for`）：
 | `-x, --max-connection-per-server=<NUM>` | `64` | 每 URL `protocol + hostname` server 最大连接数；当前允许范围 `1..1024`，不按解析 IP 绕过。 |
 | `-k, --min-split-size=<SIZE>` | `2M` | 小于 `2*SIZE` 的范围不继续拆分。 |
 | `--stream-piece-selector=<SELECTOR>` | `default` | piece 选择：`default`、`inorder`、`random`、`geom`。 |
-| `--uri-selector=<SELECTOR>` | `feedback` | 镜像 URI 选择：`inorder` 按顺序，`feedback` 参考历史速度/错误，`adaptive` 偏动态反馈。 |
+| `--uri-selector=<SELECTOR>` | `adaptive` | 镜像 URI 选择：`inorder` 按顺序，`feedback` 参考历史速度/错误，`adaptive` 偏动态反馈。 |
 | `--dry-run [true\|false]` | `false` | 只检查远端资源，不实际下载。 |
 | `--netrc-path=<FILE>` | `~/.netrc` | netrc 文件路径。 |
 | `-n, --no-netrc [true\|false]` | `false` | 禁用 netrc。 |
@@ -783,8 +785,8 @@ network 日志（每条路径都有，关键字 `TLS handshake failed for`）：
 | `--allow-piece-length-change [true\|false]` | `false` | 允许 piece length 改变继续下载。 |
 | `--always-resume [true\|false]` | `true` | 总是尝试断点续传；失败次数受 `--max-resume-failure-tries` 影响。 |
 | `--async-dns [true\|false]` | 非 Android 默认 `true`，Android 默认 `false` | 启用异步 DNS。 |
-| `--async-dns-mode=<cares\|dot\|doh\|multi>` | `cares` | 异步 DNS 后端，详见 2.3；`multi` 有 secure server 时先跑 DoT/DoH，plain DNS 只做 bootstrap 或 fallback。 |
-| `--async-dns-server=<SERVER>[,...]` | cares 读系统配置；DoT/DoH 必填；multi 无 plain server 时用系统 resolver | 指定异步 DNS server，格式随 mode 变化；DoT/DoH 可写数值地址或域名，域名会 plain DNS bootstrap 并遵守 `--disable-ipv6`，且可加 `#TLS_HOST`；multi 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST` 是 DoT，HTTPS URL 是 DoH；有显式 plain server 时，DoT/DoH 域名 server 的 bootstrap 也走这些 plain server。 |
+| `--async-dns-mode=<cares\|dot\|doh\|multi>` | `multi`（SSL 构建；无 SSL 构建为 `cares`） | 异步 DNS 后端，详见 2.3；`multi` 有 secure server 时先跑 DoT/DoH，plain DNS 只做 bootstrap 或 fallback。 |
+| `--async-dns-server=<SERVER>[,...]` | 内置公共 DNS 列表：`dot://dot.360.cn,dot://dot.pub,https://dns.alidns.com/dns-query,tcp://180.184.1.1,udp://119.29.29.29` | 指定异步 DNS server，格式随 mode 变化；DoT/DoH 可写数值地址或域名，域名会 plain DNS bootstrap 并遵守 `--disable-ipv6`，且可加 `#TLS_HOST`；multi 中 `udp://IP`/裸 IP 是 plain UDP，`tcp://IP` 是 plain TCP，`dot://HOST` 是 DoT，HTTPS URL 是 DoH；有显式 plain server 时，DoT/DoH 域名 server 的 bootstrap 也走这些 plain server。配置文件或命令行给了值就完全覆盖内置默认列表。 |
 | `--enable-async-dns6 [true\|false]` | 已废弃 | 旧 IPv6 异步 DNS 开关；当前使用 `--disable-ipv6` 控制。 |
 | `--auto-file-renaming [true\|false]` | `true` | 同名文件自动追加 `.1` 到 `.9999`。 |
 | `--auto-save-interval=<SEC>` | `60` | 定期保存 `.aria2` 控制文件。 |

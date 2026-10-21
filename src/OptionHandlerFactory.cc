@@ -102,7 +102,11 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
   {
     OptionHandler* op(new ParameterOptionHandler(
 #  ifdef ENABLE_SSL
-        PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_CARES,
+        // Default to multi so that secure DNS is attempted first when a
+        // server list is configured. Non-SSL builds must keep cares:
+        // parseDefaultValues() parses the default value, and multi is not
+        // an allowed value without SSL.
+        PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_MULTI,
         {V_CARES, V_DOT, V_DOH, V_MULTI}));
 #  else  // !ENABLE_SSL
         PREF_ASYNC_DNS_MODE, TEXT_ASYNC_DNS_MODE, V_CARES, {V_CARES}));
@@ -114,8 +118,14 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+    // Default public DNS server list. Any value set in a configuration
+    // file or on the command line overrides it. Builds without SSL (or
+    // cares mode) reject the secure entries and keep the system resolver,
+    // so this is safe as a default.
     OptionHandler* op(new DefaultOptionHandler(
-        PREF_ASYNC_DNS_SERVER, TEXT_ASYNC_DNS_SERVER, NO_DEFAULT_VALUE));
+        PREF_ASYNC_DNS_SERVER, TEXT_ASYNC_DNS_SERVER,
+        "dot://dot.360.cn,dot://dot.pub,https://dns.alidns.com/dns-query,"
+        "tcp://180.184.1.1,udp://119.29.29.29"));
     op->addTag(TAG_ADVANCED);
     handlers.push_back(op);
   }
@@ -871,7 +881,7 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
   }
   {
     OptionHandler* op(new NumberOptionHandler(PREF_MAX_FILE_NOT_FOUND,
-                                              TEXT_MAX_FILE_NOT_FOUND, "0", 0));
+                                              TEXT_MAX_FILE_NOT_FOUND, "10", 0));
     op->addTag(TAG_FTP);
     op->addTag(TAG_HTTP);
     op->setInitialOption(true);
@@ -1017,7 +1027,7 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
   }
   {
     OptionHandler* op(new ParameterOptionHandler(
-        PREF_URI_SELECTOR, TEXT_URI_SELECTOR, V_FEEDBACK,
+        PREF_URI_SELECTOR, TEXT_URI_SELECTOR, V_ADAPTIVE,
         {V_INORDER, V_FEEDBACK, V_ADAPTIVE}));
     op->addTag(TAG_FTP);
     op->addTag(TAG_HTTP);

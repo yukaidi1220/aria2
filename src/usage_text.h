@@ -466,7 +466,8 @@
     "                              Append #TLS_HOST to set TLS/HTTP names. multi\n" \
     "                              tries secure DNS before plain fallback.\n" \
     "                              HTTPS RR discovery is a separate background\n" \
-    "                              lookup and may not use the same fallback flow.")
+    "                              lookup and may not use the same fallback flow.\n" \
+    "                              Default: multi.")
 #else  // !ENABLE_SSL
 #define TEXT_ASYNC_DNS_MODE                                     \
   _(" --async-dns-mode=cares      Select asynchronous DNS resolver backend.")
@@ -930,7 +931,11 @@
     "                              dot://HOST[:PORT][#TLS_HOST], or HTTPS DoH\n" \
     "                              URLs; bare IP entries mean udp://IP. multi\n" \
     "                              resolves download names with secure DNS first;\n" \
-    "                              plain DNS is fallback or secure bootstrap.")
+    "                              plain DNS is fallback or secure bootstrap.\n" \
+    "                              Default: dot://dot.360.cn,dot://dot.pub,\n" \
+    "                              https://dns.alidns.com/dns-query,\n" \
+    "                              tcp://180.184.1.1,udp://119.29.29.29\n" \
+    "                              (overridden by any configured value).")
 #define TEXT_ENABLE_RPC                                               \
   _(" --enable-rpc[=true|false]    Enable JSON-RPC/XML-RPC server.\n" \
     "                              It is strongly recommended to set secret\n" \
