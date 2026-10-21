@@ -109,10 +109,30 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v6
+    - name: Resolve Ubuntu base image
+      id: base_image
+      run: |
+        set -eu
+        candidates='public.ecr.aws/docker/library/ubuntu:22.04 public.ecr.aws/ubuntu/ubuntu:22.04 mirror.gcr.io/library/ubuntu:22.04 docker.io/library/ubuntu:22.04'
+        for attempt in 1 2 3; do
+          for img in $candidates; do
+            if docker pull -q "$img"; then
+              echo "image=$img" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::notice::pull of $img failed on attempt $attempt"
+          done
+          if [ "$attempt" != 3 ]; then
+            sleep 15
+          fi
+        done
+        echo "::error::Could not pull ubuntu:22.04 from any of: $candidates"
+        exit 1
     - name: Build dependencies Docker image
       run: |
         docker build \
           --build-arg HOST=${{ matrix.host }} \
+          --build-arg BASE_IMAGE=${{ steps.base_image.outputs.image }} \
           -t aria2-deps-${{ matrix.host }} \
           -f Dockerfile.mingw-ci .
     - name: Build aria2 Windows binary

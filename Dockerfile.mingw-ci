@@ -4,7 +4,11 @@
 # Uses OpenSSL 1.1.1w (last version supporting Windows XP) for TLS.
 # All dependencies are statically linked.
 
-FROM public.ecr.aws/docker/library/ubuntu:22.04
+# The base is parameterized because public.ecr.aws enforces an anonymous
+# per-IP data cap that shared CI runner IPs routinely exceed; the workflow
+# resolves whichever mirror is currently serving ubuntu:22.04.
+ARG BASE_IMAGE=public.ecr.aws/docker/library/ubuntu:22.04
+FROM ${BASE_IMAGE}
 
 ARG HOST=i686-w64-mingw32
 ENV HOST=$HOST
