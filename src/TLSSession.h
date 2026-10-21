@@ -83,6 +83,12 @@ public:
   // from the certificate verification hostname passed to tlsConnect().
   virtual bool supportsSNIHostnameOverride() const { return false; }
 
+  // Returns true if this backend can omit the SNI extension altogether
+  // while still verifying the peer certificate against the hostname
+  // passed to tlsConnect(). Backends which derive SNI from that hostname
+  // must return false, otherwise omission silently sends SNI anyway.
+  virtual bool supportsSNIHostnameOmission() const { return false; }
+
   // Returns true if this backend can send ALPN protocols.
   virtual bool supportsAlpnProtocols() const { return false; }
 

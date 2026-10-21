@@ -563,7 +563,10 @@
     "                              separated TARGET:SNI mappings. TARGET may be\n" \
     "                              a DNS hostname, IPv4 address, or [IPv6]\n" \
     "                              address. SNI must be a DNS hostname, not an\n" \
-    "                              IP address. Mappings are looked up using the\n" \
+    "                              IP address, except for the reserved value\n" \
+    "                              'none' which omits the SNI extension. Peer\n" \
+    "                              verification keeps using the request host.\n" \
+    "                              Mappings are looked up using the\n" \
     "                              current request host after redirects.")
 #define TEXT_TLS_HANDSHAKE_FAILOVER                                      \
   _(" --tls-handshake-failover[=true|false]\n"                            \

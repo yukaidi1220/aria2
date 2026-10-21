@@ -63,6 +63,14 @@ bool hasMappingDelimiter(const std::string& value)
   return value.find(':') != std::string::npos;
 }
 
+// "none" is the reserved value that means "send no SNI extension at all".
+// It cannot collide with a usable SNI hostname because a lone label without
+// a dot is rejected by isTLSSNIHostname().
+bool isSNIHostNone(const std::string& value)
+{
+  return util::toLower(value) == "none";
+}
+
 std::string normalizeTargetHost(std::string host)
 {
   return util::toLower(std::move(host));
@@ -111,8 +119,12 @@ TLSSNIHostMappingEntry parseMappingEntry(const std::string& value)
 
   targetHost = util::strip(targetHost);
   sniHost = util::strip(sniHost);
-  if (targetHost.empty() || sniHost.empty()) {
+  const auto omitSNI = isSNIHostNone(sniHost);
+  if (targetHost.empty() || (sniHost.empty() && !omitSNI)) {
     throwBadTLSSNIHostMapping(value);
+  }
+  if (omitSNI) {
+    sniHost.clear();
   }
 
   return {normalizeTargetHost(std::move(targetHost)), std::move(sniHost)};
@@ -136,6 +148,15 @@ TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
 
   const auto& value = option->get(PREF_TLS_SNI_HOST);
   if (!hasMappingDelimiter(value)) {
+    auto stripped = util::strip(value);
+    if (stripped.empty()) {
+      // An empty value is a mistake, not a request to omit SNI. Only the
+      // explicit 'none' sentinel may produce an empty SNI host.
+      throwBadTLSSNIHostMapping(value);
+    }
+    if (isSNIHostNone(stripped)) {
+      return TLSSNIHostConfig(std::string(), true);
+    }
     return TLSSNIHostConfig(value, true);
   }
 

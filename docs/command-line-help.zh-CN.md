@@ -51,7 +51,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 
 | 能力 | 用户可用状态 | 关键边界 | 主要源码落点 |
 | --- | --- | --- | --- |
-| FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
+| FakeSNI / `--tls-sni-host` | 已接入 HTTPS TLS 握手，可写单一 SNI、`none` 或 `TARGET:SNI` 映射 | 只改 ClientHello SNI；不改 DNS、TCP 目标、HTTP `Host:` 或证书校验主机；SNI 与校验主机不同时要求 TLS 后端支持 SNI override；`none` 省略 SNI，要求后端支持 `supportsSNIHostnameOmission()`，当前 WinTLS/AppleTLS 暂不支持 | `src/TLSSNIHostMapping.cc`、`src/HttpTLSHandshakeParams.cc`、`src/SocketCore.cc`、`src/TLSSession.h` |
 | `--hosts-mapping` | 已接入直连 HTTP/HTTPS 解析路径 | 一边必须是主机名，另一边必须是 IP；代理解析不走这里；`IPADDR:HOST` 会改变逻辑 HTTP/TLS 主机 | `src/HostMapping.cc`、`src/AbstractCommand.cc`、`src/HttpRequest.cc` |
 | DoT / DoH / DNS multi fallback | 已接入异步 DNS 后端 | 没有 `--async-dns-over-https` / `--async-dns-over-tls` 独立参数；使用 `--async-dns-mode=doh|dot|multi`；server 可写数值 IP 或域名，域名会先用 plain c-ares DNS bootstrap 成 IP 再连接；`multi` 有显式 `udp://`/`tcp://` plain server 时，DoT/DoH 域名 server 的 bootstrap 也使用这些 plain server；有 secure server 时，下载域名先由 DoT/DoH 并发解析，全部失败后才降级到显式 plain DNS，再降级到系统 c-ares；`#TLS_HOST` 只作为 TLS/HTTP 名称 hint | `src/AsyncNameResolverMan.cc`、`src/AsyncNameResolver.cc`、`src/AsyncDnsServerConfig.cc`、`src/AsyncDotNameResolver.cc`、`src/AsyncDohNameResolver.cc` |
 | IPv4/IPv6 双栈选择 | 已有第一阶段 Happy Eyeballs 行为 | A/AAAA 异步并发解析，任一成功先用；后台补齐新地址后唤醒后续连接；已有两族地址时做 active family 均衡；如果 IPv4 存在且 IPv6 只有 ULA/link-local/site-local/loopback/multicast/unspecified/IPv4-mapped 这类非公网 scope，主选址优先 IPv4；连接失败/超时会给同一下载项的同 host/port/family 加短 TTL 软降权，连接成功清除；异步 DNS 且 IPv6 未禁用时 opposite-family 备份连接延迟为 `0ms`，否则保持 `300ms` | `src/AsyncNameResolverMan.cc`、`src/AbstractCommand.cc` 内的 `AsyncDnsCacheCommand` 和 `selectIPAddress()`、`src/FileEntry.cc`、`src/InitiateConnectionCommand.cc`、`src/BackupIPv4ConnectCommand.cc`、`src/ConnectCommand.cc` |
@@ -68,7 +68,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 
 | 选项 | 注册/构建门槛 | 源码实现解释 | 关键边界 |
 | --- | --- | --- | --- |
-| `--tls-sni-host=<HOST\|TARGET:SNI[,TARGET:SNI]...>` | `DefaultOptionHandler`，HTTP/HTTPS/Advanced | `HttpTLSHandshakeParams.cc` 先算 logical verify host，再由 `TLSSNIHostMapping.cc` 解析单值或映射，最后 `SocketCore::tlsHandshake()` 调 `TLSSession::setSNIHostname()` | 只改 TLS SNI；命中 override 时要求 TLS 后端声明 `supportsSNIHostnameOverride()` |
+| `--tls-sni-host=<HOST\|none\|TARGET:SNI[,TARGET:SNI]...>` | `DefaultOptionHandler`，HTTP/HTTPS/Advanced | `HttpTLSHandshakeParams.cc` 先算 logical verify host，再由 `TLSSNIHostMapping.cc` 解析单值、`none` 或映射，最后 `SocketCore::tlsHandshake()` 只在 SNI 主机名合法时调 `TLSSession::setSNIHostname()`；`none` 解析成空串，因此根本不调这个方法，ClientHello 里没有 SNI | 只改 TLS SNI；命中 override 时要求 TLS 后端声明 `supportsSNIHostnameOverride()`，`none` 省略时改要求 `supportsSNIHostnameOmission()` |
 | `--tls-handshake-failover[=true\|false]` | `ENABLE_SSL` 构建为布尔项，默认 `true`；无 SSL 构建为 unsupported（默认 `false`，`=true` 拒绝） | `HttpRequestCommand.cc` 的 `tryRetryTLSHandshakeWithNextAddress()` 在 TLS 握手失败（含证书校验失败）时标记坏 IP、记录地址族惩罚，并重建 `InitiateConnectionCommand`；换族与否由 `HttpTLSHandshakeParams.cc::decideTlsAddressFailover()` 决定 | 证书校验开启时只换到另一地址族且只换一次（对端族近期也失败就中止报错），每次重试仍完整校验证书；IPv6 侧只认 global unicast 地址；证书校验关闭时保持“换任意其他已解析地址”的原行为；不校验证书不等于接受无效证书之外的语义变化 |
 | `--hosts-mapping=<HOST:IPADDR[,IPADDR:HOST]...>` | `DefaultOptionHandler`，HTTP/HTTPS/Advanced | `HostMapping.cc` 校验一边主机一边 IP；`AbstractCommand::resolveHostname()` 用 `HOST:IPADDR` 填 aria2 DNS cache；`getLogicalHostForRequest()` 用 `IPADDR:HOST` 改 HTTP/TLS 逻辑主机 | 进程内映射，不是系统 hosts；代理侧解析不走这里 |
 | `--async-dns[=true\|false]` | 仅 `ENABLE_ASYNC_DNS` 构建注册；非 Android 默认 `true`，Android 默认 `false` | 开启后走 `AsyncNameResolverMan`；按 mode 创建 c-ares、DoT 或 DoH resolver | 无异步 DNS 构建时没有此选项；设为 `false` 时不会校验或启动 DoT/DoH/multi resolver 配置，下载域名解析回到 hosts/cache 后的同步 `getaddrinfo` 路径 |
@@ -88,25 +88,30 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 
 注册路径：
 
-- `src/OptionHandlerFactory.cc` 注册 `PREF_TLS_SNI_HOST`，参数格式为 `HOST or TARGET:SNI[,TARGET:SNI]...`。
-- `src/TLSSNIHostMapping.cc::getTLSSNIHostConfig()` 解析单一 SNI 或映射表。
+- `src/OptionHandlerFactory.cc` 注册 `PREF_TLS_SNI_HOST`，参数格式为 `HOST|none or TARGET:SNI[,TARGET:SNI]...`。
+- `src/TLSSNIHostMapping.cc::getTLSSNIHostConfig()` 解析单一 SNI、`none` 或映射表。
 - `src/HttpTLSHandshakeParams.cc::createHttpTLSHandshakeParams()` 计算 `sniHost`、证书校验主机 `verifyHost` 和 ALPN 列表。
-- `src/SocketCore.cc::SocketCore::tlsConnect()` 校验 SNI 主机格式，调用 `TLSSession::setSNIHostname()`，并在 SNI 与证书校验主机不同时检查 `TLSSession::supportsSNIHostnameOverride()`。
+- `src/SocketCore.cc::SocketCore::tlsConnect()` 校验 SNI 主机格式，调用 `TLSSession::setSNIHostname()`，并在 SNI 与证书校验主机不同时检查 `TLSSession::supportsSNIHostnameOverride()`；`sniHost` 为空表示省略 SNI，此时改查 `TLSSession::supportsSNIHostnameOmission()`。
 
 源码实现解释：
 
 - 单值模式没有冒号，`getTLSSNIHostConfig()` 直接把整串作为 SNI，并把 `overridden=true`。这意味着它不是“默认值”，而是显式 override。
+- 整串（去掉首尾空白后）等于 `none` 时视为省略 SNI：返回的 `sniHost` 是空串、`overridden=true`。`none` 按大小写不敏感匹配。空串和只有空白的值不算 `none`，会直接报 `Bad TLS SNI host mapping`。
+- 映射条目里 `SNI` 部分等于 `none` 时，该条目的 `sniHost` 存成空串，表示只对命中的 `TARGET` 省略 SNI。
 - 映射模式按逗号切分后逐条解析；`TARGET` 会转小写，IPv6 目标去掉方括号存储，`SNI` 保持原值交给 TLS 层校验。
 - 匹配时先看当前请求 host，再看 logical/default host。前者用于重定向后的实际请求，后者用于 `--hosts-mapping=IP:HOST` 这类逻辑主机改写。
 - `SocketCore::tlsHandshake()` 只在 `isTLSSNIHostname()` 通过时设置 SNI；非 override 的普通默认 SNI 设置失败只记 debug，显式 override 或 SNI/verify host 不同时失败会中止。
+- 省略模式下 `sniHost` 是空串，`isTLSSNIHostname()` 不通过，所以 `setSNIHostname()` 根本不会被调用，ClientHello 里没有 SNI 扩展；这条路径改由 `supportsSNIHostnameOmission()` 把关，并只记一条 debug 日志说明校验主机是谁。
 - 同一 socket 已经握手后再次传入不同 `TLSHandshakeParams` 会报错，避免 H2/socket 复用时把一个 TLS 会话误用到另一个主机，导致后续证书和主机语义混乱。
 
 语义：
 
 - `--tls-sni-host=front.example`：所有 HTTPS 请求的 TLS ClientHello SNI 都使用 `front.example`。
+- `--tls-sni-host=none`：所有 HTTPS 请求的 ClientHello 都不带 SNI 扩展。证书仍按请求主机名校验，`--tls-sni-host=none` 不会放松校验；服务端证书覆盖不了这个名字时握手照样失败。服务端也收不到 SNI，只能按自己的默认虚拟主机选站点，可能给出另一个站点或直接拒绝请求。
+- `--tls-sni-host=origin.example:none`：只对 `origin.example` 省略 SNI，其余请求照旧按主机名发 SNI。
 - `--tls-sni-host=origin.example:front.example,redirect.example:redirect-front.example`：优先按当前请求 host 匹配；没有命中时，再按逻辑/默认 host 回退匹配。重定向后的请求会重新计算这两个 host。
 - `TARGET` 可以是 DNS 主机名、IPv4 地址或 `[IPv6]`。IPv6 映射必须加方括号，例如 `[2001:db8::1]:front.example`。
-- `SNI` 必须是可用于 TLS SNI 的 DNS 主机名；`isTLSSNIHostname()` 会拒绝 IP、`localhost`、单标签名、空标签、下划线、标签首尾 `-` 等。
+- `SNI` 必须是可用于 TLS SNI 的 DNS 主机名；`isTLSSNIHostname()` 会拒绝 IP、`localhost`、单标签名、空标签、下划线、标签首尾 `-` 等。例外只有保留值 `none`：它在解析阶段就换成空串，不走 `isTLSSNIHostname()`。
 - `--tls-sni-host` 的冒号格式只能解释为 `TARGET:SNI`。`host:ip`、`ip:host` 这类“一边主机名、一边 IP”的映射属于 `--hosts-mapping`，不要写进 FakeSNI 选项里；如果把 IP 写在 `SNI` 位置，TLS SNI 校验会拒绝。
 - 同一个 `TARGET` 如果写了多次，`getTLSSNIHostConfig()` 会保留最先命中的配置；当前请求 host 的匹配优先级高于逻辑/默认 host 的匹配。
 - 这个选项只改 TLS SNI，不改 DNS 解析、TCP 连接目标、HTTP `Host` 头、代理 `CONNECT` 目标、cookie 作用域、证书校验主机。
@@ -118,11 +123,16 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 aria2c --tls-sni-host=front.example https://origin.example/file
 aria2c --tls-sni-host=origin.example:front.example,redirect.example:redirect-front.example https://origin.example/file
 aria2c --tls-sni-host=[2001:db8::1]:front.example https://[2001:db8::1]/file
+aria2c --tls-sni-host=none https://origin.example/file
+aria2c --tls-sni-host=origin.example:none,redirect.example:redirect-front.example https://origin.example/file
 ```
 
 兼容注意：
 
 - 如果 SNI 与证书校验主机不同，`SocketCore::tlsConnect()` 要求 TLS 后端 `supportsSNIHostnameOverride()` 为真。当前 OpenSSL/GnuTLS 后端显式支持；基类默认不支持，WinTLS/AppleTLS 当前没有在头文件里声明覆盖该能力。
+- 省略 SNI（`none`）另有一个能力位 `supportsSNIHostnameOmission()`。OpenSSL/LibreSSL 和 GnuTLS 后端返回真：它们的 `tlsConnect()` 只用主机名做证书校验，不派生 SNI，不调 `setSNIHostname()` 就没有 SNI 扩展。WinTLS 和 AppleTLS 把同一个主机名同时喂给 SNI（`InitializeSecurityContext` 的 target、`SSLSetPeerDomainName`），现在做不到「不发 SNI 又保住校验」，因此这两个后端返回假，`--tls-sni-host=none` 在握手前就报 `SSL/TLS backend does not support omitting TLS SNI hostname`。这是当前实现的限制，后续可能支持。
+- 因此这个能力取决于怎么构建，而不是跑在哪个平台上：Windows 上用仓库的 `./mingw-config`（它显式 `--without-wintls --with-openssl`）交叉编译出的产物走 OpenSSL 后端，支持 `none`；但如果自己在 mingw 下只写 `--with-openssl` 而不关 wintls，`configure.ac` 先探 WinTLS 并占掉 `have_ssl`，OpenSSL 探测会被跳过，产物不支持。macOS 的 CI 配方是 `--without-openssl --without-gnutls --with-appletls`，产物同样不支持 `none`。
+- 中间网络设备可能对不带 SNI 的连接直接发 RST，这种情况下 `none` 反而比正常 SNI 更差；只在确认服务端能在无 SNI 下正常应答时使用。
 - WinTLS 可以设置普通 SNI，但“FakeSNI：SNI 与校验主机不同”会被源码提前拒绝。XP/Win7 若使用原生 SChannel 后端，要优先使用 `--hosts-mapping=IP:HOST` 这种“逻辑主机一致”的方式，或换 OpenSSL/GnuTLS 构建。
 - `--check-certificate=false` 能绕过证书校验，但不建议用于生产下载。
 
@@ -361,7 +371,7 @@ XP/Win7 注意：
 
 - HTTP/2 实际可用性取决于构建是否有 libnghttp2，以及 TLS 后端是否能发送 ALPN。旧 Windows 原生 SChannel/WinTLS 路径通常不能指望 ALPN；启用 `--enable-http2=true` 时会优雅退回 HTTP/1.1，不应因为 ALPN 缺失直接中断 HTTPS 下载。
 - 需要兼容 XP/Win7 且确实要使用 H2 时，优先使用当前 Windows MinGW/OpenSSL artifact；该构建静态链接 nghttp2，并继续使用 OpenSSL 1.1.1w 维持 XP 基线。如果 TLS ALPN 协商失败，HTTP/1.1 fallback 能保持可用。
-- `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端 SNI override 能力限制，见 2.1。
+- `--hosts-mapping`、`--tls-sni-host` 与 HTTP/2 可以组合，但 FakeSNI 仍受 TLS 后端能力限制：改 SNI 要看 `supportsSNIHostnameOverride()`，省略 SNI 要看 `supportsSNIHostnameOmission()`，见 2.1。
 - 当前源码没有 WinTLS/AppleTLS 的 ALPN 接线；这不是“操作系统新一点就一定能 H2”的问题，而是 `TLSSession` 后端能力声明决定的。后续若给这些后端补 ALPN，必须同步改这里。
 - DoH over H2 继承 HTTP/2 的 ALPN 依赖。旧 Windows TLS 后端不能协商 `h2` 时，DoH 会继续走 HTTP/1.1 POST；这属于正常降级，不是解析器失败。
 
@@ -458,7 +468,7 @@ TLS: connected remote=93.184.216.34:443 sni=example.com verify=example.com versi
 - `--ech-config-base64=BASE64` 会隐式启用 required ECH；也可以显式写 `--enable-ech=true --ech-config-base64=BASE64`。
 - `--enable-ech=true` 但没有 `--ech-config-base64` 会失败，不会尝试普通 TLS fallback。
 - `--ech-config-base64` 必须是标准 base64，解码结果不能为空；实际 ECHConfigList 结构由 TLS 后端继续校验。
-- `--tls-sni-host` 只要让 `TLSSNIHostConfig::overridden` 为 true，就不能和 ECH 混用；这包括显式单值 override，也包括 `TARGET:SNI` 映射命中。映射未命中、普通 SNI 与证书校验主机一致时不触发这个拒绝。当前阶段先避免 outer/inner SNI 语义被 FakeSNI 搅乱。
+- `--tls-sni-host` 只要让 `TLSSNIHostConfig::overridden` 为 true，就不能和 ECH 混用；这包括显式单值 override，包括 `TARGET:SNI` 映射命中，也包括 `none` 和 `TARGET:none`（`none` 同样置 `overridden=true`）。映射未命中、普通 SNI 与证书校验主机一致时不触发这个拒绝。当前阶段先避免 outer/inner SNI 语义被 FakeSNI 搅乱。
 - TLS 后端不支持 ECHConfigList，或者握手成功但 ECH 没被接受，都会中止本次 HTTPS 下载。
 
 未实现边界：
@@ -615,7 +625,7 @@ network 日志（每条路径都有，关键字 `TLS handshake failed for`）：
 | `--check-certificate [true\|false]` | `true` | 校验证书。 |
 | `--tls-handshake-failover [true\|false]` | `true`（SSL 构建；无 SSL 构建默认 `false` 且拒绝 `true`） | TLS 握手/证书校验失败时换地址（优先换地址族）重试，详见 2.11。 |
 | `--min-tls-version=<VERSION>` | `TLSv1.2` | 最低 TLS 版本。 |
-| `--tls-sni-host=<HOST\|TARGET:SNI[,TARGET:SNI]...>` | 无 | FakeSNI / SNI 映射，详见 2.1。 |
+| `--tls-sni-host=<HOST\|none\|TARGET:SNI[,TARGET:SNI]...>` | 无 | FakeSNI / SNI 映射，`none` 表示省略 SNI，详见 2.1。 |
 | `--enable-ech [true\|false]` | `false` | 启用 required ECH；必须配 `--ech-config-base64`。 |
 | `--ech-config-base64=<BASE64>` | 无 | base64 编码的二进制 ECHConfigList；会隐式启用 required ECH。 |
 | `--enable-http2 [false]` | `false` | 实验性 HTTP/2；需要 libnghttp2、HTTPS、ALPN，详见 2.4。 |

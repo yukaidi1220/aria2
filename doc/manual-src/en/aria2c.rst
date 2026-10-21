@@ -435,7 +435,7 @@ HTTP Specific Options
   Verify the peer using certificates specified in :option:`--ca-certificate` option.
   Default: ``true``
 
-.. option:: --tls-sni-host=<HOST|TARGET:SNI[,TARGET:SNI]...>
+.. option:: --tls-sni-host=<HOST|none|TARGET:SNI[,TARGET:SNI]...>
 
   Set the hostname sent in the TLS SNI extension. Specify a single ``HOST`` to
   use the same SNI hostname for all HTTPS requests, or specify comma separated
@@ -461,6 +461,23 @@ HTTP Specific Options
   When multiple mappings use the same ``TARGET``, the first matching entry is
   used.
 
+  The reserved value ``none`` means "send no SNI extension at all". It can be
+  used as the single value, or as the ``SNI`` part of a ``TARGET:none`` mapping
+  to omit SNI only for selected targets. ``none`` is matched
+  case-insensitively. Certificate verification is not relaxed in this mode:
+  the peer certificate is still verified against the request hostname, so a
+  server whose certificate does not cover that name fails the handshake.
+  Omitting SNI also means the server picks its default virtual host, which may
+  serve a different site or reject the request.
+
+  Omitting SNI requires a TLS backend that does not derive the SNI extension
+  from the certificate verification hostname. OpenSSL, LibreSSL and GnuTLS
+  support it. WinTLS and AppleTLS derive SNI from that hostname, so ``none`` is
+  rejected before the handshake there; support for these backends may be added
+  later. Some network devices between the client and the server reset
+  connections that carry no SNI, so this value is only useful where the server
+  is reachable without it.
+
   Example:
 
   .. code-block:: console
@@ -470,6 +487,16 @@ HTTP Specific Options
   In this example, only the TLS SNI hostname is ``front.example``. DNS
   resolution, the TCP connection target, the HTTP ``Host`` header, and
   certificate verification still use ``origin.example``.
+
+  Example without SNI:
+
+  .. code-block:: console
+
+    $ aria2c --tls-sni-host=none https://origin.example/file
+
+  In this example the ClientHello carries no SNI extension, while DNS
+  resolution, the TCP connection target, the HTTP ``Host`` header and
+  certificate verification all still use ``origin.example``.
 
   Example with redirects:
 
@@ -628,7 +655,8 @@ HTTP Specific Options
   the TCP connection still goes to ``IPADDR``. An explicit
   :option:`--tls-sni-host` value still controls the TLS SNI hostname. In mapping
   form, :option:`--tls-sni-host` first matches the current URL host, then falls
-  back to this logical hostname.
+  back to this logical hostname. A ``none`` value omits the SNI extension in
+  this combination as well.
 
   Hostname matching is case-insensitive. When multiple ``HOST:IPADDR`` mappings
   use the same ``HOST``, aria2 tries the mapped IP addresses in the order they

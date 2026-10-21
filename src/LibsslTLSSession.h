@@ -60,6 +60,13 @@ public:
     return false;
 #endif // !SSL_CTRL_SET_TLSEXT_HOSTNAME
   }
+  // SNI is only emitted when setSNIHostname() is called, so skipping that
+  // call omits the extension while verification still uses the hostname
+  // given to tlsConnect().
+  virtual bool supportsSNIHostnameOmission() const CXX11_OVERRIDE
+  {
+    return true;
+  }
   virtual int setAlpnProtocols(const std::vector<std::string>& protocols)
       CXX11_OVERRIDE;
   virtual bool supportsAlpnProtocols() const CXX11_OVERRIDE

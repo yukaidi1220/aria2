@@ -1042,15 +1042,27 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
     }
     const auto clientSide = tlsctx->getSide() == TLS_CLIENT;
     const auto sniOverridden = clientSide && params.sniHostOverridden;
+    // An override whose SNI host is empty is the explicit request to send
+    // no SNI extension at all. Certificate verification is unaffected: it
+    // always uses params.verifyHost.
+    const auto sniOmission = sniOverridden && params.sniHost.empty();
     const auto sniOverride =
-        clientSide && params.sniHost != params.verifyHost;
+        clientSide && !sniOmission && params.sniHost != params.verifyHost;
     const auto sniHostname = isTLSSNIHostname(params.sniHost);
-    if (sniOverridden && !sniHostname) {
+    if (sniOverridden && !sniHostname && !sniOmission) {
       throw DL_ABORT_EX(fmt("Invalid TLS SNI hostname override"));
     }
     if (sniOverride && !tlsSession_->supportsSNIHostnameOverride()) {
       throw DL_ABORT_EX(
           fmt("SSL/TLS backend does not support SNI hostname override"));
+    }
+    if (sniOmission && !tlsSession_->supportsSNIHostnameOmission()) {
+      throw DL_ABORT_EX(fmt("SSL/TLS backend does not support omitting TLS "
+                            "SNI hostname"));
+    }
+    if (sniOmission) {
+      A2_LOG_DEBUG(fmt("TLS SNI hostname is omitted for verify host %s",
+                       params.verifyHost.c_str()));
     }
     // Check hostname is not numeric and it includes ".". Setting
     // "localhost" will produce TLS alert with GNUTLS.

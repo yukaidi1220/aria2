@@ -26,6 +26,11 @@ class TLSSNIHostMappingTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testRequestHostBeatsDefaultHost);
   CPPUNIT_TEST(testMappedDefaultHostWithoutExplicitSNI);
   CPPUNIT_TEST(testMalformedMapping);
+  CPPUNIT_TEST(testGlobalNoneOmitsSNI);
+  CPPUNIT_TEST(testGlobalNoneIsCaseInsensitiveAndTrimmed);
+  CPPUNIT_TEST(testMappedNoneOmitsSNI);
+  CPPUNIT_TEST(testNoneLikeNameIsStillLiteral);
+  CPPUNIT_TEST(testUnmappedTargetKeepsHostWhenNoneMapped);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -43,6 +48,11 @@ public:
   void testRequestHostBeatsDefaultHost();
   void testMappedDefaultHostWithoutExplicitSNI();
   void testMalformedMapping();
+  void testGlobalNoneOmitsSNI();
+  void testGlobalNoneIsCaseInsensitiveAndTrimmed();
+  void testMappedNoneOmitsSNI();
+  void testNoneLikeNameIsStillLiteral();
+  void testUnmappedTargetKeepsHostWhenNoneMapped();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(TLSSNIHostMappingTest);
@@ -215,6 +225,70 @@ void TLSSNIHostMappingTest::testMalformedMapping()
   option.put(PREF_TLS_SNI_HOST, "[2001:db8::1:front.example");
   CPPUNIT_ASSERT_THROW(getTLSSNIHostConfig("2001:db8::1", &option),
                        DlAbortEx);
+
+  // An empty global value must not be read as "omit SNI".
+  option.put(PREF_TLS_SNI_HOST, "");
+  CPPUNIT_ASSERT_THROW(getTLSSNIHostConfig("origin.example", &option),
+                       DlAbortEx);
+
+  option.put(PREF_TLS_SNI_HOST, "   ");
+  CPPUNIT_ASSERT_THROW(getTLSSNIHostConfig("origin.example", &option),
+                       DlAbortEx);
+}
+
+void TLSSNIHostMappingTest::testGlobalNoneOmitsSNI()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST, "none");
+
+  auto config = getTLSSNIHostConfig("origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string(""), config.sniHost);
+  CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testGlobalNoneIsCaseInsensitiveAndTrimmed()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST, " NoNe ");
+
+  auto config = getTLSSNIHostConfig("origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string(""), config.sniHost);
+  CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testMappedNoneOmitsSNI()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST,
+             "origin.example : none,mirror.example:front.example");
+
+  auto omitted = getTLSSNIHostConfig("origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string(""), omitted.sniHost);
+  CPPUNIT_ASSERT(omitted.overridden);
+
+  auto mapped = getTLSSNIHostConfig("mirror.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("front.example"), mapped.sniHost);
+  CPPUNIT_ASSERT(mapped.overridden);
+}
+
+void TLSSNIHostMappingTest::testNoneLikeNameIsStillLiteral()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST, "none.example");
+
+  auto config = getTLSSNIHostConfig("origin.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("none.example"), config.sniHost);
+  CPPUNIT_ASSERT(config.overridden);
+}
+
+void TLSSNIHostMappingTest::testUnmappedTargetKeepsHostWhenNoneMapped()
+{
+  Option option;
+  option.put(PREF_TLS_SNI_HOST, "origin.example:none");
+
+  auto config = getTLSSNIHostConfig("other.example", &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("other.example"), config.sniHost);
+  CPPUNIT_ASSERT(!config.overridden);
 }
 
 } // namespace aria2

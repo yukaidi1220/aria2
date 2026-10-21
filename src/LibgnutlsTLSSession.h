@@ -55,6 +55,13 @@ public:
   {
     return true;
   }
+  // gnutls_server_name_set() is the only thing that populates the
+  // extension, so not calling it omits SNI. Verification still runs
+  // against the hostname passed to tlsConnect().
+  virtual bool supportsSNIHostnameOmission() const CXX11_OVERRIDE
+  {
+    return true;
+  }
   virtual int setAlpnProtocols(const std::vector<std::string>& protocols)
       CXX11_OVERRIDE;
   virtual bool supportsAlpnProtocols() const CXX11_OVERRIDE
