@@ -209,6 +209,27 @@ TlsAddressFailover decideTlsAddressFailover(int failedFamily, bool verifyPeer,
   return TLS_ADDRESS_FAILOVER_OTHER_FAMILY;
 }
 
+bool shouldRetryTLSHandshakeWithoutSNI(const Request* request,
+                                       const Option* option,
+                                       bool backendCanOmitSNI)
+{
+  if (request->getProtocol() != "https" ||
+      !option->getAsBool(PREF_TLS_SNI_NONE_FALLBACK) ||
+      request->isTlsSNINoneRetry() || !backendCanOmitSNI) {
+    return false;
+  }
+  auto tlsParams = createHttpTLSHandshakeParams(request, option);
+  // Nothing to fall back from: SNI is already omitted, or ECH owns the
+  // outer name and cannot be combined with an override.
+  return !tlsParams.sniHostOmitted && !tlsParams.echParams.requested &&
+         tlsParams.echParams.configList.empty();
+}
+
+bool tlsAddressFailoverAllowed(const TLSHandshakeParams& params)
+{
+  return !(params.sniHostOverridden && !params.sniHostOmitted);
+}
+
 } // namespace aria2
 
 #endif // ENABLE_SSL

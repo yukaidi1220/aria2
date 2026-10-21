@@ -529,6 +529,8 @@ HTTP Specific Options
 
   Default: ``true``
 
+  Builds without SSL treat ``true`` as unsupported during option parsing.
+
 .. option:: --tls-handshake-failover [true|false]
 
   Retry a failed TLS handshake, including a certificate verification failure,
@@ -556,8 +558,9 @@ HTTP Specific Options
   IPv6, only a global unicast address counts as usable: if the other family
   only has scoped addresses (ULA, link-local, and so on), aria2 aborts with
   the TLS error instead of retrying.  Address failover is not attempted for
-  proxy requests, and not attempted when :option:`--tls-sni-host` sets a
-  different SNI hostname; omitting SNI with ``none`` does not block it.  Set
+  proxy requests, and not attempted when :option:`--tls-sni-host` sets an
+  explicit SNI hostname (this includes an override that is identical to the
+  request hostname); omitting SNI with ``none`` does not block it.  Set
   ``--tls-handshake-failover=false`` to abort on the first TLS handshake
   failure.  Builds without SSL treat ``true`` as unsupported during option
   parsing.

@@ -1075,12 +1075,23 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+#ifdef ENABLE_SSL
     OptionHandler* op(new BooleanOptionHandler(
         PREF_TLS_SNI_NONE_FALLBACK, TEXT_TLS_SNI_NONE_FALLBACK, A2_V_TRUE,
         OptionHandler::OPT_ARG));
+#else  // !ENABLE_SSL
+    // The default must stay false here: parseDefaultValues() parses the
+    // default value, and UnsupportedFeatureOptionHandler rejects "true".
+    OptionHandler* op(new UnsupportedFeatureOptionHandler(
+        PREF_TLS_SNI_NONE_FALLBACK, TEXT_TLS_SNI_NONE_FALLBACK, A2_V_FALSE,
+        "TLS SNI none fallback", OptionHandler::OPT_ARG));
+#endif // !ENABLE_SSL
     op->addTag(TAG_ADVANCED);
     op->addTag(TAG_HTTP);
     op->addTag(TAG_HTTPS);
+    op->setInitialOption(true);
+    op->setChangeGlobalOption(true);
+    op->setChangeOptionForReserved(true);
     handlers.push_back(op);
   }
   {

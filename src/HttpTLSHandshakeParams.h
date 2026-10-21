@@ -81,6 +81,30 @@ TlsAddressFailover decideTlsAddressFailover(int failedFamily, bool verifyPeer,
                                             bool oppositeFamilyPenalized,
                                             bool hasAnyOtherAddress);
 
+// Decides whether a failed HTTPS TLS handshake may be retried once without
+// the SNI extension, still verifying the peer certificate against the
+// request hostname. |backendCanOmitSNI| tells whether the TLS backend of
+// the failed session can omit the extension while still verifying the peer.
+//
+// The retry is skipped when the request is not HTTPS, when
+// --tls-sni-none-fallback is disabled, when this request was already retried
+// without SNI (otherwise the retry would loop), when the backend cannot omit
+// SNI, when SNI is already omitted, and when ECH is configured (ECH owns the
+// outer name and cannot be combined with an override).
+//
+// Like createHttpTLSHandshakeParams(), this throws DlAbortEx for a
+// misconfigured combination (for example ECH with an SNI override).
+bool shouldRetryTLSHandshakeWithoutSNI(const Request* request,
+                                       const Option* option,
+                                       bool backendCanOmitSNI);
+
+// Decides whether a failed HTTPS TLS handshake may be retried with another
+// resolved address, given the handshake parameters of the failed attempt.
+// An explicit SNI override pins the SNI semantics to the chosen hostname, so
+// address rotation is skipped (an override identical to the request hostname
+// still blocks it); omitting SNI does not block it.
+bool tlsAddressFailoverAllowed(const TLSHandshakeParams& params);
+
 } // namespace aria2
 
 #endif // ENABLE_SSL
