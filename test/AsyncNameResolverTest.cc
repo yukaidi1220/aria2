@@ -743,33 +743,33 @@ void AsyncNameResolverTest::testConfigureDohHttp2AffectsLoggedTransport()
   auto logs = log.closeAndRead();
 #ifdef HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT(logs.find("DNS: CUID#101 - query plan host=example.org "
-                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "qtype=A mode=DoH phase=primary backend=DoH "
                            "transport=https-h1-or-h2 "
                            "server=https://dns.example.org:443/dns-query "
                            "bootstrap=system-cares fallback_from=none") !=
                  std::string::npos);
   CPPUNIT_ASSERT(logs.find("DNS: CUID#102 - query plan host=example.org "
-                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "qtype=A mode=DoH phase=primary backend=DoH "
                            "transport=https-h1-or-h2 "
                            "server=https://dns.example.org:443/dns-query "
                            "bootstrap=system-cares fallback_from=none") !=
                  std::string::npos);
 #else  // !HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT(logs.find("DNS: CUID#101 - query plan host=example.org "
-                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "qtype=A mode=DoH phase=primary backend=DoH "
                            "transport=https-h1 "
                            "server=https://dns.example.org:443/dns-query "
                            "bootstrap=system-cares fallback_from=none") !=
                  std::string::npos);
   CPPUNIT_ASSERT(logs.find("DNS: CUID#102 - query plan host=example.org "
-                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "qtype=A mode=DoH phase=primary backend=DoH "
                            "transport=https-h1 "
                            "server=https://dns.example.org:443/dns-query "
                            "bootstrap=system-cares fallback_from=none") !=
                  std::string::npos);
 #endif // !HAVE_LIBNGHTTP2
   CPPUNIT_ASSERT(logs.find("DNS: CUID#103 - query plan host=example.org "
-                           "qtype=A mode=doh phase=primary backend=DoH "
+                           "qtype=A mode=DoH phase=primary backend=DoH "
                            "transport=https-h1 "
                            "server=https://dns.example.org:443/dns-query "
                            "bootstrap=system-cares fallback_from=none") !=
