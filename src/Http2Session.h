@@ -63,6 +63,7 @@ struct Http2ResponseEvent {
   Http2BodyQueue body;
   bool headersComplete = false;
   bool streamClosed = false;
+  bool remoteEndStream = false;
   uint32_t errorCode = 0;
 };
 

@@ -192,6 +192,7 @@ Http2MultiplexExchange::getState(int32_t streamId) const
   state.responseAvailable = true;
   state.headersComplete = event->headersComplete;
   state.streamClosed = event->streamClosed;
+  state.remoteEndStream = event->remoteEndStream;
   state.bodyLength = event->body.size();
   state.errorCode = event->errorCode;
   return state;

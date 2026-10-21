@@ -165,6 +165,37 @@ bool Http2DownloadCommand::executeInternal()
     pendingBody_.erase(0, consumed);
     if (result == ProcessDataResult::DONE) {
       if (!pendingBody_.empty()) {
+        if (getRequestGroup()->downloadFinished()) {
+          // Download is complete but there is still buffered body data
+          // from the server. Cancel the stream and finish.
+          pendingBody_.clear();
+          if (state.streamClosed) {
+            exchange_->popResponseEvent(streamId_);
+          }
+          else {
+            exchange_->cancelStream(streamId_);
+          }
+          poolIdleConnection();
+          return true;
+        }
+        // The segment was completed but the download is not finished.
+        // prepareForNextSegment() returned true (via base class
+        // prepareForRetry), meaning we should retry. Continue the loop
+        // to process the remaining body data for the next segment.
+        continue;
+      }
+      if (state.streamClosed) {
+        exchange_->popResponseEvent(streamId_);
+        poolIdleConnection();
+      }
+      return true;
+    }
+    if (result == ProcessDataResult::REQUEUED) {
+      if (!pendingBody_.empty() &&
+          !getRequestGroup()->downloadFinished()) {
+        // The command was requeued for retry (e.g., the next segment is
+        // busy), but there is still buffered body data that cannot be
+        // written. Cancel the stream so the retry starts fresh.
         pendingBody_.clear();
         if (state.streamClosed) {
           exchange_->popResponseEvent(streamId_);
@@ -175,13 +206,6 @@ bool Http2DownloadCommand::executeInternal()
         poolIdleConnection();
         return true;
       }
-      if (state.streamClosed) {
-        exchange_->popResponseEvent(streamId_);
-        poolIdleConnection();
-      }
-      return true;
-    }
-    if (result == ProcessDataResult::REQUEUED) {
       continue;
     }
     if (consumed == 0) {
@@ -208,6 +232,13 @@ bool Http2DownloadCommand::executeInternal()
     if (result != ProcessDataResult::DONE) {
       throw DL_ABORT_EX("HTTP/2 response body did not complete on stream close");
     }
+    exchange_->popResponseEvent(streamId_);
+    poolIdleConnection();
+    return true;
+  }
+
+  if (!exchange_->hasActiveStream(streamId_)) {
+    pendingBody_.clear();
     exchange_->popResponseEvent(streamId_);
     poolIdleConnection();
     return true;

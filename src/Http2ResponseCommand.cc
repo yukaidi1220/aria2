@@ -50,6 +50,7 @@
 #  include "StreamFilter.h"
 #  include "a2functional.h"
 
+#  include <nghttp2/nghttp2.h>
 #  include <utility>
 
 namespace aria2 {
@@ -196,7 +197,13 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
 
   auto state = exchange_->getState(streamId_);
-  if (state.errorCode != 0) {
+  // When skipping a response body (e.g., for redirects or error pages),
+  // the server may send fewer or more bytes than the declared
+  // Content-Length. nghttp2 detects this as a content-length mismatch and
+  // sends RST_STREAM with NGHTTP2_PROTOCOL_ERROR. We tolerate this error
+  // here and let the checks below determine whether the body was too long.
+  if (state.errorCode != 0 &&
+      state.errorCode != NGHTTP2_PROTOCOL_ERROR) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
 
@@ -213,7 +220,16 @@ bool Http2ResponseCommand::drainSkippedResponseBody()
   }
 
   state = exchange_->getState(streamId_);
-  if (state.errorCode != 0) {
+  // After draining the body queue, detect body-longer vs body-shorter.
+  // When body exceeds Content-Length, nghttp2's per-chunk content-length
+  // check fires before END_STREAM is received, so remoteEndStream is false.
+  // When body is shorter, END_STREAM arrives first (remoteEndStream is true)
+  // and nghttp2's end-of-stream check detects the mismatch. We tolerate
+  // PROTOCOL_ERROR only when the server properly sent END_STREAM (truncated
+  // body is acceptable when skipping).
+  if (state.errorCode != 0 &&
+      (state.errorCode != NGHTTP2_PROTOCOL_ERROR ||
+       !state.remoteEndStream)) {
     throw DL_ABORT_EX("HTTP/2 stream failed while skipping response body");
   }
   if (state.streamClosed) {
