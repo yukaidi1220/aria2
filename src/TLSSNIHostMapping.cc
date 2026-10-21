@@ -46,8 +46,11 @@
 
 namespace aria2 {
 
-TLSSNIHostConfig::TLSSNIHostConfig(std::string sniHost, bool overridden)
-    : sniHost(std::move(sniHost)), overridden(overridden)
+TLSSNIHostConfig::TLSSNIHostConfig(std::string sniHost, bool overridden,
+                                   bool sniHostOmitted)
+    : sniHost(std::move(sniHost)),
+      overridden(overridden),
+      sniHostOmitted(sniHostOmitted)
 {
 }
 
@@ -56,6 +59,7 @@ namespace {
 struct TLSSNIHostMappingEntry {
   std::string targetHost;
   std::string sniHost;
+  bool sniHostOmitted;
 };
 
 bool hasMappingDelimiter(const std::string& value)
@@ -127,7 +131,8 @@ TLSSNIHostMappingEntry parseMappingEntry(const std::string& value)
     sniHost.clear();
   }
 
-  return {normalizeTargetHost(std::move(targetHost)), std::move(sniHost)};
+  return {normalizeTargetHost(std::move(targetHost)), std::move(sniHost),
+          omitSNI};
 }
 
 } // namespace
@@ -155,9 +160,9 @@ TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
       throwBadTLSSNIHostMapping(value);
     }
     if (isSNIHostNone(stripped)) {
-      return TLSSNIHostConfig(std::string(), true);
+      return TLSSNIHostConfig(std::string(), true, true);
     }
-    return TLSSNIHostConfig(value, true);
+    return TLSSNIHostConfig(stripped, true);
   }
 
   auto normalizedRequestHost = normalizeTargetHost(requestHost);
@@ -171,12 +176,14 @@ TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,
   for (const auto& entry : entries) {
     auto parsed = parseMappingEntry(entry);
     if (!matchedRequestHost && parsed.targetHost == normalizedRequestHost) {
-      result = TLSSNIHostConfig(std::move(parsed.sniHost), true);
+      result = TLSSNIHostConfig(std::move(parsed.sniHost), true,
+                                parsed.sniHostOmitted);
       matchedRequestHost = true;
     }
     else if (!matchedRequestHost && !matchedDefaultHost &&
              parsed.targetHost == normalizedDefaultHost) {
-      result = TLSSNIHostConfig(std::move(parsed.sniHost), true);
+      result = TLSSNIHostConfig(std::move(parsed.sniHost), true,
+                                parsed.sniHostOmitted);
       matchedDefaultHost = true;
     }
   }

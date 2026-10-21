@@ -559,15 +559,22 @@
     "                              in --ca-certificate option.")
 #define TEXT_TLS_SNI_HOST                                               \
   _(" --tls-sni-host=HOST        Set the hostname sent in the TLS SNI extension.\n" \
-    "                              Use HOST for all HTTPS requests, or comma\n" \
-    "                              separated TARGET:SNI mappings. TARGET may be\n" \
-    "                              a DNS hostname, IPv4 address, or [IPv6]\n" \
-    "                              address. SNI must be a DNS hostname, not an\n" \
-    "                              IP address, except for the reserved value\n" \
-    "                              'none' which omits the SNI extension. Peer\n" \
+    "                              Use HOST for all HTTPS download requests,\n" \
+    "                              or comma separated TARGET:SNI mappings.\n" \
+    "                              TARGET may be a DNS hostname, IPv4 address,\n" \
+    "                              or [IPv6] address. SNI must be a DNS\n" \
+    "                              hostname, not an IP address. The reserved\n" \
+    "                              value 'none' omits the SNI extension and is\n" \
+    "                              not supported by WinTLS or AppleTLS. Peer\n" \
     "                              verification keeps using the request host.\n" \
-    "                              Mappings are looked up using the\n" \
-    "                              current request host after redirects.")
+    "                              Mappings use the current request host after\n" \
+    "                              redirects.")
+#define TEXT_TLS_SNI_NONE_FALLBACK                                       \
+  _(" --tls-sni-none-fallback[=true|false] Retry an HTTPS connection\n" \
+    "                              without the SNI extension when the TLS\n" \
+    "                              handshake fails. Certificate verification\n" \
+    "                              still uses the request hostname.\n" \
+    "                              Default: true")
 #define TEXT_TLS_HANDSHAKE_FAILOVER                                      \
   _(" --tls-handshake-failover[=true|false]\n"                            \
     "                              Retry a failed TLS handshake (including a\n" \

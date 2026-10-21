@@ -1075,6 +1075,15 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+    OptionHandler* op(new BooleanOptionHandler(
+        PREF_TLS_SNI_NONE_FALLBACK, TEXT_TLS_SNI_NONE_FALLBACK, A2_V_TRUE,
+        OptionHandler::OPT_ARG));
+    op->addTag(TAG_ADVANCED);
+    op->addTag(TAG_HTTP);
+    op->addTag(TAG_HTTPS);
+    handlers.push_back(op);
+  }
+  {
 #ifdef ENABLE_SSL
     OptionHandler* op(new BooleanOptionHandler(
         PREF_TLS_HANDSHAKE_FAILOVER, TEXT_TLS_HANDSHAKE_FAILOVER, A2_V_TRUE,

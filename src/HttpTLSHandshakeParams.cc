@@ -176,11 +176,13 @@ TLSHandshakeParams createHttpTLSHandshakeParams(const Request* request,
 {
   const auto verifyHost = getLogicalHostForRequest(request->getHost(), option);
   auto sniHostConfig =
-      getTLSSNIHostConfig(request->getHost(), verifyHost, option);
+      request->isTlsSNINoneRetry()
+          ? TLSSNIHostConfig(std::string(), true, true)
+          : getTLSSNIHostConfig(request->getHost(), verifyHost, option);
   auto params = TLSHandshakeParams(
       sniHostConfig.sniHost, verifyHost,
       applyHttpsServiceBindingAlpn(request, createHttpAlpnProtocols(option)),
-      sniHostConfig.overridden);
+      sniHostConfig.overridden, sniHostConfig.sniHostOmitted);
   params.echParams = createHttpECHParams(option, sniHostConfig);
   return params;
 }

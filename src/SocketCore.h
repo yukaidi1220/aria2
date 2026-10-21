@@ -73,6 +73,9 @@ struct TLSHandshakeParams {
   std::vector<std::string> alpnProtocols;
   TLSECHParams echParams;
   bool sniHostOverridden = false;
+  // Explicit request to send no SNI extension. Kept separate from an empty
+  // sniHost so that a caller which passes "" by mistake still fails loudly.
+  bool sniHostOmitted = false;
 
   TLSHandshakeParams() = default;
   explicit TLSHandshakeParams(const std::string& hostname)
@@ -88,10 +91,12 @@ struct TLSHandshakeParams {
   }
   TLSHandshakeParams(const std::string& sniHost,
                      const std::string& verifyHost,
-                     bool sniHostOverridden)
+                     bool sniHostOverridden,
+                     bool sniHostOmitted = false)
       : sniHost(sniHost),
         verifyHost(verifyHost),
-        sniHostOverridden(sniHostOverridden)
+        sniHostOverridden(sniHostOverridden),
+        sniHostOmitted(sniHostOmitted)
   {
   }
   TLSHandshakeParams(const std::string& sniHost,
@@ -106,11 +111,13 @@ struct TLSHandshakeParams {
   TLSHandshakeParams(const std::string& sniHost,
                      const std::string& verifyHost,
                      std::vector<std::string> alpnProtocols,
-                     bool sniHostOverridden)
+                     bool sniHostOverridden,
+                     bool sniHostOmitted = false)
       : sniHost(sniHost),
         verifyHost(verifyHost),
         alpnProtocols(std::move(alpnProtocols)),
-        sniHostOverridden(sniHostOverridden)
+        sniHostOverridden(sniHostOverridden),
+        sniHostOmitted(sniHostOmitted)
   {
   }
 };
@@ -163,6 +170,7 @@ private:
   std::shared_ptr<TLSSession> tlsSession_;
   TLSHandshakeParams tlsHandshakeParams_;
   bool tlsHandshakeParamsSet_;
+  bool tlsBackendSupportsSNIHostnameOmission_ = false;
 
   /**
    * Makes this socket secure. The connection must be established
@@ -374,6 +382,8 @@ public:
 
   std::string getSelectedAlpnProtocol() const;
   bool peerCertificateMatchesHostname(const std::string& hostname) const;
+  // True if the TLS backend of the last created session can omit SNI.
+  bool tlsBackendSupportsSNIHostnameOmission() const;
 #endif // ENABLE_SSL
 
 #ifdef HAVE_LIBSSH2

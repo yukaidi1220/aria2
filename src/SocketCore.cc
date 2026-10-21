@@ -121,7 +121,8 @@ bool operator==(const TLSHandshakeParams& lhs,
   return lhs.sniHost == rhs.sniHost && lhs.verifyHost == rhs.verifyHost &&
          lhs.alpnProtocols == rhs.alpnProtocols &&
          lhs.echParams == rhs.echParams &&
-         lhs.sniHostOverridden == rhs.sniHostOverridden;
+         lhs.sniHostOverridden == rhs.sniHostOverridden &&
+         lhs.sniHostOmitted == rhs.sniHostOmitted;
 }
 
 bool operator!=(const TLSHandshakeParams& lhs,
@@ -134,6 +135,7 @@ bool tlsHandshakeParamsCompatibleForOriginCoalescing(
     const TLSHandshakeParams& established, const TLSHandshakeParams& candidate)
 {
   return !established.sniHostOverridden && !candidate.sniHostOverridden &&
+         !established.sniHostOmitted && !candidate.sniHostOmitted &&
          established.alpnProtocols == candidate.alpnProtocols &&
          established.echParams == candidate.echParams;
 }
@@ -1034,6 +1036,8 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
     // Do some initial setup
     A2_LOG_DEBUG("Creating TLS session");
     tlsSession_.reset(TLSSession::make(tlsctx));
+    tlsBackendSupportsSNIHostnameOmission_ =
+        tlsSession_->supportsSNIHostnameOmission();
     auto rv = tlsSession_->init(sockfd_);
     if (rv != TLS_ERR_OK) {
       std::string error = tlsSession_->getLastErrorString();
@@ -1042,10 +1046,15 @@ bool SocketCore::tlsHandshake(TLSContext* tlsctx,
     }
     const auto clientSide = tlsctx->getSide() == TLS_CLIENT;
     const auto sniOverridden = clientSide && params.sniHostOverridden;
-    // An override whose SNI host is empty is the explicit request to send
-    // no SNI extension at all. Certificate verification is unaffected: it
-    // always uses params.verifyHost.
-    const auto sniOmission = sniOverridden && params.sniHost.empty();
+    // Omission is an explicit flag rather than an empty sniHost, so that a
+    // caller which passes an empty hostname by mistake still fails loudly
+    // below. Certificate verification is unaffected: it always uses
+    // params.verifyHost.
+    const auto sniOmission = clientSide && params.sniHostOmitted;
+    if (sniOmission && !params.sniHost.empty()) {
+      throw DL_ABORT_EX(
+          fmt("TLS SNI omission requires an empty SNI hostname"));
+    }
     const auto sniOverride =
         clientSide && !sniOmission && params.sniHost != params.verifyHost;
     const auto sniHostname = isTLSSNIHostname(params.sniHost);
@@ -1233,6 +1242,11 @@ bool SocketCore::peerCertificateMatchesHostname(
     const std::string& hostname) const
 {
   return tlsSession_ && tlsSession_->peerCertificateMatchesHostname(hostname);
+}
+
+bool SocketCore::tlsBackendSupportsSNIHostnameOmission() const
+{
+  return tlsBackendSupportsSNIHostnameOmission_;
 }
 
 #endif // ENABLE_SSL

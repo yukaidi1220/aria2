@@ -391,6 +391,20 @@ void SocketCoreTest::testTLSHandshakeParams()
     CPPUNIT_ASSERT_EQUAL((size_t)1, params.alpnProtocols.size());
     CPPUNIT_ASSERT(params.sniHostOverridden);
   }
+  {
+    // An empty SNI hostname alone must not be read as "omit SNI".
+    TLSHandshakeParams params("", "origin.example");
+    CPPUNIT_ASSERT(params.sniHost.empty());
+    CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+    CPPUNIT_ASSERT(params.sniHostOverridden);
+    CPPUNIT_ASSERT(!params.sniHostOmitted);
+  }
+  {
+    TLSHandshakeParams params("", "origin.example", true, true);
+    CPPUNIT_ASSERT(params.sniHost.empty());
+    CPPUNIT_ASSERT(params.sniHostOverridden);
+    CPPUNIT_ASSERT(params.sniHostOmitted);
+  }
 }
 
 void SocketCoreTest::testTLSHandshakeParamsComparison()
@@ -401,6 +415,8 @@ void SocketCoreTest::testTLSHandshakeParamsComparison()
   CPPUNIT_ASSERT(base != TLSHandshakeParams("front.example", "example.org"));
   CPPUNIT_ASSERT(base != TLSHandshakeParams("example.org", "example.org",
                                             true));
+  TLSHandshakeParams omitted("", "example.org", true, true);
+  CPPUNIT_ASSERT(omitted != TLSHandshakeParams("", "example.org", true));
 
   std::vector<std::string> alpnProtocols;
   alpnProtocols.push_back("h2");
@@ -457,6 +473,11 @@ void SocketCoreTest::testTLSHandshakeParamsOriginCoalescingCompatibility()
                                          alpnProtocols, true);
   CPPUNIT_ASSERT(!tlsHandshakeParamsCompatibleForOriginCoalescing(
       established, overriddenCandidate));
+
+  TLSHandshakeParams omittedEstablished("", "origin.example", alpnProtocols,
+                                        true, true);
+  CPPUNIT_ASSERT(!tlsHandshakeParamsCompatibleForOriginCoalescing(
+      omittedEstablished, candidate));
 
   TLSHandshakeParams echEstablished("origin.example", "origin.example",
                                     alpnProtocols);

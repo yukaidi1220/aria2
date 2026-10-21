@@ -46,8 +46,11 @@ class Option;
 struct TLSSNIHostConfig {
   std::string sniHost;
   bool overridden;
+  // True when SNI must be omitted entirely. sniHost is empty in that case.
+  bool sniHostOmitted;
 
-  TLSSNIHostConfig(std::string sniHost, bool overridden);
+  TLSSNIHostConfig(std::string sniHost, bool overridden,
+                   bool sniHostOmitted = false);
 };
 
 TLSSNIHostConfig getTLSSNIHostConfig(const std::string& requestHost,

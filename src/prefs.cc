@@ -429,6 +429,8 @@ PrefPtr PREF_MAX_HTTP_PIPELINING = makePref("max-http-pipelining");
 PrefPtr PREF_HEADER = makePref("header");
 // value: hostname
 PrefPtr PREF_TLS_SNI_HOST = makePref("tls-sni-host");
+// value: true | false
+PrefPtr PREF_TLS_SNI_NONE_FALLBACK = makePref("tls-sni-none-fallback");
 // values: comma separated HOST:IPADDR or IPADDR:HOST
 PrefPtr PREF_HOSTS_MAPPING = makePref("hosts-mapping");
 // value: true | false

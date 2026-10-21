@@ -74,6 +74,7 @@ Request::Request()
       removalRequested_(false),
       http2OriginCoalesced_(false),
       http2OriginCoalescingBlocked_(false),
+      tlsSNINoneRetry_(false),
       httpsServiceBindingEndpointInfoSet_(false),
       connectedPort_(0),
       wakeTime_(global::wallclock())

@@ -88,6 +88,7 @@ private:
   bool removalRequested_;
   bool http2OriginCoalesced_;
   bool http2OriginCoalescingBlocked_;
+  bool tlsSNINoneRetry_;
   bool httpsServiceBindingEndpointInfoSet_;
   HttpsServiceBindingEndpointInfo httpsServiceBindingEndpointInfo_;
   uint16_t connectedPort_;
@@ -178,6 +179,11 @@ public:
   void setHttp2OriginCoalesced(bool f) { http2OriginCoalesced_ = f; }
 
   bool isHttp2OriginCoalesced() const { return http2OriginCoalesced_; }
+
+  // Once set, every subsequent TLS handshake for this request omits SNI.
+  void setTlsSNINoneRetry(bool f) { tlsSNINoneRetry_ = f; }
+
+  bool isTlsSNINoneRetry() const { return tlsSNINoneRetry_; }
 
   void blockHttp2OriginCoalescing()
   {

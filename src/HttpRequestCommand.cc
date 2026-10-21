@@ -152,6 +152,39 @@ const char* addressFamilyName(int family)
   return "unknown";
 }
 
+bool tryRetryTLSHandshakeWithoutSNI(
+    const std::shared_ptr<Request>& req, const std::shared_ptr<Option>& option,
+    const std::shared_ptr<SocketCore>& socket, DownloadEngine* e, cuid_t cuid,
+    const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup)
+{
+  if (req->getProtocol() != "https" ||
+      !option->getAsBool(PREF_TLS_SNI_NONE_FALLBACK) ||
+      req->isTlsSNINoneRetry() ||
+      !socket->tlsBackendSupportsSNIHostnameOmission()) {
+    return false;
+  }
+
+  auto tlsParams = createHttpTLSHandshakeParams(req.get(), option.get());
+  if (tlsParams.sniHostOmitted || tlsParams.echParams.requested ||
+      !tlsParams.echParams.configList.empty()) {
+    // Nothing to fall back from: SNI is already omitted, or ECH owns the
+    // outer name and cannot be combined with an override.
+    return false;
+  }
+
+  req->setTlsSNINoneRetry(true);
+  A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                     " - TLS handshake failed for %s:%u, retrying without "
+                     "SNI extension",
+                     cuid, req->getConnectedAddr().c_str(),
+                     req->getConnectedPort()));
+  e->setNoWait(true);
+  e->addCommand(
+      InitiateConnectionCommandFactory::createInitiateConnectionCommand(
+          cuid, req, fileEntry, requestGroup, e));
+  return true;
+}
+
 bool tryRetryTLSHandshakeWithNextAddress(
     const std::shared_ptr<Request>& req,
     const std::shared_ptr<Option>& option, DownloadEngine* e, cuid_t cuid,
@@ -165,7 +198,7 @@ bool tryRetryTLSHandshakeWithNextAddress(
     return false;
   }
   auto tlsParams = createHttpTLSHandshakeParams(req.get(), option.get());
-  if (tlsParams.sniHost != tlsParams.verifyHost) {
+  if (tlsParams.sniHostOverridden && !tlsParams.sniHostOmitted) {
     A2_LOG_NETWORK(fmt("CUID#%" PRId64
                        " - TLS handshake failed for %s:%u; not retrying with "
                        "another address: SNI override changes the verification "
@@ -299,6 +332,14 @@ bool HttpRequestCommand::executeInternal()
       }
       catch (RecoverableException& e) {
         if (isTLSHandshakeFailure(e)) {
+          // Try the same address with no SNI first: a mid-path device may
+          // reset the connection only when the SNI extension is present.
+          if (!proxyRequest_ &&
+              tryRetryTLSHandshakeWithoutSNI(
+                  getRequest(), getOption(), getSocket(), getDownloadEngine(),
+                  getCuid(), getFileEntry(), getRequestGroup())) {
+            return true;
+          }
           if (retryTLSHandshakeWithNextAddress_ && !proxyRequest_ &&
               getOption()->getAsBool(PREF_TLS_HANDSHAKE_FAILOVER)) {
             if (tryRetryTLSHandshakeWithNextAddress(

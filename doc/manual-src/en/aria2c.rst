@@ -438,11 +438,15 @@ HTTP Specific Options
 .. option:: --tls-sni-host=<HOST|none|TARGET:SNI[,TARGET:SNI]...>
 
   Set the hostname sent in the TLS SNI extension. Specify a single ``HOST`` to
-  use the same SNI hostname for all HTTPS requests, or specify comma separated
-  ``TARGET:SNI`` mappings to choose the SNI hostname from the current request
-  host. The mapping form is evaluated for each HTTPS request, including the
-  request made after a redirect. If no mapping matches, aria2 uses the current
-  request hostname as before.
+  use the same SNI hostname for all HTTPS download requests, or specify comma
+  separated ``TARGET:SNI`` mappings to choose the SNI hostname from the current
+  request host. The mapping form is evaluated for each HTTPS request, including
+  the request made after a redirect. If no mapping matches, aria2 uses the
+  current request hostname as before.
+
+  This option does not affect the DNS-over-HTTPS and DNS-over-TLS connections
+  made by :option:`--async-dns-mode`; those handshakes always use the resolver
+  server hostname.
 
   This option only changes the SNI value in the TLS ClientHello. It does not
   change DNS resolution, TCP connect target, HTTP ``Host`` header, proxy
@@ -476,7 +480,8 @@ HTTP Specific Options
   rejected before the handshake there; support for these backends may be added
   later. Some network devices between the client and the server reset
   connections that carry no SNI, so this value is only useful where the server
-  is reachable without it.
+  is reachable without it. Because an omitted SNI is an explicit override,
+  HTTP/2 origin coalescing is disabled for matching requests.
 
   Example:
 
@@ -507,6 +512,23 @@ HTTP Specific Options
   If the first request is redirected to ``redirect.example``, the redirected
   HTTPS request uses ``redirect-front.example`` as the SNI hostname.
 
+.. option:: --tls-sni-none-fallback [true|false]
+
+  When an HTTPS TLS handshake fails, retry the request once without the SNI
+  extension. Certificate verification is not relaxed: the peer certificate is
+  still verified against the request hostname. If the retry succeeds, later
+  handshakes for the same request keep omitting SNI.
+
+  This is useful when the failure is caused by a network device that resets
+  connections based on the cleartext SNI value. The fallback requires a TLS
+  backend that can omit SNI, as described in :option:`--tls-sni-host`. It is
+  skipped when SNI is already omitted, when ECH is configured, when the
+  handshake is made to a proxy, and when the request has already been retried
+  once without SNI. The no-SNI retry happens before
+  :option:`--tls-handshake-failover` tries another address.
+
+  Default: ``true``
+
 .. option:: --tls-handshake-failover [true|false]
 
   Retry a failed TLS handshake, including a certificate verification failure,
@@ -534,8 +556,8 @@ HTTP Specific Options
   IPv6, only a global unicast address counts as usable: if the other family
   only has scoped addresses (ULA, link-local, and so on), aria2 aborts with
   the TLS error instead of retrying.  Address failover is not attempted for
-  proxy requests, and not attempted when :option:`--tls-sni-host` overrides
-  change the certificate verification hostname.  Set
+  proxy requests, and not attempted when :option:`--tls-sni-host` sets a
+  different SNI hostname; omitting SNI with ``none`` does not block it.  Set
   ``--tls-handshake-failover=false`` to abort on the first TLS handshake
   failure.  Builds without SSL treat ``true`` as unsupported during option
   parsing.
