@@ -24,11 +24,14 @@ RUN apt-get update && \
         python3-docutils perl
 
 # Download all dependency sources
+# expat and c-ares come from the projects' GitHub release tags because the
+# SourceForge path and Debian's pool no longer serve these exact versions
+# (Debian rotates orig tarballs out of pool as new releases land).
 RUN curl --fail -L --retry 5 --retry-all-errors -O https://ftp.gnu.org/gnu/gmp/gmp-6.3.0.tar.xz && \
-    curl --fail -L --retry 5 --retry-all-errors -o expat-2.8.1.tar.bz2 https://downloads.sourceforge.net/project/expat/expat/2.8.1/expat-2.8.1.tar.bz2 && \
+    curl --fail -L --retry 5 --retry-all-errors -o expat-2.8.1.tar.bz2 https://github.com/libexpat/libexpat/releases/download/R_2_8_1/expat-2.8.1.tar.bz2 && \
     curl --fail -L --retry 5 --retry-all-errors -O https://www.sqlite.org/2026/sqlite-autoconf-3530200.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o zlib-1.3.dfsg+really1.3.2.tar.gz https://deb.debian.org/debian/pool/main/z/zlib/zlib_1.3.dfsg+really1.3.2.orig.tar.gz && \
-    curl --fail -L --retry 5 --retry-all-errors -o c-ares-1.34.6.tar.gz https://deb.debian.org/debian/pool/main/c/c-ares/c-ares_1.34.6.orig.tar.gz && \
+    curl --fail -L --retry 5 --retry-all-errors -o c-ares-1.34.6.tar.gz https://github.com/c-ares/c-ares/releases/download/v1.34.6/c-ares-1.34.6.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o nghttp2-1.64.0.tar.gz https://github.com/nghttp2/nghttp2/releases/download/v1.64.0/nghttp2-1.64.0.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o libssh2-1.11.1.tar.gz https://libssh2.org/download/libssh2-1.11.1.tar.gz && \
     curl --fail -L --retry 5 --retry-all-errors -o openssl-1.1.1w.tar.gz https://deb.debian.org/debian/pool/main/o/openssl/openssl_1.1.1w.orig.tar.gz
