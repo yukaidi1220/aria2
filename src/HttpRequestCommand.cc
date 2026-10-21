@@ -135,8 +135,10 @@ bool markHttpsServiceBindingEndpointFailed(
       endpoint, HTTPS_SERVICE_BINDING_ENDPOINT_FAILURE_TTL);
   A2_LOG_NETWORK(fmt("HTTPS RR: temporarily avoiding failed endpoint %s:%u "
                      "for origin %s:%u",
-                     endpoint.connectHost.c_str(), endpoint.connectPort,
-                     endpoint.originHost.c_str(), endpoint.originPort));
+                     endpoint.connectHost.c_str(),
+                     static_cast<unsigned int>(endpoint.connectPort),
+                     endpoint.originHost.c_str(),
+                     static_cast<unsigned int>(endpoint.originPort)));
   req->clearHttpsServiceBindingEndpointInfo();
   return true;
 }
@@ -157,18 +159,9 @@ bool tryRetryTLSHandshakeWithoutSNI(
     const std::shared_ptr<SocketCore>& socket, DownloadEngine* e, cuid_t cuid,
     const std::shared_ptr<FileEntry>& fileEntry, RequestGroup* requestGroup)
 {
-  if (req->getProtocol() != "https" ||
-      !option->getAsBool(PREF_TLS_SNI_NONE_FALLBACK) ||
-      req->isTlsSNINoneRetry() ||
-      !socket->tlsBackendSupportsSNIHostnameOmission()) {
-    return false;
-  }
-
-  auto tlsParams = createHttpTLSHandshakeParams(req.get(), option.get());
-  if (tlsParams.sniHostOmitted || tlsParams.echParams.requested ||
-      !tlsParams.echParams.configList.empty()) {
-    // Nothing to fall back from: SNI is already omitted, or ECH owns the
-    // outer name and cannot be combined with an override.
+  if (!shouldRetryTLSHandshakeWithoutSNI(
+          req.get(), option.get(),
+          socket->tlsBackendSupportsSNIHostnameOmission())) {
     return false;
   }
 
@@ -177,7 +170,7 @@ bool tryRetryTLSHandshakeWithoutSNI(
                      " - TLS handshake failed for %s:%u, retrying without "
                      "SNI extension",
                      cuid, req->getConnectedAddr().c_str(),
-                     req->getConnectedPort()));
+                     static_cast<unsigned int>(req->getConnectedPort())));
   e->setNoWait(true);
   e->addCommand(
       InitiateConnectionCommandFactory::createInitiateConnectionCommand(
@@ -198,7 +191,7 @@ bool tryRetryTLSHandshakeWithNextAddress(
     return false;
   }
   auto tlsParams = createHttpTLSHandshakeParams(req.get(), option.get());
-  if (tlsParams.sniHostOverridden && !tlsParams.sniHostOmitted) {
+  if (!tlsAddressFailoverAllowed(tlsParams)) {
     A2_LOG_NETWORK(fmt("CUID#%" PRId64
                        " - TLS handshake failed for %s:%u; not retrying with "
                        "another address: SNI override changes the verification "

@@ -571,11 +571,12 @@
     "                              Mappings use the current request host after\n" \
     "                              redirects.")
 #define TEXT_TLS_SNI_NONE_FALLBACK                                       \
-  _(" --tls-sni-none-fallback[=true|false] Retry an HTTPS connection\n" \
-    "                              without the SNI extension when the TLS\n" \
-    "                              handshake fails. Certificate verification\n" \
-    "                              still uses the request hostname.\n" \
-    "                              Default: true")
+  _(" --tls-sni-none-fallback[=true|false]\n"                            \
+    "                              Retry an HTTPS connection without the\n" \
+    "                              SNI extension when the TLS handshake\n" \
+    "                              fails. Certificate verification still\n" \
+    "                              uses the request hostname. Default:\n" \
+    "                              true. Builds without SSL reject true.")
 #define TEXT_TLS_HANDSHAKE_FAILOVER                                      \
   _(" --tls-handshake-failover[=true|false]\n"                            \
     "                              Retry a failed TLS handshake (including a\n" \

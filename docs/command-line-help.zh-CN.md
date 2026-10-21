@@ -120,7 +120,7 @@ aria2c --conf-path=aria2.conf --enable-rpc --rpc-secret=TOKEN
 - 这个选项只改 TLS SNI，不改 DNS 解析、TCP 连接目标、HTTP `Host` 头、代理 `CONNECT` 目标、cookie 作用域、证书校验主机。
 - 映射表里未命中的请求会继续使用逻辑/默认主机做 SNI；这不是通配符映射，源码没有 `*.example.com` 之类规则。
 - 省略 SNI 会关掉 HTTP/2 origin coalescing：`HttpInitiateConnectionCommand.cc` 只要看到 `sniHostOverridden` 就返回空谓词，`DownloadEngine` 遇空谓词就不跨 key 复用连接。方向是保守的，代价是少了跨域复用。
-- 省略 SNI 不阻止「握手失败后换下一个已解析地址重试」。`HttpRequestCommand.cc` 原来的判据是 `sniHost != verifyHost` 字符串不等就放弃轮换，现在改成「显式改了 SNI 才放弃」；`none` 不再误触发这条保护。
+- 省略 SNI 不阻止「握手失败后换下一个已解析地址重试」。判据原来在 `HttpRequestCommand.cc` 里是 `sniHost != verifyHost` 字符串不等就放弃轮换，现在抽成 `HttpTLSHandshakeParams.cc::tlsAddressFailoverAllowed()`：「显式改了 SNI 才放弃」；`none` 不再误触发这条保护。
 
 示例：
 
@@ -144,11 +144,13 @@ aria2c --tls-sni-host=origin.example:none,redirect.example:redirect-front.exampl
 自动回退 `--tls-sni-none-fallback`：
 
 - 布尔选项，默认 `true`。HTTPS 握手失败时自动改用「省略 SNI」重试一次。判据是异常文本前缀 `SSL/TLS handshake failure:`（`HttpRequestCommand.cc::isTLSHandshakeFailure`），也就是 `SocketCore` 在 TLS 层拿到错误时抛的那条。
+- 无 SSL 构建该选项为 unsupported：默认 `false`，`=true`（含空值）会在参数阶段被拒绝（与 `--tls-handshake-failover` 一致）。
 - 触发后给当前 `Request` 置 `setTlsSNINoneRetry(true)`，本请求之后每次握手都省略 SNI；同一次请求最多回退一次，不会循环。
 - 回退时会重新走 `InitiateConnectionCommandFactory`，DNS 解析、连接目标、证书校验主机都不变，只有 SNI 从「有」变成「无」。
 - 以下情况不回退：协议不是 https；开关为 false；后端 `tlsBackendSupportsSNIHostnameOmission()` 为假；这次握手本来就已省略 SNI；配置了 ECH（ECH 的 outer name 和 override 互斥）；握手对象是代理（`proxyRequest_` 非空）。
+- 判据抽成了纯函数 `HttpTLSHandshakeParams.cc::shouldRetryTLSHandshakeWithoutSNI(request, option, backendCanOmitSNI)`，置标志、记日志、重建连接的副作用仍留在 `HttpRequestCommand.cc` 的匿名 namespace 里；对应单测在 `test/HttpTLSHandshakeParamsTest.cc`。
 - 代价要说清：任何 `SSL/TLS handshake failure:` 都会先多试一次，包括证书不匹配这类根本与中间设备无关的失败。校验不会因为回退而放松，失败还是会失败，只是多一次连接。
-- 和地址轮换的顺序：先回退无 SNI，再考虑「换下一个已解析地址」。后者仍然只在 `--check-certificate=false` 且没有显式改 SNI 时启用。
+- 和地址轮换的顺序：先回退无 SNI，再考虑「换下一个已解析地址」。后者在证书校验开启时只换另一地址族且只换一次，校验关闭时换任意其他已解析地址；`--tls-sni-host` 设置了显式 SNI 时同样不换（`none` 除外）。
 
 和 `--hosts-mapping` 的组合顺序：
 
@@ -563,7 +565,7 @@ Alt-Svc 源码状态：
 - 每次重试仍完整执行证书校验，因此不存在“接受无效证书”的路径；两族都失败时，最终报出的仍是最后一次 TLS 错误。
 - 证书校验关闭（`--check-certificate=false`）时保持原行为：换该 host 的任意其他已解析地址重试，没有其他地址才报错。
 - 前提是该 host 的 DNS cache 里已有另一地址族的 good 地址（async DNS 的 A/AAAA 并发解析通常会在此期间补齐）；只有单一族地址时行为与原来一致。IPv6 侧只认 global unicast 地址：对端族只有 ULA/link-local 等非公网 scope 地址时按“对端族不可用”处理，直接报 TLS 错误，不会拿去重试。
-- 代理请求、以及 `--tls-sni-host` override 改变了证书校验主机时，不尝试换地址（network 日志会说明原因）。
+- 代理请求、以及 `--tls-sni-host` 设置了显式 SNI 时（即使与请求主机名相同），不尝试换地址（network 日志会说明原因）；`none` 省略 SNI 不阻止换地址。
 - 想完全恢复“握手失败即中止”的上游行为，设 `--tls-handshake-failover=false`；无 SSL 构建该选项为 unsupported：默认 `false`，`=true`（含空值）会在参数阶段被拒绝。
 
 典型场景：IPv4 通路上有中间设备对 TLS 做 RST 或注入证书，导致 IPv4 握手/证书校验失败，而同一 host 的 IPv6 地址不受影响；反之 IPv6 被干扰时也会回退 IPv4。

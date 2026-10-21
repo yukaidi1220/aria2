@@ -37,6 +37,10 @@ class HttpTLSHandshakeParamsTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testTlsAddressFailoverAbortsWhenOtherFamilyUnavailable);
   CPPUNIT_TEST(testTlsAddressFailoverAnyAddressWhenNotVerifying);
   CPPUNIT_TEST(testTlsAddressFailoverAbortsUnknownFamily);
+  CPPUNIT_TEST(testTlsAddressFailoverBlockedBySNIOverride);
+  CPPUNIT_TEST(testShouldRetryTLSHandshakeWithoutSNIEnabled);
+  CPPUNIT_TEST(testShouldRetryTLSHandshakeWithoutSNIGuards);
+  CPPUNIT_TEST(testCreateHttpTLSHandshakeParamsRetryMode);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -60,6 +64,10 @@ public:
   void testTlsAddressFailoverAbortsWhenOtherFamilyUnavailable();
   void testTlsAddressFailoverAnyAddressWhenNotVerifying();
   void testTlsAddressFailoverAbortsUnknownFamily();
+  void testTlsAddressFailoverBlockedBySNIOverride();
+  void testShouldRetryTLSHandshakeWithoutSNIEnabled();
+  void testShouldRetryTLSHandshakeWithoutSNIGuards();
+  void testCreateHttpTLSHandshakeParamsRetryMode();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(HttpTLSHandshakeParamsTest);
@@ -353,6 +361,99 @@ void HttpTLSHandshakeParamsTest::testTlsAddressFailoverAbortsUnknownFamily()
 {
   CPPUNIT_ASSERT_EQUAL(TLS_ADDRESS_FAILOVER_ABORT,
                        decideTlsAddressFailover(0, true, true, false, true));
+}
+
+void HttpTLSHandshakeParamsTest::testTlsAddressFailoverBlockedBySNIOverride()
+{
+  // No override: address rotation stays allowed.
+  TLSHandshakeParams plain("origin.example", "origin.example");
+  CPPUNIT_ASSERT(tlsAddressFailoverAllowed(plain));
+  // An explicit override blocks rotation...
+  TLSHandshakeParams overridden("front.example", "origin.example", true);
+  CPPUNIT_ASSERT(!tlsAddressFailoverAllowed(overridden));
+  // ... even when the SNI hostname is identical to the request hostname.
+  TLSHandshakeParams sameHost("origin.example", "origin.example", true);
+  CPPUNIT_ASSERT(!tlsAddressFailoverAllowed(sameHost));
+  // Omitting SNI does not block rotation.
+  TLSHandshakeParams omitted("", "origin.example", true, true);
+  CPPUNIT_ASSERT(tlsAddressFailoverAllowed(omitted));
+}
+
+void HttpTLSHandshakeParamsTest::testShouldRetryTLSHandshakeWithoutSNIEnabled()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_TLS_SNI_NONE_FALLBACK, A2_V_TRUE);
+
+  CPPUNIT_ASSERT(shouldRetryTLSHandshakeWithoutSNI(&request, &option, true));
+}
+
+void HttpTLSHandshakeParamsTest::testShouldRetryTLSHandshakeWithoutSNIGuards()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_TLS_SNI_NONE_FALLBACK, A2_V_TRUE);
+
+  // The TLS backend of the failed session cannot omit SNI.
+  CPPUNIT_ASSERT(!shouldRetryTLSHandshakeWithoutSNI(&request, &option, false));
+  // Disabled by --tls-sni-none-fallback=false.
+  option.put(PREF_TLS_SNI_NONE_FALLBACK, A2_V_FALSE);
+  CPPUNIT_ASSERT(!shouldRetryTLSHandshakeWithoutSNI(&request, &option, true));
+  option.put(PREF_TLS_SNI_NONE_FALLBACK, A2_V_TRUE);
+  // Already retried once without SNI: no second fallback, otherwise the
+  // retry would loop.
+  request.setTlsSNINoneRetry(true);
+  CPPUNIT_ASSERT(!shouldRetryTLSHandshakeWithoutSNI(&request, &option, true));
+  request.setTlsSNINoneRetry(false);
+  // SNI is already omitted: nothing to fall back from.
+  option.put(PREF_TLS_SNI_HOST, "none");
+  CPPUNIT_ASSERT(!shouldRetryTLSHandshakeWithoutSNI(&request, &option, true));
+  // Only HTTPS is covered.
+  Request plainRequest;
+  CPPUNIT_ASSERT(plainRequest.setUri("http://origin.example/file"));
+  CPPUNIT_ASSERT(
+      !shouldRetryTLSHandshakeWithoutSNI(&plainRequest, &option, true));
+  // ECH owns the outer name and cannot be combined with an override.
+  Option echOption;
+  echOption.put(PREF_TLS_SNI_NONE_FALLBACK, A2_V_TRUE);
+  echOption.put(PREF_ECH_CONFIG_BASE64, "AQIDBA==");
+  CPPUNIT_ASSERT(!shouldRetryTLSHandshakeWithoutSNI(&request, &echOption,
+                                                    true));
+  // ECH combined with an SNI override is a misconfiguration: the same
+  // DlAbortEx a normal handshake setup would raise, before any retry.
+  Option echOverrideOption;
+  echOverrideOption.put(PREF_TLS_SNI_NONE_FALLBACK, A2_V_TRUE);
+  echOverrideOption.put(PREF_ECH_CONFIG_BASE64, "AQIDBA==");
+  echOverrideOption.put(PREF_TLS_SNI_HOST, "front.example");
+  CPPUNIT_ASSERT_THROW(
+      shouldRetryTLSHandshakeWithoutSNI(&request, &echOverrideOption, true),
+      Exception);
+}
+
+void HttpTLSHandshakeParamsTest::testCreateHttpTLSHandshakeParamsRetryMode()
+{
+  Request request;
+  CPPUNIT_ASSERT(request.setUri("https://origin.example/file"));
+  Option option;
+  option.put(PREF_TLS_SNI_HOST, "front.example");
+
+  // Before the fallback the configured override is used...
+  auto params = createHttpTLSHandshakeParams(&request, &option);
+  CPPUNIT_ASSERT_EQUAL(std::string("front.example"), params.sniHost);
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+  CPPUNIT_ASSERT(params.sniHostOverridden);
+  CPPUNIT_ASSERT(!params.sniHostOmitted);
+
+  // ... and once the no-SNI retry is in flight the override is dropped in
+  // favor of omitting the extension; verification is unchanged.
+  request.setTlsSNINoneRetry(true);
+  params = createHttpTLSHandshakeParams(&request, &option);
+  CPPUNIT_ASSERT(params.sniHost.empty());
+  CPPUNIT_ASSERT_EQUAL(std::string("origin.example"), params.verifyHost);
+  CPPUNIT_ASSERT(params.sniHostOverridden);
+  CPPUNIT_ASSERT(params.sniHostOmitted);
 }
 
 } // namespace aria2
