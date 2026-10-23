@@ -191,13 +191,31 @@ jobs:
           g++ gcc libc-ares-dev libexpat1-dev libgmp-dev \
           libnghttp2-dev libsqlite3-dev libssh2-1-dev libssl-dev \
           libtool libxml2-dev nettle-dev pkg-config zlib1g-dev
+    - name: Check static libraries
+      run: |
+        set -eu
+        missing=0
+        for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat libsqlite3 libz libgmp libnettle libhogweed; do
+          if ! ls /usr/lib/x86_64-linux-gnu/"$lib".a >/dev/null 2>&1; then
+            echo "missing static library: $lib.a"
+            missing=1
+          fi
+        done
+        if [ "$missing" -ne 0 ]; then
+          echo "Static linking needs the .a files above; install the matching -dev packages."
+          exit 1
+        fi
     - name: Build
       run: |
         autoreconf -i
-        ./configure --without-gnutls --with-openssl --with-libnghttp2
+        ./configure --without-gnutls --with-openssl --with-libnghttp2 LDFLAGS="-static"
         make -j"$(nproc)"
-    - name: Smoke test
-      run: src/aria2c -v
+    - name: Strip, verify static and smoke test
+      run: |
+        strip src/aria2c
+        file src/aria2c
+        file src/aria2c | grep -q 'statically linked'
+        src/aria2c -v
     - name: Upload artifact
       uses: actions/upload-artifact@v7
       with:
