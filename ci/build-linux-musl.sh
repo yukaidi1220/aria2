@@ -23,7 +23,7 @@ fi
 
 autoreconf -i
 ./configure --without-gnutls --with-openssl --with-libnghttp2 --disable-nls \
-  LDFLAGS='-static'
+  LDFLAGS='-static' LIBS='-llzma -lz -lm'
 make -j"$(nproc)" LDFLAGS='-all-static'
 
 strip src/aria2c
