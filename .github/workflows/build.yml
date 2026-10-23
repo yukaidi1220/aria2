@@ -209,7 +209,7 @@ jobs:
       run: |
         autoreconf -i
         ./configure --without-gnutls --with-openssl --with-libnghttp2 LDFLAGS="-static"
-        make -j"$(nproc)"
+        make -j"$(nproc)" LDFLAGS="-all-static"
     - name: Strip, verify static and smoke test
       run: |
         strip src/aria2c
