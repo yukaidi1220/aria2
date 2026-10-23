@@ -23,6 +23,7 @@ RUN curl --fail -L --retry 5 --retry-all-errors -o /tmp/openssl.tar.gz \
       https://github.com/openssl/openssl/releases/download/openssl-3.3.7/openssl-3.3.7.tar.gz && \
     tar xf /tmp/openssl.tar.gz -C /tmp && \
     cd /tmp/openssl-3.3.7 && \
-    ./Configure linux-x86_64 no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl && \
+    ./Configure linux-x86_64 no-shared no-tests --libdir=lib \
+      --prefix=/usr/local/openssl --openssldir=/etc/ssl && \
     make -j"$(nproc)" && \
     make install_sw
