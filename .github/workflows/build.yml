@@ -178,3 +178,68 @@ jobs:
       with:
         name: aria2-${{ matrix.host }}
         path: out/aria2c.exe
+
+  build-linux:
+    runs-on: ubuntu-22.04
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          autoconf automake autopoint autotools-dev \
+          g++ gcc libc-ares-dev libexpat1-dev libgmp-dev \
+          libnghttp2-dev libsqlite3-dev libssh2-1-dev libssl-dev \
+          libtool libxml2-dev nettle-dev pkg-config zlib1g-dev
+    - name: Build
+      run: |
+        autoreconf -i
+        ./configure --without-gnutls --with-openssl --with-libnghttp2
+        make -j"$(nproc)"
+    - name: Smoke test
+      run: src/aria2c -v
+    - name: Upload artifact
+      uses: actions/upload-artifact@v7
+      with:
+        name: aria2-linux-x86_64
+        path: src/aria2c
+
+  release:
+    needs: [build-windows, build-linux]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+    - name: Download artifacts
+      uses: actions/download-artifact@v8
+      with:
+        pattern: aria2-*
+        path: dist
+    - name: Create release
+      env:
+        GH_TOKEN: ${{ github.token }}
+        TZ: Asia/Shanghai
+      run: |
+        set -euo pipefail
+        tag=$(date +%Y%m%d%H%M%S)
+        mkdir -p out
+        for d in dist/*/; do
+          case "$(basename "$d")" in
+            aria2-i686-w64-mingw32)   cp "$d/aria2c.exe" out/aria2c-i686-windows.exe ;;
+            aria2-x86_64-w64-mingw32) cp "$d/aria2c.exe" out/aria2c-x86_64-windows.exe ;;
+            aria2-linux-x86_64)       cp "$d/aria2c" out/aria2c-x86_64-linux ;;
+          esac
+        done
+        ls -l out
+        {
+          echo "Automated build of \`${GITHUB_SHA:0:7}\` on \`main\`."
+          echo
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}" --jq '.commit.message'
+        } > notes.md
+        gh release create "$tag" out/* \
+          --repo "$GITHUB_REPOSITORY" \
+          --target "$GITHUB_SHA" \
+          --title "$tag" \
+          --notes-file notes.md \
+          --latest
