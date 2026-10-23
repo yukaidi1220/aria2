@@ -190,12 +190,12 @@ jobs:
           autoconf automake autopoint autotools-dev \
           g++ gcc libc-ares-dev libexpat1-dev libgmp-dev \
           libnghttp2-dev libsqlite3-dev libssh2-1-dev libssl-dev \
-          libtool libxml2-dev nettle-dev pkg-config zlib1g-dev
+          libtool libxml2-dev liblzma-dev libicu-dev nettle-dev pkg-config zlib1g-dev
     - name: Check static libraries
       run: |
         set -eu
         missing=0
-        for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat libsqlite3 libz libgmp libnettle libhogweed; do
+        for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat libsqlite3 libz libgmp libnettle libhogweed liblzma libicuuc libicudata; do
           if ! ls /usr/lib/x86_64-linux-gnu/"$lib".a >/dev/null 2>&1; then
             echo "missing static library: $lib.a"
             missing=1
@@ -208,7 +208,7 @@ jobs:
     - name: Build
       run: |
         autoreconf -i
-        ./configure --without-gnutls --with-openssl --with-libnghttp2 LDFLAGS="-static"
+        ./configure --without-gnutls --with-openssl --with-libnghttp2 LDFLAGS="-static" LIBS="-llzma -licuuc -licudata"
         make -j"$(nproc)" LDFLAGS="-all-static"
     - name: Strip, verify static and smoke test
       run: |
