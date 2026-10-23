@@ -1,0 +1,16 @@
+# CI image for building a fully static (musl) Linux aria2c.
+#
+# glibc static binaries dlopen the host's NSS/gconv modules at runtime and
+# crash when the host glibc differs from the build glibc (observed: 2.35-built
+# binary segfaults on a 2.39 host). musl keeps resolver and locale handling in
+# libc itself and never dlopens host modules, so the binary runs on any Linux.
+# Alpine's -dev packages ship the .a files, unlike Debian's.
+
+ARG BASE_IMAGE=alpine:3.20
+FROM ${BASE_IMAGE}
+
+RUN apk add --no-cache \
+      build-base autoconf automake libtool pkgconfig gettext \
+      linux-headers file bash \
+      openssl-dev nghttp2-dev c-ares-dev libssh2-dev expat-dev sqlite-dev \
+      zlib-dev gmp-dev libxml2-dev xz-dev

@@ -1,0 +1,24 @@
+#!/bin/sh
+# Build a fully static (musl) aria2c inside the aria2-musl-deps container.
+# Usage: bash /src/ci/build-linux-musl.sh /out
+set -eu
+
+out="$1"
+cp -a /src /tmp/aria2-build
+cd /tmp/aria2-build
+
+for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat \
+           libsqlite3 libz libgmp liblzma; do
+  test -e "/usr/lib/$lib.a" || { echo "missing static library: $lib.a"; exit 1; }
+done
+
+autoreconf -i
+./configure --without-gnutls --with-openssl --with-libnghttp2 --disable-nls \
+  LDFLAGS='-static'
+make -j"$(nproc)" LDFLAGS='-all-static'
+
+strip src/aria2c
+file src/aria2c
+file src/aria2c | grep -q 'statically linked'
+src/aria2c -v
+cp src/aria2c "$out/"

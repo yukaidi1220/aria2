@@ -183,44 +183,43 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v6
-    - name: Install dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          autoconf automake autopoint autotools-dev \
-          g++ gcc libc-ares-dev libexpat1-dev libgmp-dev \
-          libnghttp2-dev libsqlite3-dev libssh2-1-dev libssl-dev \
-          libtool libxml2-dev liblzma-dev libicu-dev nettle-dev pkg-config zlib1g-dev
-    - name: Check static libraries
+    - name: Resolve Alpine base image
+      id: base_image
       run: |
         set -eu
-        missing=0
-        for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat libsqlite3 libz libgmp libnettle libhogweed liblzma libicuuc libicudata; do
-          if ! ls /usr/lib/x86_64-linux-gnu/"$lib".a >/dev/null 2>&1; then
-            echo "missing static library: $lib.a"
-            missing=1
+        candidates='public.ecr.aws/docker/library/alpine:3.20 mirror.gcr.io/library/alpine:3.20 docker.io/library/alpine:3.20'
+        for attempt in 1 2 3; do
+          for img in $candidates; do
+            if docker pull -q "$img"; then
+              echo "image=$img" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "::notice::pull of $img failed on attempt $attempt"
+          done
+          if [ "$attempt" != 3 ]; then
+            sleep 15
           fi
         done
-        if [ "$missing" -ne 0 ]; then
-          echo "Static linking needs the .a files above; install the matching -dev packages."
-          exit 1
-        fi
-    - name: Build
+        echo "::error::Could not pull alpine:3.20 from any of: $candidates"
+        exit 1
+    - name: Build dependencies Docker image
       run: |
-        autoreconf -i
-        ./configure --without-gnutls --with-openssl --with-libnghttp2 LDFLAGS="-static" LIBS="-llzma -licuuc -licudata"
-        make -j"$(nproc)" LDFLAGS="-all-static"
-    - name: Strip, verify static and smoke test
+        docker build \
+          --build-arg BASE_IMAGE=${{ steps.base_image.outputs.image }} \
+          -t aria2-musl-deps \
+          -f Dockerfile.musl-ci .
+    - name: Build aria2 Linux binary
       run: |
-        strip src/aria2c
-        file src/aria2c
-        file src/aria2c | grep -q 'statically linked'
-        src/aria2c -v
+        mkdir -p out
+        docker run --rm \
+          -v ${{ github.workspace }}:/src:ro \
+          -v ${{ github.workspace }}/out:/out \
+          aria2-musl-deps bash /src/ci/build-linux-musl.sh /out
     - name: Upload artifact
       uses: actions/upload-artifact@v7
       with:
         name: aria2-linux-x86_64
-        path: src/aria2c
+        path: out/aria2c
 
   release:
     needs: [build-windows, build-linux]
