@@ -10,7 +10,7 @@ ARG BASE_IMAGE=alpine:3.20
 FROM ${BASE_IMAGE}
 
 RUN apk add --no-cache \
-      build-base autoconf automake libtool pkgconfig gettext \
+      build-base autoconf automake libtool pkgconfig gettext gettext-dev \
       linux-headers file bash \
       openssl-dev openssl-libs-static nghttp2-dev nghttp2-static \
       c-ares-dev c-ares-static libssh2-dev libssh2-static \
