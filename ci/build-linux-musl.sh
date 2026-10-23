@@ -10,7 +10,8 @@ cd /tmp/aria2-build
 missing=
 for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat \
            libsqlite3 libz libgmp liblzma; do
-  if ! test -e "/usr/lib/$lib.a"; then
+  # Alpine keeps some early-boot libs (e.g. libz) in /lib, the rest in /usr/lib.
+  if ! test -e "/usr/lib/$lib.a" && ! test -e "/lib/$lib.a"; then
     echo "missing static library: $lib.a"
     missing=1
   fi
