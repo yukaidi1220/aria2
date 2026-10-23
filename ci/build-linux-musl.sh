@@ -7,10 +7,18 @@ out="$1"
 cp -a /src /tmp/aria2-build
 cd /tmp/aria2-build
 
+missing=
 for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat \
            libsqlite3 libz libgmp liblzma; do
-  test -e "/usr/lib/$lib.a" || { echo "missing static library: $lib.a"; exit 1; }
+  if ! test -e "/usr/lib/$lib.a"; then
+    echo "missing static library: $lib.a"
+    missing=1
+  fi
 done
+if [ -n "$missing" ]; then
+  echo "install the matching Alpine -static packages"
+  exit 1
+fi
 
 autoreconf -i
 ./configure --without-gnutls --with-openssl --with-libnghttp2 --disable-nls \

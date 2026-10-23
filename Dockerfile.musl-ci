@@ -12,5 +12,8 @@ FROM ${BASE_IMAGE}
 RUN apk add --no-cache \
       build-base autoconf automake libtool pkgconfig gettext \
       linux-headers file bash \
-      openssl-dev nghttp2-dev c-ares-dev libssh2-dev expat-dev sqlite-dev \
-      zlib-dev gmp-dev libxml2-dev xz-dev
+      openssl-dev openssl-libs-static nghttp2-dev nghttp2-static \
+      c-ares-dev c-ares-static libssh2-dev libssh2-static \
+      expat-dev expat-static sqlite-dev sqlite-static \
+      zlib-dev zlib-static gmp-dev libxml2-dev libxml2-static \
+      xz-dev xz-static
