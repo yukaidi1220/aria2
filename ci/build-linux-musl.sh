@@ -8,11 +8,18 @@ cp -a /src /tmp/aria2-build
 cd /tmp/aria2-build
 
 missing=
-for lib in libssl libcrypto libnghttp2 libcares libssh2 libxml2 libexpat \
+for lib in libnghttp2 libcares libssh2 libxml2 libexpat \
            libsqlite3 libz libgmp liblzma; do
   # Alpine keeps some early-boot libs (e.g. libz) in /lib, the rest in /usr/lib.
   if ! test -e "/usr/lib/$lib.a" && ! test -e "/lib/$lib.a"; then
     echo "missing static library: $lib.a"
+    missing=1
+  fi
+done
+# OpenSSL comes from the source build in Dockerfile.musl-ci.
+for lib in /usr/local/openssl/lib/libssl.a /usr/local/openssl/lib/libcrypto.a; do
+  if ! test -e "$lib"; then
+    echo "missing static library: $lib"
     missing=1
   fi
 done
@@ -22,7 +29,8 @@ if [ -n "$missing" ]; then
 fi
 
 autoreconf -i
-./configure --without-gnutls --with-openssl --with-libnghttp2 --disable-nls \
+PKG_CONFIG_PATH=/usr/local/openssl/lib/pkgconfig \
+  ./configure --without-gnutls --with-openssl --with-libnghttp2 --disable-nls \
   LDFLAGS='-static' LIBS='-llzma -lz -lm'
 make -j"$(nproc)" LDFLAGS='-all-static'
 

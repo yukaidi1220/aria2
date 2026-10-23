@@ -4,16 +4,25 @@
 # crash when the host glibc differs from the build glibc (observed: 2.35-built
 # binary segfaults on a 2.39 host). musl keeps resolver and locale handling in
 # libc itself and never dlopens host modules, so the binary runs on any Linux.
-# Alpine's -dev packages ship the .a files, unlike Debian's.
+# Alpine's -dev packages ship shared libs only since 3.20; static ones live in
+# the split-out -static packages. OpenSSL is built from source (no-shared)
+# because the static libcrypto from openssl-libs-static failed to activate
+# its builtin legacy provider inside the fully static binary.
 
 ARG BASE_IMAGE=alpine:3.20
 FROM ${BASE_IMAGE}
 
 RUN apk add --no-cache \
       build-base autoconf automake libtool pkgconfig gettext gettext-dev \
-      linux-headers file bash \
-      openssl-dev openssl-libs-static nghttp2-dev nghttp2-static \
-      c-ares-dev c-ares-static libssh2-dev libssh2-static \
-      expat-dev expat-static sqlite-dev sqlite-static \
-      zlib-dev zlib-static gmp-dev libxml2-dev libxml2-static \
-      xz-dev xz-static
+      linux-headers file bash curl perl \
+      nghttp2-dev nghttp2-static c-ares-dev c-ares-static \
+      libssh2-dev libssh2-static expat-dev expat-static sqlite-dev sqlite-static \
+      zlib-dev zlib-static gmp-dev libxml2-dev libxml2-static xz-dev xz-static
+
+RUN curl --fail -L --retry 5 --retry-all-errors -o /tmp/openssl.tar.gz \
+      https://github.com/openssl/openssl/releases/download/openssl-3.3.7/openssl-3.3.7.tar.gz && \
+    tar xf /tmp/openssl.tar.gz -C /tmp && \
+    cd /tmp/openssl-3.3.7 && \
+    ./Configure linux-x86_64 no-shared no-tests --prefix=/usr/local/openssl --openssldir=/etc/ssl && \
+    make -j"$(nproc)" && \
+    make install_sw
