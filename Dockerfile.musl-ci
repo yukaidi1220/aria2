@@ -23,7 +23,10 @@ RUN curl --fail -L --retry 5 --retry-all-errors -o /tmp/openssl.tar.gz \
       https://github.com/openssl/openssl/releases/download/openssl-3.3.7/openssl-3.3.7.tar.gz && \
     tar xf /tmp/openssl.tar.gz -C /tmp && \
     cd /tmp/openssl-3.3.7 && \
-    ./Configure linux-x86_64 no-shared no-tests --libdir=lib \
+    # no-module makes the legacy provider builtin (STATIC_LEGACY linked into
+    # libcrypto); by default OpenSSL 3 builds it as a legacy.so module, which
+    # a static binary cannot dlopen (musl has no static dlopen at all).
+    ./Configure linux-x86_64 no-shared no-module no-tests --libdir=lib \
       --prefix=/usr/local/openssl --openssldir=/etc/ssl && \
     make -j"$(nproc)" && \
     make install_sw
