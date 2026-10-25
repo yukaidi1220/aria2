@@ -105,10 +105,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          set -e
+          set -eo pipefail
           KEEP=10
+          # --slurp cannot be combined with --jq; pipe through jq instead,
+          # and pipefail makes a failed listing fail the step visibly.
           gh api --paginate --slurp "/user/packages/container/aria2/versions" \
-            --jq "flatten | sort_by(-.created_at) | .[$KEEP:] | .[].id" \
+            | jq -r "flatten | sort_by(-.created_at) | .[$KEEP:] | .[].id" \
             | while read -r id; do
                 echo "deleting aria2 version $id"
                 gh api -X DELETE "/user/packages/container/aria2/versions/$id" \
@@ -128,7 +130,7 @@ jobs:
 
       - name: Run image and exercise the RPC
         run: |
-          set -e
+          set -eo pipefail
           docker run -d --name aria2-smoke -e RPC_SECRET=ci-secret -p 127.0.0.1:6800:6800 "$IMAGE:latest"
 
           rpc() { curl -fsS http://127.0.0.1:6800/jsonrpc -d "$1"; }
@@ -143,8 +145,17 @@ jobs:
           done
           rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.getVersion","params":["token:ci-secret"]}' | grep -q '"version"'
 
-          # a wrong secret must be rejected
-          rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.getVersion","params":["token:wrong"]}' | grep -q '"error"'
+          # a wrong secret must be rejected: aria2 answers HTTP 400 with an
+          # error body, so query without curl -f to capture status and body
+          code=$(curl -sS -o /tmp/rpc-body -w '%{http_code}' \
+            http://127.0.0.1:6800/jsonrpc \
+            -d '{"jsonrpc":"2.0","id":1,"method":"aria2.getVersion","params":["token:wrong"]}')
+          echo "wrong-secret response: HTTP $code $(cat /tmp/rpc-body)"
+          case "$code" in
+            4*) ;;
+            *) echo "expected a 4xx rejection, got $code"; exit 1 ;;
+          esac
+          grep -q '"error"' /tmp/rpc-body
 
           # download a real file through the RPC into /downloads
           rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.addUri","params":["token:ci-secret",["https://raw.githubusercontent.com/yukaidi1220/aria2/main/README"],{"dir":"/downloads"}]}' | grep -q '"result"'
