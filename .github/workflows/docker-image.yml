@@ -100,3 +100,50 @@ jobs:
 
       - name: Inspect manifest
         run: docker buildx imagetools inspect "$IMAGE:latest"
+
+  smoke:
+    needs: merge
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run image and exercise the RPC
+        run: |
+          set -e
+          docker run -d --name aria2-smoke -e RPC_SECRET=ci-secret -p 127.0.0.1:6800:6800 "$IMAGE:latest"
+
+          rpc() { curl -fsS http://127.0.0.1:6800/jsonrpc -d "$1"; }
+
+          # wait for RPC to come up with the valid secret
+          for i in $(seq 1 30); do
+            if rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.getVersion","params":["token:ci-secret"]}' | grep -q '"version"'; then
+              echo "RPC is up"
+              break
+            fi
+            sleep 1
+          done
+          rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.getVersion","params":["token:ci-secret"]}' | grep -q '"version"'
+
+          # a wrong secret must be rejected
+          rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.getVersion","params":["token:wrong"]}' | grep -q '"error"'
+
+          # download a real file through the RPC into /downloads
+          rpc '{"jsonrpc":"2.0","id":1,"method":"aria2.addUri","params":["token:ci-secret",["https://raw.githubusercontent.com/yukaidi1220/aria2/main/README"],{"dir":"/downloads"}]}' | grep -q '"result"'
+
+          for i in $(seq 1 60); do
+            if docker exec aria2-smoke test -f /downloads/README; then
+              echo "download completed:"
+              docker exec aria2-smoke ls -la /downloads/
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "download did not complete in time"
+          docker logs aria2-smoke
+          exit 1
