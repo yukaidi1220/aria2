@@ -101,6 +101,20 @@ jobs:
       - name: Inspect manifest
         run: docker buildx imagetools inspect "$IMAGE:latest"
 
+      - name: Prune old image versions
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          KEEP=10
+          gh api --paginate --slurp "/user/packages/container/aria2/versions" \
+            --jq "flatten | sort_by(-.created_at) | .[$KEEP:] | .[].id" \
+            | while read -r id; do
+                echo "deleting aria2 version $id"
+                gh api -X DELETE "/user/packages/container/aria2/versions/$id" \
+                  || echo "::warning::failed to delete aria2 version $id"
+              done
+
   smoke:
     needs: merge
     runs-on: ubuntu-latest
