@@ -110,7 +110,7 @@ jobs:
           # --slurp cannot be combined with --jq; pipe through jq instead,
           # and pipefail makes a failed listing fail the step visibly.
           gh api --paginate --slurp "/user/packages/container/aria2/versions" \
-            | jq -r "flatten | sort_by(-.created_at) | .[$KEEP:] | .[].id" \
+            | jq -r "flatten | sort_by(.created_at) | reverse | .[$KEEP:] | .[].id" \
             | while read -r id; do
                 echo "deleting aria2 version $id"
                 gh api -X DELETE "/user/packages/container/aria2/versions/$id" \
