@@ -852,7 +852,7 @@ network 日志（每条路径都有，关键字 `TLS handshake failed for`）：
 | 选项 | 来源 | 当前判断 |
 | --- | --- | --- |
 | `--dns-timeout=<SEC>` | `OptionHandlerFactory.cc`，`NO_DESCRIPTION` | 注册为数字项，默认 `30`，范围 `1..60`；manual 未列出独立说明。 |
-| `--dns-transport-connect-timeout=<SEC>` | `OptionHandlerFactory.cc`，`NO_DESCRIPTION` | 注册为数字项，默认 `5`，范围 `1..30`；单个 DoT/DoH 端点的建连超时，端点数乘上它要小于等于 `--dns-timeout`。 |
+| `--dns-transport-connect-timeout=<SEC>` | `OptionHandlerFactory.cc`，`NO_DESCRIPTION` | 注册为数字项，默认 `5`，范围 `1..30`；单个 DoT/DoH 端点的建连超时，端点数乘上它要小于等于 `--dns-timeout`。和 `--dns-timeout` 一样是隐藏项：实测写命令行会被判 unknown option，只能进配置文件。 |
 | `--startup-idle-time=<SEC>` | `OptionHandlerFactory.cc` | 注册为数字项；manual 未列出独立说明。 |
 | `--select-least-used-host [true\|false]` | `OptionHandlerFactory.cc` | 注册项；需要确认当前 URI/host 选择语义是否仍作为正式用户选项公开。 |
 | `--max-http-pipelining=<NUM>` | `OptionHandlerFactory.cc` | 注册项，和 HTTP/1.1 pipelining 相关；manual 未在当前提取列表中出现。 |
