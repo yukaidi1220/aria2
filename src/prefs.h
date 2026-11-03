@@ -127,6 +127,8 @@ extern PrefPtr PREF_TIMEOUT;
 // values: 1*digit
 extern PrefPtr PREF_DNS_TIMEOUT;
 // values: 1*digit
+extern PrefPtr PREF_DNS_TRANSPORT_CONNECT_TIMEOUT;
+// values: 1*digit
 extern PrefPtr PREF_CONNECT_TIMEOUT;
 // values: 1*digit
 extern PrefPtr PREF_MAX_TRIES;

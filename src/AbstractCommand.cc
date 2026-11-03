@@ -799,7 +799,8 @@ createServiceBindingDiscoveryResolversForPhase(
         resolvers, std::make_shared<AsyncDotNameResolver>(
                        AF_UNSPEC, std::move(dotServers),
                        AsyncDotTransportFactory(),
-                       AsyncDotBootstrapResolverFactory(), bootstrapFamily));
+                       AsyncDotBootstrapResolverFactory(), bootstrapFamily,
+                       getDnsTransportConnectTimeout(option)));
   }
   else if (mode == V_DOH) {
     auto dohServers = parseAsyncDnsDohServerConfigList(servers);
@@ -808,7 +809,8 @@ createServiceBindingDiscoveryResolversForPhase(
         resolvers, std::make_shared<AsyncDohNameResolver>(
                        AF_UNSPEC, std::move(dohServers),
                        AsyncDohTransportFactory(), isDohHttp2Enabled(option),
-                       AsyncDohBootstrapResolverFactory(), bootstrapFamily));
+                       AsyncDohBootstrapResolverFactory(), bootstrapFamily,
+                       getDnsTransportConnectTimeout(option)));
   }
   else if (mode == V_MULTI) {
     auto config = parseAsyncDnsMultiServerConfigList(servers);
@@ -819,7 +821,8 @@ createServiceBindingDiscoveryResolversForPhase(
           resolvers, std::make_shared<AsyncDotNameResolver>(
                          AF_UNSPEC, std::move(config.dotServers),
                          AsyncDotTransportFactory(),
-                         plainBootstrapResolverFactory, bootstrapFamily));
+                         plainBootstrapResolverFactory, bootstrapFamily,
+                         getDnsTransportConnectTimeout(option)));
     }
     if (!config.dohServers.empty()) {
       appendServiceBindingResolver(
@@ -827,7 +830,8 @@ createServiceBindingDiscoveryResolversForPhase(
                          AF_UNSPEC, std::move(config.dohServers),
                          AsyncDohTransportFactory(),
                          isDohHttp2Enabled(option),
-                         plainBootstrapResolverFactory, bootstrapFamily));
+                         plainBootstrapResolverFactory, bootstrapFamily,
+                         getDnsTransportConnectTimeout(option)));
     }
   }
 #endif // ENABLE_SSL
@@ -1251,6 +1255,37 @@ bool AbstractCommand::execute()
       auto ss = e_->getRequestGroupMan()->getOrCreateServerStat(
           req_->getHost(), req_->getProtocol());
       ss->setError();
+
+      // The timeout branch below is never reached when the error event fires,
+      // so this is the only place that can account for a socket error. Only an
+      // unconfirmed address counts as failed: an address that completed the
+      // handshake has proven itself, whatever breaks later on.
+      const auto& errorConnectedAddr = req_->getConnectedAddr();
+      if (!errorConnectedAddr.empty() && !req_->connectedAddrInfoConfirmed()) {
+        const auto& errorConnectedHostname = req_->getConnectedHostname();
+        const auto errorConnectedPort = req_->getConnectedPort();
+        e_->markBadIPAddress(getCuid(), errorConnectedHostname,
+                             errorConnectedAddr, errorConnectedPort);
+        if (fileEntry_) {
+          fileEntry_->recordAddressFamilyFailure(
+              errorConnectedHostname, errorConnectedPort,
+              getNumericAddressFamily(errorConnectedAddr));
+        }
+        // Marking is one-way: CacheEntry::add() refuses to re-insert a known
+        // address and never clears the bad flag, so without dropping the entry
+        // a host whose only answer is this address would resolve successfully
+        // yet find no usable address and abort on the next try.  The timeout
+        // branch below does the same.
+        if (e_->findCachedIPAddress(errorConnectedHostname, errorConnectedPort)
+                .empty()) {
+          A2_LOG_NETWORK(
+              fmt("CUID#%" PRId64 " - All IP addresses for %s were marked bad",
+                  getCuid(), errorConnectedHostname.c_str()));
+          e_->removeCachedIPAddress(errorConnectedHostname, errorConnectedPort);
+          onAllConnectAddressesFailed(errorConnectedHostname,
+                                      errorConnectedPort);
+        }
+      }
 
       A2_LOG_NETWORK(fmt("CUID#%" PRId64 " - Network problem while talking to %s: "
                          "%s, retrying",

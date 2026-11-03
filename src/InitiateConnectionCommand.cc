@@ -253,6 +253,13 @@ InitiateConnectionCommand::createBackupConnectCommand(
                                                    hostname, port);
     backupAddr = selectBackupIPAddress(addrs, ipaddr);
   }
+  if (backupAddr.empty()) {
+    A2_LOG_NETWORK(fmt("CUID#%" PRId64
+                       " - No IPv%d candidate available for a backup "
+                       "connection to %s:%u",
+                       getCuid(), backupFamily == AF_INET ? 4 : 6,
+                       hostname.c_str(), port));
+  }
   if (!backupAddr.empty()) {
     info = std::make_shared<BackupConnectInfo>();
     auto backupDelay = getBackupConnectionDelay(getOption().get());

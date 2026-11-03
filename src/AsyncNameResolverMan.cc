@@ -644,33 +644,34 @@ std::vector<WindowedAsyncResolver::ResolverFactory> createPlainResolverFactories
 std::vector<WindowedAsyncResolver::ResolverFactory> createSecureResolverFactories(
     int family, const AsyncDnsMultiServerConfig& config, bool dohHttp2,
     std::function<std::unique_ptr<AsyncResolver>(int)> bootstrapFactory,
-    int bootstrapFamily)
+    int bootstrapFamily, std::chrono::seconds endpointConnectTimeout)
 {
   std::vector<WindowedAsyncResolver::ResolverFactory> factories;
   auto maxLen = std::max(config.dotServers.size(), config.dohServers.size());
   for (size_t i = 0; i < maxLen; ++i) {
     if (i < config.dotServers.size()) {
       auto server = config.dotServers[i];
-      factories.push_back([family, server, bootstrapFactory,
-                           bootstrapFamily]() -> std::shared_ptr<AsyncResolver> {
+      factories.push_back([family, server, bootstrapFactory, bootstrapFamily,
+                           endpointConnectTimeout]()
+                              -> std::shared_ptr<AsyncResolver> {
         std::vector<AsyncDnsServerConfig> servers;
         servers.push_back(server);
         return std::make_shared<AsyncDotNameResolver>(
             family, std::move(servers), AsyncDotTransportFactory(),
-            bootstrapFactory, bootstrapFamily);
+            bootstrapFactory, bootstrapFamily, endpointConnectTimeout);
       });
     }
     if (i < config.dohServers.size()) {
       auto server = config.dohServers[i];
-      factories.push_back(
-          [family, server, dohHttp2, bootstrapFactory,
-           bootstrapFamily]() -> std::shared_ptr<AsyncResolver> {
-            std::vector<AsyncDohServerConfig> servers;
-            servers.push_back(server);
-            return std::make_shared<AsyncDohNameResolver>(
-                family, std::move(servers), AsyncDohTransportFactory(),
-                dohHttp2, bootstrapFactory, bootstrapFamily);
-          });
+      factories.push_back([family, server, dohHttp2, bootstrapFactory,
+                           bootstrapFamily, endpointConnectTimeout]()
+                              -> std::shared_ptr<AsyncResolver> {
+        std::vector<AsyncDohServerConfig> servers;
+        servers.push_back(server);
+        return std::make_shared<AsyncDohNameResolver>(
+            family, std::move(servers), AsyncDohTransportFactory(), dohHttp2,
+            bootstrapFactory, bootstrapFamily, endpointConnectTimeout);
+      });
     }
   }
   return factories;
@@ -770,14 +771,16 @@ std::shared_ptr<AsyncResolver> AsyncNameResolverMan::createResolver(
     validateAsyncDnsDotServerConfig(dotServers);
     return std::make_shared<AsyncDotNameResolver>(
         family, std::move(dotServers), AsyncDotTransportFactory(),
-        AsyncDotBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_));
+        AsyncDotBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_),
+        endpointConnectTimeout_);
   }
   case RESOLVER_DOH: {
     auto dohServers = parseAsyncDnsDohServerConfigList(servers_);
     validateAsyncDnsDohServerConfig(dohServers);
     return std::make_shared<AsyncDohNameResolver>(
         family, std::move(dohServers), AsyncDohTransportFactory(), dohHttp2_,
-        AsyncDohBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_));
+        AsyncDohBootstrapResolverFactory(), getBootstrapFamily(ipv4_, ipv6_),
+        endpointConnectTimeout_);
   }
   case RESOLVER_MULTI:
     return std::make_shared<AsyncNameResolver>(family, std::string());
@@ -805,7 +808,7 @@ AsyncNameResolverMan::createResolvers(int family) const
           createPlainBootstrapResolverFactory(config);
       auto factories = createSecureResolverFactories(
           family, config, dohHttp2_, plainBootstrapResolverFactory,
-          getBootstrapFamily(ipv4_, ipv6_));
+          getBootstrapFamily(ipv4_, ipv6_), endpointConnectTimeout_);
       resolvers.push_back(std::make_shared<WindowedAsyncResolver>(
           family, "multi secure DNS", std::move(factories), windowLimit,
           startOffset));
@@ -1305,6 +1308,8 @@ void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,
       (option->getAsBool(PREF_ENABLE_HTTP2) ||
        option->getAsBool(PREF_ENABLE_DOH_HTTP2)) &&
       !option->getAsBool(PREF_ENABLE_HTTP_PIPELINING));
+  asyncNameResolverMan->setEndpointConnectTimeout(
+      getDnsTransportConnectTimeout(option));
 }
 
 } // namespace aria2

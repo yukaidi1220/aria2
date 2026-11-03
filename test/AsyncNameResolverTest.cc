@@ -36,6 +36,7 @@ class AsyncNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPending);
   CPPUNIT_TEST(testAsyncResolverWriteEventUsesExceptFd);
   CPPUNIT_TEST(testAsyncResolverExceptFdIsProcessedAsWriteReady);
+  CPPUNIT_TEST(testSelectEventPollPumpsResolverTimeout);
   CPPUNIT_TEST(testValidateConfigLeavesCaresServersUnchanged);
   CPPUNIT_TEST(testStartAsyncCaresWithExplicitServerFallsBackToSystem);
   CPPUNIT_TEST(testCaresQueryLogsServerSource);
@@ -99,6 +100,7 @@ public:
   void testGetStatusSucceedsWhenIPv4SucceedsAndIPv6IsPending();
   void testAsyncResolverWriteEventUsesExceptFd();
   void testAsyncResolverExceptFdIsProcessedAsWriteReady();
+  void testSelectEventPollPumpsResolverTimeout();
   void testValidateConfigLeavesCaresServersUnchanged();
   void testStartAsyncCaresWithExplicitServerFallsBackToSystem();
   void testCaresQueryLogsServerSource();
@@ -202,6 +204,55 @@ public:
   }
 
   const std::string& getHostname() const CXX11_OVERRIDE { return hostname_; }
+};
+
+// Counts the deadline pumps a resolver receives from an event poll.  The
+// transports that talk DoT/DoH depend on them: without a pump per round, an
+// endpoint that never answers is only bounded by the operating system.
+class PumpCountingAsyncResolver : public AsyncResolver {
+public:
+  PumpCountingAsyncResolver() : family_(AF_INET), status_(STATUS_QUERYING) {}
+
+  size_t getProcessTimeoutCalls() const { return processTimeoutCalls_; }
+
+  void resolve(const std::string& name) CXX11_OVERRIDE { hostname_ = name; }
+
+  const std::vector<std::string>& getResolvedAddresses() const CXX11_OVERRIDE
+  {
+    return addrs_;
+  }
+
+  const std::string& getError() const CXX11_OVERRIDE { return error_; }
+
+  STATUS getStatus() const CXX11_OVERRIDE { return status_; }
+
+  bool usable() const CXX11_OVERRIDE { return true; }
+
+  int getFamily() const CXX11_OVERRIDE { return family_; }
+
+  const std::vector<AsyncResolverSocketEntry>& getsock() const CXX11_OVERRIDE
+  {
+    return socks_;
+  }
+
+  void process(sock_t readfd, sock_t writefd) CXX11_OVERRIDE
+  {
+    (void)readfd;
+    (void)writefd;
+  }
+
+  void processTimeout() CXX11_OVERRIDE { ++processTimeoutCalls_; }
+
+  const std::string& getHostname() const CXX11_OVERRIDE { return hostname_; }
+
+private:
+  int family_;
+  STATUS status_;
+  size_t processTimeoutCalls_ = 0;
+  std::vector<std::string> addrs_;
+  std::string error_;
+  std::string hostname_;
+  std::vector<AsyncResolverSocketEntry> socks_;
 };
 
 class MockAsyncNameResolverMan : public AsyncNameResolverMan {
@@ -473,6 +524,21 @@ void AsyncNameResolverTest::testAsyncResolverExceptFdIsProcessedAsWriteReady()
 
   CPPUNIT_ASSERT_EQUAL(AsyncResolver::badSocket(), readfd);
   CPPUNIT_ASSERT_EQUAL(ent.fd, writefd);
+}
+
+void AsyncNameResolverTest::testSelectEventPollPumpsResolverTimeout()
+{
+  auto resolver = std::make_shared<PumpCountingAsyncResolver>();
+  MockCommand command(1);
+  SelectEventPoll poll;
+  CPPUNIT_ASSERT(poll.addNameResolver(resolver, &command));
+
+  struct timeval tv;
+  tv.tv_sec = 0;
+  tv.tv_usec = 0;
+  poll.poll(tv);
+
+  CPPUNIT_ASSERT_EQUAL((size_t)1, resolver->getProcessTimeoutCalls());
 }
 
 void AsyncNameResolverTest::testValidateConfigLeavesCaresServersUnchanged()

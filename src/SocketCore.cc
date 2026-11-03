@@ -1796,6 +1796,41 @@ bool isIPv6GlobalUnicastAddress(const std::string& addr)
   return true;
 }
 
+void interleaveAddressFamilies(std::vector<std::string>& addrs)
+{
+  std::vector<std::string> ipv4;
+  std::vector<std::string> ipv6;
+  std::vector<std::string> other;
+  for (const auto& addr : addrs) {
+    switch (getNumericAddressFamily(addr)) {
+    case AF_INET:
+      ipv4.push_back(addr);
+      break;
+    case AF_INET6:
+      ipv6.push_back(addr);
+      break;
+    default:
+      other.push_back(addr);
+      break;
+    }
+  }
+  if (ipv4.empty() || ipv6.empty()) {
+    // A single family (or no numeric address at all) carries nothing to
+    // interleave, so leave the caller's order untouched.
+    return;
+  }
+  addrs.clear();
+  auto i4 = ipv4.begin();
+  auto i6 = ipv6.begin();
+  while (i4 != ipv4.end() && i6 != ipv6.end()) {
+    addrs.push_back(*i4++);
+    addrs.push_back(*i6++);
+  }
+  addrs.insert(addrs.end(), i4, ipv4.end());
+  addrs.insert(addrs.end(), i6, ipv6.end());
+  addrs.insert(addrs.end(), other.begin(), other.end());
+}
+
 namespace net {
 
 size_t getBinAddr(void* dest, const std::string& ip)

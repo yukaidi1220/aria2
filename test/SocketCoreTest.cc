@@ -27,6 +27,7 @@ class SocketCoreTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testInetPton);
   CPPUNIT_TEST(testGetNumericAddressFamily);
   CPPUNIT_TEST(testIsIPv6GlobalUnicastAddress);
+  CPPUNIT_TEST(testInterleaveAddressFamilies);
   CPPUNIT_TEST(testGetBinAddr);
   CPPUNIT_TEST(testVerifyHostname);
 #ifdef ENABLE_SSL
@@ -58,6 +59,7 @@ public:
   void testInetPton();
   void testGetNumericAddressFamily();
   void testIsIPv6GlobalUnicastAddress();
+  void testInterleaveAddressFamilies();
   void testGetBinAddr();
   void testVerifyHostname();
 #ifdef ENABLE_SSL
@@ -207,6 +209,30 @@ void SocketCoreTest::testIsIPv6GlobalUnicastAddress()
   CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("ff02::1"));
   CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("192.0.2.1"));
   CPPUNIT_ASSERT(!isIPv6GlobalUnicastAddress("localhost"));
+}
+
+void SocketCoreTest::testInterleaveAddressFamilies()
+{
+  auto check = [](const std::vector<std::string>& in,
+                  const std::vector<std::string>& expected) {
+    auto addrs = in;
+    interleaveAddressFamilies(addrs);
+    CPPUNIT_ASSERT_EQUAL(expected.size(), addrs.size());
+    for (size_t i = 0; i < expected.size(); ++i) {
+      CPPUNIT_ASSERT_EQUAL(expected[i], addrs[i]);
+    }
+  };
+
+  check({"2001:db8::1", "192.0.2.1", "2001:db8::2", "192.0.2.2"},
+        {"192.0.2.1", "2001:db8::1", "192.0.2.2", "2001:db8::2"});
+  check({"2001:db8::1", "2001:db8::2", "192.0.2.1"},
+        {"192.0.2.1", "2001:db8::1", "2001:db8::2"});
+  // One family only: the caller's order is kept.
+  check({"192.0.2.2", "192.0.2.1"}, {"192.0.2.2", "192.0.2.1"});
+  check({"2001:db8::2", "2001:db8::1"}, {"2001:db8::2", "2001:db8::1"});
+  check({"dns.example.org", "2001:db8::1", "192.0.2.1"},
+        {"192.0.2.1", "2001:db8::1", "dns.example.org"});
+  check({}, {});
 }
 
 void SocketCoreTest::testGetBinAddr()

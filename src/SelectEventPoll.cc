@@ -209,6 +209,11 @@ void SelectEventPoll::AsyncNameResolverEntry::process(fd_set* rfdsPtr,
   }
 }
 
+void SelectEventPoll::AsyncNameResolverEntry::processTimeout()
+{
+  nameResolver_->processTimeout();
+}
+
 #endif // ENABLE_ASYNC_DNS
 
 SelectEventPoll::SelectEventPoll()
@@ -302,6 +307,17 @@ void SelectEventPoll::poll(const struct timeval& tv)
                      nullptr
 #  endif // !__MINGW32__
     );
+  }
+
+  // select() only wakes us up for sockets that are ready, so a resolver
+  // waiting on an endpoint that never answers would otherwise be bounded only
+  // by the operating system's connect timeout.  This runs after the ready
+  // pass above: pumping here can close a socket and immediately reopen one
+  // that reuses the descriptor number, and the fd sets still carry the state
+  // of the closed socket.  Epoll, kqueue, poll, port and libuv all pump after
+  // the ready scan too.
+  for (auto& i : nameResolverEntries_) {
+    i.second.processTimeout();
   }
 
 #endif // ENABLE_ASYNC_DNS

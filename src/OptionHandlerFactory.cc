@@ -254,6 +254,16 @@ std::vector<OptionHandler*> OptionHandlerFactory::createOptionHandlers()
     handlers.push_back(op);
   }
   {
+    // Connect timeout for one DoT/DoH endpoint.  Keep
+    // numberOfEndpoints * this <= dns-timeout, otherwise the encrypted
+    // channel is still judged unreachable only after the background
+    // address-fill window has closed.
+    OptionHandler* op(new NumberOptionHandler(
+        PREF_DNS_TRANSPORT_CONNECT_TIMEOUT, NO_DESCRIPTION, "5", 1, 30));
+    op->hide();
+    handlers.push_back(op);
+  }
+  {
     OptionHandler* op(new ParameterOptionHandler(
         PREF_DOWNLOAD_RESULT, TEXT_DOWNLOAD_RESULT, A2_V_DEFAULT,
         {A2_V_DEFAULT, A2_V_FULL, A2_V_HIDE}));

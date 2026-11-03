@@ -58,6 +58,7 @@
 #  include <nghttp2/nghttp2.h>
 #endif // HAVE_LIBNGHTTP2
 #include "LogFactory.h"
+#include "wallclock.h"
 #include "a2functional.h"
 #include "fmt.h"
 #include "util.h"
@@ -640,7 +641,7 @@ AsyncDohNameResolver::AsyncDohNameResolver(
     int family, std::vector<AsyncDohServerConfig> servers,
     AsyncDohTransportFactory transportFactory, bool enableHttp2,
     AsyncDohBootstrapResolverFactory bootstrapResolverFactory,
-    int bootstrapFamily)
+    int bootstrapFamily, std::chrono::seconds endpointConnectTimeout)
     : family_(family),
       bootstrapFamily_(bootstrapFamily),
       servers_(std::move(servers)),
@@ -652,6 +653,7 @@ AsyncDohNameResolver::AsyncDohNameResolver(
       state_(DOH_IDLE),
       serverIndex_(0),
       currentEndpointIndex_(0),
+      endpointConnectTimeout_(endpointConnectTimeout),
       queryType_(getQueryType(family)),
       queryId_(0)
 {
@@ -782,6 +784,7 @@ bool AsyncDohNameResolver::startBootstrapResolver()
     if (currentEndpoints_.empty()) {
       throw DL_ABORT_EX("DoH bootstrap returned no address");
     }
+    interleaveAddressFamilies(currentEndpoints_);
     return startCurrentEndpoint();
   }
   if (bootstrapResolver_->getStatus() == STATUS_ERROR) {
@@ -797,28 +800,17 @@ bool AsyncDohNameResolver::startBootstrapResolver()
 
 bool AsyncDohNameResolver::startCurrentEndpoint()
 {
-  const auto& server = servers_[serverIndex_];
   while (currentEndpointIndex_ < currentEndpoints_.size()) {
-    const auto& connectHost = currentEndpoints_[currentEndpointIndex_];
     try {
-      exchange_->reset();
-      transport_ = transportFactory_(server);
-      if (!transport_) {
-        throw DL_ABORT_EX("DoH transport factory returned null");
-      }
-      transport_->startConnect(connectHost, server.port);
-      state_ = DOH_CONNECTING;
-      A2_LOG_NETWORK(fmt("DNS: DoH connecting to %s via %s for %s %s",
-                         formatDohServer(server).c_str(),
-                         formatHost(connectHost).c_str(),
-                         queryTypeToString(queryType_), hostname_.c_str()));
-      updateSocketEvents();
+      startEndpointConnect();
       return true;
     }
     catch (Exception& e) {
+      const auto& server = servers_[serverIndex_];
       error_ = e.what();
       A2_LOG_NETWORK(fmt("DNS: DoH endpoint %s for server %s failed: %s",
-                         formatHost(connectHost).c_str(),
+                         formatHost(currentEndpoints_[currentEndpointIndex_])
+                             .c_str(),
                          formatDohServer(server).c_str(), error_.c_str()));
       ++currentEndpointIndex_;
       transport_.reset();
@@ -826,6 +818,25 @@ bool AsyncDohNameResolver::startCurrentEndpoint()
   }
   return failCurrentServerOrRetry(
       error_.empty() ? "DoH server connection failed" : error_);
+}
+
+void AsyncDohNameResolver::startEndpointConnect()
+{
+  const auto& server = servers_[serverIndex_];
+  const auto& connectHost = currentEndpoints_[currentEndpointIndex_];
+  exchange_->reset();
+  transport_ = transportFactory_(server);
+  if (!transport_) {
+    throw DL_ABORT_EX("DoH transport factory returned null");
+  }
+  transport_->startConnect(connectHost, server.port);
+  state_ = DOH_CONNECTING;
+  endpointConnectStart_ = global::wallclock();
+  A2_LOG_NETWORK(fmt("DNS: DoH connecting to %s via %s for %s %s",
+                     formatDohServer(server).c_str(),
+                     formatHost(connectHost).c_str(),
+                     queryTypeToString(queryType_), hostname_.c_str()));
+  updateSocketEvents();
 }
 
 bool AsyncDohNameResolver::failCurrentEndpointOrServer(std::string error)
@@ -1092,6 +1103,14 @@ void AsyncDohNameResolver::processTimeout()
     processBootstrapResolver(badSocket(), badSocket());
     return;
   }
+  if (status_ == STATUS_QUERYING && state_ == DOH_CONNECTING &&
+      endpointConnectStart_.difference(global::wallclock()) >=
+          endpointConnectTimeout_) {
+    failCurrentEndpointOrServer(
+        fmt("DoH connect timed out after %lds",
+            static_cast<long>(endpointConnectTimeout_.count())));
+    return;
+  }
   processBufferedRead();
 }
 
@@ -1112,6 +1131,7 @@ void AsyncDohNameResolver::processBootstrapResolver(sock_t readfd,
       failCurrentServerOrRetry("DoH bootstrap returned no address");
       return;
     }
+    interleaveAddressFamilies(currentEndpoints_);
     startCurrentEndpoint();
     return;
   }

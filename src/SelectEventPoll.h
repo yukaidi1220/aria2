@@ -157,6 +157,8 @@ private:
     sock_t getFds(fd_set* rfdsPtr, fd_set* wfdsPtr, fd_set* efdsPtr);
 
     void process(fd_set* rfdsPtr, fd_set* wfdsPtr, fd_set* efdsPtr);
+
+    void processTimeout();
   };
 #endif // ENABLE_ASYNC_DNS
 
