@@ -498,6 +498,12 @@ int getNumericAddressFamily(const std::string& addr);
 // IPv4-mapped, or IPv4-compatible.
 bool isIPv6GlobalUnicastAddress(const std::string& addr);
 
+// Reorders addrs so that the two families alternate, IPv4 first
+// (v4[0], v6[0], v4[1], v6[1], ...).  Addresses that are not numeric
+// keep their place at the end.  The order is left untouched when only
+// one family is present.
+void interleaveAddressFamilies(std::vector<std::string>& addrs);
+
 namespace net {
 
 // Stores binary representation of IP address ip which is represented

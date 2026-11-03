@@ -170,6 +170,9 @@ PrefPtr PREF_TIMEOUT = makePref("timeout");
 // values: 1*digit
 PrefPtr PREF_DNS_TIMEOUT = makePref("dns-timeout");
 // values: 1*digit
+PrefPtr PREF_DNS_TRANSPORT_CONNECT_TIMEOUT =
+    makePref("dns-transport-connect-timeout");
+// values: 1*digit
 PrefPtr PREF_CONNECT_TIMEOUT = makePref("connect-timeout");
 // values: 1*digit
 PrefPtr PREF_MAX_TRIES = makePref("max-tries");

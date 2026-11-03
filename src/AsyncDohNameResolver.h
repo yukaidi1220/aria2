@@ -39,6 +39,7 @@
 
 #ifdef ENABLE_SSL
 
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -49,6 +50,7 @@
 #include "AsyncResolver.h"
 #include "DnsMessage.h"
 #include "SocketCore.h"
+#include "TimerA2.h"
 
 namespace aria2 {
 
@@ -110,7 +112,9 @@ public:
                         AsyncDohBootstrapResolverFactory
                             bootstrapResolverFactory =
                                 AsyncDohBootstrapResolverFactory(),
-                        int bootstrapFamily = AF_UNSPEC);
+                        int bootstrapFamily = AF_UNSPEC,
+                        std::chrono::seconds endpointConnectTimeout =
+                            DEFAULT_DNS_TRANSPORT_CONNECT_TIMEOUT);
 
   virtual ~AsyncDohNameResolver();
 
@@ -160,6 +164,9 @@ private:
   bool startBootstrapResolver();
   bool prepareCurrentServerEndpoints();
   bool startCurrentEndpoint();
+  // Starts the connect attempt for the endpoint currently under
+  // currentEndpointIndex_ and arms the per-endpoint connect timer.
+  void startEndpointConnect();
   bool failCurrentEndpointOrServer(std::string error);
   bool failCurrentServerOrRetry(std::string error);
   void fail(std::string error);
@@ -197,6 +204,8 @@ private:
   size_t serverIndex_;
   std::vector<std::string> currentEndpoints_;
   size_t currentEndpointIndex_;
+  std::chrono::seconds endpointConnectTimeout_;
+  Timer endpointConnectStart_;
   std::vector<std::string> resolvedAddresses_;
   std::vector<dns::ServiceBindingRecord> serviceBindingRecords_;
   std::string error_;

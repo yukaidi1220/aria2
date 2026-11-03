@@ -2,10 +2,12 @@
 
 #include <iostream>
 #include <memory>
+#include <utility>
 #include <cppunit/extensions/HelperMacros.h>
 
 #include "Option.h"
 #include "prefs.h"
+#include "RequestGroupMan.h"
 #include "SocketCore.h"
 #include "SocketRecvBuffer.h"
 #include "FileEntry.h"
@@ -55,6 +57,99 @@ private:
     throw DL_RETRY_EX2("retry from test command", code_);
   }
 };
+
+// A command that only ever sees the socket error event: the write check keeps
+// AbstractCommand::shouldProcess() from running executeInternal(), so a
+// delivered error event takes the network problem branch.
+class SocketErrorTestCommand : public AbstractCommand {
+public:
+  SocketErrorTestCommand(const std::shared_ptr<Request>& req,
+                         const std::shared_ptr<FileEntry>& fileEntry,
+                         RequestGroup* requestGroup, DownloadEngine* e,
+                         const std::shared_ptr<SocketCore>& socket)
+      : AbstractCommand(1, req, fileEntry, requestGroup, e, socket,
+                        std::shared_ptr<SocketRecvBuffer>(), false)
+  {
+    disableReadCheckSocket();
+    setWriteCheckSocket(socket);
+  }
+
+private:
+  virtual bool executeInternal() CXX11_OVERRIDE
+  {
+    CPPUNIT_FAIL("executeInternal must not run on a socket error event");
+    return true;
+  }
+};
+
+std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>
+createOpenSocketPair()
+{
+  SocketCore server;
+  server.bind(0);
+  server.beginListen();
+  server.setBlockingMode();
+
+  auto endpoint = server.getAddrInfo();
+  auto client = std::make_shared<SocketCore>();
+  client->establishConnection("localhost", endpoint.port);
+  CPPUNIT_ASSERT(client->isWritable(5));
+
+  auto inbound = server.acceptConnection();
+  inbound->setBlockingMode();
+
+  return std::pair<std::shared_ptr<SocketCore>, std::shared_ptr<SocketCore>>(
+      client, inbound);
+}
+
+struct SocketErrorOutcome {
+  std::string cachedAddr;
+  bool penalized;
+  bool freshAnswerAccepted;
+};
+
+// Delivers only a socket error event to AbstractCommand::execute() and reports
+// what the DNS cache and the family health of the file entry look like
+// afterwards.
+SocketErrorOutcome runSocketError(bool confirmed)
+{
+  auto option = std::make_shared<Option>();
+  option->put(PREF_RETRY_WAIT, "0");
+  auto ctx = std::make_shared<DownloadContext>(1_k, 4_k, "/tmp/myfile");
+  RequestGroup group(GroupId::create(), option);
+  group.setDownloadContext(ctx);
+  DownloadEngine engine(make_unique<SelectEventPoll>());
+  engine.setOption(option.get());
+  auto rgman = make_unique<RequestGroupMan>(
+      std::vector<std::shared_ptr<RequestGroup>>{}, 1, option.get());
+  group.setRequestGroupMan(rgman.get());
+  engine.setRequestGroupMan(std::move(rgman));
+
+  auto fileEntry = ctx->getFirstFileEntry();
+  auto req = std::make_shared<Request>();
+  CPPUNIT_ASSERT(req->setUri("http://example.org/myfile"));
+  req->setConnectedAddrInfo("example.org", "2001:db8::1", 80);
+  if (confirmed) {
+    req->confirmConnectedAddrInfo();
+  }
+  CPPUNIT_ASSERT(engine.cacheIPAddress("example.org", "2001:db8::1", 80));
+
+  auto sockets = createOpenSocketPair();
+  SocketErrorTestCommand command(req, fileEntry, &group, &engine, sockets.first);
+  command.errorEventReceived();
+  CPPUNIT_ASSERT(command.execute());
+
+  SocketErrorOutcome outcome;
+  outcome.cachedAddr = engine.findCachedIPAddress("example.org", 80);
+  outcome.penalized =
+      fileEntry->isAddressFamilyPenalized("example.org", 80, AF_INET6);
+  // Probes whether the host entry still exists: a marked-but-present address
+  // refuses re-insertion and stays bad forever, while a dropped entry lets the
+  // next resolution start clean.
+  outcome.freshAnswerAccepted =
+      engine.cacheIPAddress("example.org", "2001:db8::1", 80);
+  return outcome;
+}
 } // namespace
 
 class AbstractCommandTest : public CppUnit::TestFixture {
@@ -79,6 +174,8 @@ class AbstractCommandTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testSelectIPAddressIgnoresOtherActiveHostAndPort);
   CPPUNIT_TEST(testTooSlowRetryFillsStreamConcurrency);
   CPPUNIT_TEST(testOtherRetryDoesNotFillStreamConcurrency);
+  CPPUNIT_TEST(testSocketErrorMarksUnconfirmedAddressBad);
+  CPPUNIT_TEST(testSocketErrorKeepsConfirmedAddress);
   CPPUNIT_TEST(testPrioritizeIPAddress);
   CPPUNIT_TEST(testPrioritizeIPAddressIgnoresUnknownAddress);
   CPPUNIT_TEST(testPrioritizeAndInterleaveIPAddress);
@@ -132,6 +229,8 @@ public:
   void testSelectIPAddressIgnoresOtherActiveHostAndPort();
   void testTooSlowRetryFillsStreamConcurrency();
   void testOtherRetryDoesNotFillStreamConcurrency();
+  void testSocketErrorMarksUnconfirmedAddressBad();
+  void testSocketErrorKeepsConfirmedAddress();
   void testPrioritizeIPAddress();
   void testPrioritizeIPAddressIgnoresUnknownAddress();
   void testPrioritizeAndInterleaveIPAddress();
@@ -254,6 +353,22 @@ void AbstractCommandTest::testOtherRetryDoesNotFillStreamConcurrency()
 
   CPPUNIT_ASSERT_EQUAL(1, group.getNumStreamCommand());
   CPPUNIT_ASSERT_EQUAL(1, group.getNumCommand());
+}
+
+void AbstractCommandTest::testSocketErrorMarksUnconfirmedAddressBad()
+{
+  auto outcome = runSocketError(false);
+  CPPUNIT_ASSERT(outcome.cachedAddr.empty());
+  CPPUNIT_ASSERT(outcome.penalized);
+  CPPUNIT_ASSERT(outcome.freshAnswerAccepted);
+}
+
+void AbstractCommandTest::testSocketErrorKeepsConfirmedAddress()
+{
+  auto outcome = runSocketError(true);
+  CPPUNIT_ASSERT_EQUAL(std::string("2001:db8::1"), outcome.cachedAddr);
+  CPPUNIT_ASSERT(!outcome.penalized);
+  CPPUNIT_ASSERT(!outcome.freshAnswerAccepted);
 }
 
 void AbstractCommandTest::testSelectIPAddressReturnsEmptyForEmptyList()

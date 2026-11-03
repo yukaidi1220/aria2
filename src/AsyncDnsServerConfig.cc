@@ -38,7 +38,9 @@
 #include <utility>
 
 #include "DlAbortEx.h"
+#include "Option.h"
 #include "fmt.h"
+#include "prefs.h"
 #include "uri.h"
 #include "util.h"
 
@@ -297,6 +299,12 @@ void validateAsyncDnsDohServerConfig(
   for (const auto& config : configs) {
     validateServerHost("DoH", config.connectHost);
   }
+}
+
+std::chrono::seconds getDnsTransportConnectTimeout(const Option* option)
+{
+  return std::chrono::seconds(
+      option->getAsInt(PREF_DNS_TRANSPORT_CONNECT_TIMEOUT));
 }
 
 } // namespace aria2

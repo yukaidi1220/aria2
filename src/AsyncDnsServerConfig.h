@@ -37,11 +37,22 @@
 
 #include "common.h"
 
+#include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
 
 namespace aria2 {
+
+class Option;
+
+// Connect timeout granted to each DoT/DoH endpoint in turn.  Sized so that
+// every endpoint of a server is judged before dns-timeout closes the
+// background address-fill window.
+constexpr std::chrono::seconds DEFAULT_DNS_TRANSPORT_CONNECT_TIMEOUT{5};
+
+// Value of the dns-transport-connect-timeout option.
+std::chrono::seconds getDnsTransportConnectTimeout(const Option* option);
 
 struct AsyncDnsServerConfig {
   std::string connectHost;

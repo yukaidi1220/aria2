@@ -43,9 +43,7 @@
 #include <memory>
 #include <utility>
 
-#ifdef ENABLE_SSL
-#  include "AsyncDnsServerConfig.h"
-#endif // ENABLE_SSL
+#include "AsyncDnsServerConfig.h"
 
 namespace aria2 {
 
@@ -118,6 +116,10 @@ public:
     resolverMode_ = resolverMode;
   }
   void setDohHttp2(bool enable) { dohHttp2_ = enable; }
+  void setEndpointConnectTimeout(std::chrono::seconds endpointConnectTimeout)
+  {
+    endpointConnectTimeout_ = endpointConnectTimeout;
+  }
 
   virtual std::shared_ptr<AsyncResolver> createResolver(int family) const;
 
@@ -161,6 +163,8 @@ private:
   bool dohHttp2_;
   bool ipv4_;
   bool ipv6_;
+  std::chrono::seconds endpointConnectTimeout_ =
+      DEFAULT_DNS_TRANSPORT_CONNECT_TIMEOUT;
 };
 
 void configureAsyncNameResolverMan(AsyncNameResolverMan* asyncNameResolverMan,

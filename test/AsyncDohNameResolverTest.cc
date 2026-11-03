@@ -66,6 +66,9 @@ class AsyncDohNameResolverTest : public CppUnit::TestFixture {
   CPPUNIT_TEST(testDomainServerUsesAsyncBootstrapAddress);
   CPPUNIT_TEST(testDomainServerRetriesNextBootstrapAddress);
   CPPUNIT_TEST(testDomainServerRetriesNextServerOnBootstrapError);
+  CPPUNIT_TEST(testEndpointConnectTimeoutMovesToNextEndpoint);
+  CPPUNIT_TEST(testEndpointConnectTimeoutFailsAfterLastEndpoint);
+  CPPUNIT_TEST(testBootstrapEndpointsInterleaveAddressFamilies);
   CPPUNIT_TEST_SUITE_END();
 
 public:
@@ -104,6 +107,9 @@ public:
   void testDomainServerUsesAsyncBootstrapAddress();
   void testDomainServerRetriesNextBootstrapAddress();
   void testDomainServerRetriesNextServerOnBootstrapError();
+  void testEndpointConnectTimeoutMovesToNextEndpoint();
+  void testEndpointConnectTimeoutFailsAfterLastEndpoint();
+  void testBootstrapEndpointsInterleaveAddressFamilies();
 };
 
 CPPUNIT_TEST_SUITE_REGISTRATION(AsyncDohNameResolverTest);
@@ -1478,6 +1484,97 @@ void AsyncDohNameResolverTest::testDomainServerRetriesNextServerOnBootstrapError
                        bootstrapFactory.hostnames[1]);
   CPPUNIT_ASSERT_EQUAL(std::string("203.0.113.8"),
                        factory.transports.back()->connectHost);
+}
+
+void AsyncDohNameResolverTest::testEndpointConnectTimeoutMovesToNextEndpoint()
+{
+  auto logPath = std::string(A2_TEST_OUT_DIR) +
+                 "/aria2_AsyncDohNameResolverTest_"
+                 "testEndpointConnectTimeoutMovesToNextEndpoint.log";
+  ScopedNetworkLog log(logPath);
+  FakeDohTransportFactory factory;
+  FakeBootstrapResolverFactory bootstrapFactory;
+  bootstrapFactory.results.push_back({"192.0.2.1", "203.0.113.8"});
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_SUCCESS);
+  bootstrapFactory.errors.push_back(std::string());
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"dns.example.org", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      makeBootstrapResolverFactory(bootstrapFactory), AF_INET,
+      std::chrono::seconds(0));
+
+  resolver.resolve("www.example.com");
+  CPPUNIT_ASSERT_EQUAL((size_t)1, factory.transports.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("192.0.2.1"),
+                       factory.transports.back()->connectHost);
+  CPPUNIT_ASSERT_EQUAL(AsyncDohNameResolver::DOH_CONNECTING,
+                       resolver.getDohState());
+
+  resolver.processTimeout();
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_QUERYING, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL((size_t)2, factory.transports.size());
+  CPPUNIT_ASSERT_EQUAL(std::string("203.0.113.8"),
+                       factory.transports.back()->connectHost);
+
+  resolver.processTimeout();
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_ERROR, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL(AsyncDohNameResolver::DOH_FAILED,
+                       resolver.getDohState());
+
+  auto logs = log.closeAndRead();
+  CPPUNIT_ASSERT(logs.find("DoH connect timed out after 0s") !=
+                 std::string::npos);
+}
+
+void AsyncDohNameResolverTest::testEndpointConnectTimeoutFailsAfterLastEndpoint()
+{
+  FakeDohTransportFactory factory;
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"203.0.113.8", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      AsyncDohBootstrapResolverFactory(), AF_UNSPEC, std::chrono::seconds(0));
+
+  resolver.resolve("www.example.com");
+  CPPUNIT_ASSERT_EQUAL((size_t)1, factory.transports.size());
+
+  resolver.processTimeout();
+
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_ERROR, resolver.getStatus());
+  CPPUNIT_ASSERT_EQUAL(AsyncDohNameResolver::DOH_FAILED,
+                       resolver.getDohState());
+  CPPUNIT_ASSERT_EQUAL(std::string("DoH connect timed out after 0s"),
+                       resolver.getError());
+  CPPUNIT_ASSERT(resolver.getsock().empty());
+}
+
+void AsyncDohNameResolverTest::testBootstrapEndpointsInterleaveAddressFamilies()
+{
+  FakeDohTransportFactory factory;
+  FakeBootstrapResolverFactory bootstrapFactory;
+  bootstrapFactory.results.push_back(
+      {"2001:db8::1", "2001:db8::2", "192.0.2.1", "192.0.2.2"});
+  bootstrapFactory.statuses.push_back(AsyncResolver::STATUS_SUCCESS);
+  bootstrapFactory.errors.push_back(std::string());
+  AsyncDohNameResolver resolver(
+      AF_INET, {{"dns.example.org", 443, "dns.example.org", "/dns-query"}},
+      makeTransportFactory(factory), false,
+      makeBootstrapResolverFactory(bootstrapFactory), AF_INET,
+      std::chrono::seconds(0));
+
+  resolver.resolve("www.example.com");
+  for (int i = 0; i < 3; ++i) {
+    resolver.processTimeout();
+  }
+
+  std::vector<std::string> expected = {"192.0.2.1", "2001:db8::1", "192.0.2.2",
+                                       "2001:db8::2"};
+  CPPUNIT_ASSERT_EQUAL((size_t)4, factory.transports.size());
+  for (size_t i = 0; i < expected.size(); ++i) {
+    CPPUNIT_ASSERT_EQUAL(expected[i], factory.transports[i]->connectHost);
+  }
+  CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_ERROR, resolver.getStatus());
 }
 
 } // namespace aria2
