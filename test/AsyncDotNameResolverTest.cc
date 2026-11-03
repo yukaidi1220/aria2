@@ -1107,15 +1107,25 @@ void AsyncDotNameResolverTest::testBootstrapEndpointsInterleaveAddressFamilies()
       std::chrono::seconds(0));
 
   resolver.resolve("www.example.com");
+  // The factory keeps raw pointers and the resolver destroys each transport
+  // when it moves to the next endpoint, so the order has to be copied out of
+  // the live transport after every step.
+  std::vector<std::string> order;
+  order.push_back(factory.transports.back()->connectHost);
   for (int i = 0; i < 3; ++i) {
     resolver.processTimeout();
+    order.push_back(factory.transports.back()->connectHost);
   }
+
+  // The fourth deadline is the last endpoint, so this one fails the query
+  // instead of opening another transport.
+  resolver.processTimeout();
 
   std::vector<std::string> expected = {"192.0.2.1", "2001:db8::1", "192.0.2.2",
                                        "2001:db8::2"};
   CPPUNIT_ASSERT_EQUAL((size_t)4, factory.transports.size());
   for (size_t i = 0; i < expected.size(); ++i) {
-    CPPUNIT_ASSERT_EQUAL(expected[i], factory.transports[i]->connectHost);
+    CPPUNIT_ASSERT_EQUAL(expected[i], order[i]);
   }
   CPPUNIT_ASSERT_EQUAL(AsyncResolver::STATUS_ERROR, resolver.getStatus());
 }
